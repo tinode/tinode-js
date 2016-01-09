@@ -572,9 +572,8 @@
         return promise;
       }
 
-
       // The main message dispatcher
-      function onMessage(data) {
+      function dispatchMessage(data) {
         // Skip empty response. This happens when LP times out.
         if (!data) return;
 
@@ -668,7 +667,7 @@
 
           _connection = Connection(transport_);
           _connection.logger = log;
-          _connection.onMessage = instance.onMessage;
+          _connection.onMessage = dispatchMessage;
           _connection.onDisconnect = instance.onDisconnect;
           _connection.onWebsocketOpen = instance.onWebsocketOpen;
           _connection.setup(host_, false, apiKey_);
