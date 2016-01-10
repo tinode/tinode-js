@@ -60,7 +60,7 @@
   // JSON stringify helper - pre-processor for JSON.stringify
   var jsonBuildHelper = function(key, val) {
     // strip out empty elements while serializing objects to JSON
-    if (val === null || val.length === 0 ||
+    if (val === undefined || val === null || val.length === 0 ||
       ((typeof val === "object") && (Object.keys(val).length === 0))) {
       return undefined;
       // Convert javascript Date objects to rfc3339 strings
@@ -100,7 +100,7 @@
       put: function() {
         var insert;
         // inspect arguments: if array, insert its elements, if one or more arguments, insert them one by one
-        if (arguments.length == 1 && Array.isArray(arguments[0])) {
+        if (arguments.length === 1 && Array.isArray(arguments[0])) {
           insert = arguments[0];
         } else {
           insert = arguments;
@@ -604,7 +604,7 @@
             // The very first incoming packet. This is a response to the connection attempt
             if (_inPacketCount == 1) {
               if (instance.onConnect) {
-                streaming.onConnect(pkt.ctrl.code, pkt.ctrl.text, pkt.ctrl.params);
+                instance.onConnect(pkt.ctrl.code, pkt.ctrl.text, pkt.ctrl.params);
               }
             }
 
@@ -616,9 +616,9 @@
             // Handling a {meta} message.
 
             // Preferred API: Route meta to topic, if one is registered
-            var topic = Tinode.cacheGet("topic", pkt.meta.topic)
+            var topic = cacheGet("topic", pkt.meta.topic);
             if (topic) {
-              topic.routeMeta(pkt.meta);
+              topic._routeMeta(pkt.meta);
             }
 
             // Secondary API: callback
@@ -629,27 +629,27 @@
             // Handling {data} message
 
             // Preferred API: Route data to topic, if one is registered
-            var topic = Tinode.cacheGet("topic", pkt.data.topic)
+            var topic = cacheGet("topic", pkt.data.topic);
             if (topic) {
-              topic.routeData(pkt.data);
+              topic._routeData(pkt.data);
             }
 
             // Secondary API: Call callback
-            if (streaming.onDataMessage) {
-              streaming.onDataMessage(pkt.data);
+            if (instance.onDataMessage) {
+              instance.onDataMessage(pkt.data);
             }
           } else if (pkt.pres) {
             // Handling {pres} message
 
             // Preferred API: Route presence to topic, if one is registered
-            var topic = Tinode.cacheGet("topic", pkt.pres.topic);
+            var topic = cacheGet("topic", pkt.pres.topic);
             if (topic) {
-              topic.routePres(pkt.pres);
+              topic._routePres(pkt.pres);
             }
 
             // Secondary API - callback
-            if (streaming.onPresMessage) {
-              streaming.onPresMessage(pkt.pres);
+            if (instance.onPresMessage) {
+              instance.onPresMessage(pkt.pres);
             }
           } else {
             log("ERROR: Unknown packet received.");
@@ -763,7 +763,7 @@
         //     @params.init -- initializing parameters for new topics. See streaming.Set
         //		 @params.sub
         //     @params.mode -- access mode, optional
-        //     @params.get -- list of data to fetch, see streaming.Get
+        //     @params.get -- list of data to fetch, see Tinode.get
         //     @params.browse -- optional parameters for get.data. See streaming.Get
         subscribe: function(topic, params) {
           var pkt = initPacket("sub", topic)
@@ -774,7 +774,7 @@
               pkt.sub.sub.info = params.sub.info;
             }
             // .init params are used for new topics only
-            if (topic === Tinode.TOPIC_NEW) {
+            if (topic === TOPIC_NEW) {
               pkt.sub.init.defacs = params.init.acs;
               pkt.sub.init.public = params.init.public;
               pkt.sub.init.private = params.init.private;
@@ -783,7 +783,6 @@
               pkt.sub.browse = params.browse;
             }
           }
-
           return sendWithPromise(pkt, pkt.sub.id);
         },
         // Leave topic
@@ -862,6 +861,22 @@
           pkt.del.what = "topic";
 
           return sendWithPromise(pkt, pkt.del.id);
+        },
+        // Get named topic, either pull from cache or create a new instance.
+        getTopic: function(name) {
+          var topic = cacheGet("topic", name);
+          if (!topic) {
+            topic = new Topic(name);
+            cachePut("topic", name, topic);
+          }
+          return topic;
+        },
+        // Instantiate 'me' topic or get it from cache.
+        getMeTopic: function() {
+          return instance.getTopic(TOPIC_ME);
+        },
+        newTopic: function(callbacks) {
+          return new Topic(undefined, callbacks);
         },
         // Deprecated? Remove?
         wantAkn: function(status) {
@@ -965,7 +980,7 @@
       this.created = new Date(this.created);
     }
     if (typeof this.updated === "string") {
-        this.updated = new Date(topic.updated);
+        this.updated = new Date(this.updated);
     }
 
     if (this.onInfoChange) {
@@ -981,7 +996,7 @@
       }
     }
 
-    tinode = Tinode.getInstance();
+    var tinode = Tinode.getInstance();
     for (var idx in subs) {
       var sub = subs[idx];
       if (sub.user) { // response to get.sub on !me topic does not have .user set
@@ -1006,27 +1021,12 @@
     var topic = this;
     // Send subscribe message, handle async response
     return tinode.subscribe((name || TOPIC_NEW), params).then(function(ctrl) {
-      // Handle payload
-      if (ctrl.params) {
-        // Handle "info" part of response - topic description
-        if (ctrl.params.info) {
-          topic._processInfo(ctrl.params.info);
-        }
-
-        // Handle "sub" part of response - list of topic subscribers
-        // or subscriptions in case of 'me' topic
-        if (ctrl.params.sub && ctrl.params.sub.length > 0) {
-            topic._processSub(ctrl.params.sub)
-        }
-      }
-
       topic._subscribed = true;
 
-      if (topic.name != name) {
-        Tinode.cacheDel("topic", name);
-        Tinode.cachePut("topic", topic.name, topic);
+      // Is this a new topic? Add it to cache.
+      if (!name) {
+        tinode.cachePut("topic", topic.name, topic);
       }
-
       return topic;
     });
   }
@@ -1098,7 +1098,7 @@
   Topic.prototype.userInfo = function(uid) {
     // TODO(gene): handle asynchronous requests
 
-    var user = Tinode.cacheGet("user", uid);
+    var user = Tinode.getInstance().cacheGet("user", uid);
     if (user) {
       return user; // Promise.resolve(user)
     }
@@ -1108,7 +1108,7 @@
     // Iterate over stored messages
     // Iteration stops if callback returns true
   Topic.prototype.messages = function(callback, context) {
-    topic._messages.forEach(callback, context);
+    this._messages.forEach(callback, context);
   }
 
   // Process data message
@@ -1180,7 +1180,6 @@
   // Export for the window object or node; Check that is not already defined.
   if (typeof(environment.Tinode) === 'undefined') {
     environment.Tinode = Tinode.getInstance();
-    environment.Tinode.Topic = Topic;
   }
 
 })(this); // 'this' will be window object for the browsers.
