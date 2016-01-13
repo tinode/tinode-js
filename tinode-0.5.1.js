@@ -774,6 +774,9 @@
               pkt.sub.sub.info = params.sub.info;
             }
             // .init params are used for new topics only
+            if (topic === undefined) {
+              topic = TOPIC_NEW;
+            }
             if (topic === TOPIC_NEW) {
               pkt.sub.init.defacs = params.init.acs;
               pkt.sub.init.public = params.init.public;
@@ -783,7 +786,14 @@
               pkt.sub.browse = params.browse;
             }
           }
-          return sendWithPromise(pkt, pkt.sub.id);
+          return sendWithPromise(pkt, pkt.sub.id).then(function(ctrl){
+            // Is this a new topic? Replace "new" with the issued name and add topic to cache.
+            if (topic === TOPIC_NEW) {
+              topic.name = ctrl.topic;
+              tinode.cachePut("topic", ctrl.topic, topic);
+            }
+            return ctrl;
+          });
         },
         // Leave topic
         leave: function(topic, unsub) {
@@ -860,13 +870,25 @@
           var pkt = initPacket("del", topic);
           pkt.del.what = "topic";
 
-          return sendWithPromise(pkt, pkt.del.id);
+          return sendWithPromise(pkt, pkt.del.id).then(function(ctrl) {
+            instance.cacheDel("topic", topic);
+            return ctrl;
+          });
         },
-        // Get named topic, either pull from cache or create a new instance.
+        // Get named topic, either pull it from cache or create a new instance.
         getTopic: function(name) {
           var topic = cacheGet("topic", name);
           if (!topic) {
             topic = new Topic(name);
+            topic._cacheGetUser = function(uid) {
+              return instance.cacheGet("user", uid);
+            };
+            topic._cachePutUser = function(uid, user) {
+              return instance.cachePut("user", uid, user);
+            };
+            topic._cacheDelUser = function(uid) {
+              return instance.cacheDel("user", uid);
+            };
             cachePut("topic", name, topic);
           }
           return topic;
@@ -953,8 +975,12 @@
       this.onData = callbacks.onData;
       this.onMeta = callbacks.onMeta;
       this.onPres = callbacks.onPres;
+      // A single info update;
       this.onInfoChange = callbacks.onInfoChange;
+      // A single subscription record;
       this.onSubsChange = callbacks.onSubsChange;
+      // All subscription records received;
+      this.onSubsUpdated = callbacks.onSubsUpdated;
       this.onDeleteTopic = callbacks.onDeleteTopic;
     }
   };
@@ -990,21 +1016,25 @@
 
   // Called by Tinode when meta.sub is recived.
   Topic.prototype._processSub = function(subs) {
+    var tinode = Tinode.getInstance();
+    for (var idx in subs) {
+      var sub = subs[idx];
+      if (sub.user) { // response to get.sub on !me topic does not have .user set
+        // Same the object to global cache
+        this._cachePutUser(sub.user, sub);
+        // Save the reference to user in the topic.
+        this._users[sub.user] = sub.user;
+      }
+    }
+
     if (this.onSubsChange) {
       for (var idx in subs) {
         this.onSubsChange(subs[idx]);
       }
     }
 
-    var tinode = Tinode.getInstance();
-    for (var idx in subs) {
-      var sub = subs[idx];
-      if (sub.user) { // response to get.sub on !me topic does not have .user set
-        // Same the object to global cache
-        tinode.cachePut("user", sub.user, sub);
-        // Save the reference to user in the topic.
-        this._users[sub.user] = sub.user;
-      }
+    if (this.onSubsUpdated) {
+      this.onSubsUpdated(Object.keys(this._users));
     }
   };
 
@@ -1022,11 +1052,6 @@
     // Send subscribe message, handle async response
     return tinode.subscribe((name || TOPIC_NEW), params).then(function(ctrl) {
       topic._subscribed = true;
-
-      // Is this a new topic? Add it to cache.
-      if (!name) {
-        tinode.cachePut("topic", topic.name, topic);
-      }
       return topic;
     });
   }
@@ -1042,8 +1067,8 @@
   // Leave topic
   // @unsub: boolean, leave and unsubscribe
   Topic.prototype.leave = function(unsub) {
-    // It's possible to unsubscribe (unsub==true) from inactive topic.
-    if (!topic._subscribed && !unsub) {
+    // FIXME(gene): It's possible to unsubscribe (unsub==true) from inactive topic.
+    if (!this._subscribed && !unsub) {
       throw new Error("Cannot leave inactive topic");
     }
     // Send unsubscribe message, handle async response
@@ -1054,15 +1079,15 @@
   }
 
   Topic.prototype.get = function(what, browse) {
-    if (!topic._subscribed) {
-      throw new Error("Cannot update inactive topic");
+    if (!this._subscribed) {
+      throw new Error("Cannot query inactive topic");
     }
     // Send {get} message, return promise.
     return Tinode.getInstance().get(this.name, what, browse);
   }
 
   Topic.prototype.set = function(params) {
-    if (!topic._subscribed) {
+    if (!this._subscribed) {
       throw new Error("Cannot update inactive topic");
     }
     // Send Set message, handle async response
@@ -1071,7 +1096,7 @@
 
   // Delete messages
   Topic.prototype.delete = function(params) {
-    if (!topic._subscribed) {
+    if (!this._subscribed) {
       throw new Error("Cannot delete messages in inactive topic");
     }
     // Send {del} message, return promise
@@ -1079,7 +1104,7 @@
   }
 
   Topic.prototype.delTopic = function(params) {
-    if (!topic._subscribed) {
+    if (!this._subscribed) {
       throw new Error("Cannot delete inactive topic");
     }
 
@@ -1088,7 +1113,6 @@
     var tinode = Tinode.getInstance();
     return tinode.delTopic(this.name).then(function(obj) {
       topic._resetSub();
-      tinode.cacheDel("topic", topic.name);
       if (topic.onDeleteTopic) {
         topic.onDeleteTopic();
       }
@@ -1098,7 +1122,7 @@
   Topic.prototype.userInfo = function(uid) {
     // TODO(gene): handle asynchronous requests
 
-    var user = Tinode.getInstance().cacheGet("user", uid);
+    var user = this._cacheGetUser(uid);
     if (user) {
       return user; // Promise.resolve(user)
     }
@@ -1140,12 +1164,13 @@
   }
 
   // Reset subscribed state
-  // TODO(gene): should it also clear the cache?
+  // TODO(gene): should it also clear the message cache?
   Topic.prototype._resetSub = function() {
     topic._subscribed = false;
   }
 
   // Special 'me' topic
+  /*
   var TopicMe = function(callbacks) {
     var me = this;
     return new Topic(TOPIC_ME, {
@@ -1176,6 +1201,7 @@
       }
     });
   }
+  */
 
   // Export for the window object or node; Check that is not already defined.
   if (typeof(environment.Tinode) === 'undefined') {
