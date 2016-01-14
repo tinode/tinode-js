@@ -84,16 +84,15 @@
     return val;
   };
 
-  // Basic circular buffer for caching messages
   var CBuffer = function(size) {
-    var pointer = 0,
+    var base = 0,
       buffer = [],
       contains = 0;
 
     return {
       get: function(at) {
         if (at >= contains || at < 0) return undefined;
-        return buffer[(at + pointer) % size];
+        return buffer[(at + base) % size];
       },
       // Variadic: takes one or more arguments. If a single array is passed, it's elements are
       // inserted individually
@@ -106,9 +105,12 @@
           insert = arguments;
         }
         for (var idx in insert) {
-          buffer[pointer] = insert[idx];
-          pointer = (pointer + 1) % size;
-          contains = (contains == size ? size : contains + 1);
+          buffer[(base + contains) % size] = insert[idx];
+          contains += 1;
+          if (contains > size) {
+            contains = size;
+            base = (base + 1) % size;
+          }
         }
       },
       size: function() {
@@ -121,12 +123,12 @@
         if (newSize) {
           size = newSize;
         }
-        pointer = 0;
+        base = 0;
         contains = 0;
       },
       forEach: function(callback, context) {
         for (var i = 0; i < contains; i++) {
-          if (callback(buffer[(i + pointer) % size], context)) {
+          if (callback(buffer[(i + base) % size], context)) {
             break;
           }
         }
@@ -551,7 +553,15 @@
                 "topic": topic
               }
             };
-
+          case "note":
+            return {
+              "note": {
+                // no id by design
+                "topic": topic,
+                "what": null, // one of "recv", "read", "kp"
+                "seq": 0 // the server-side message id aknowledged as received or read
+              }
+            };
           default:
             throw new Error("Unknown packet type requested: " + type);
         }
@@ -650,6 +660,19 @@
             // Secondary API - callback
             if (instance.onPresMessage) {
               instance.onPresMessage(pkt.pres);
+            }
+          } else if (pkt.info) {
+            // {info} message - read/received notifications and key presses
+
+            // Preferred API: Route {info}} to topic, if one is registered
+            var topic = cacheGet("topic", pkt.info.topic);
+            if (topic) {
+              topic._routeInfo(pkt.info);
+            }
+
+            // Secondary API - callback
+            if (instance.onInfoMessage) {
+              instance.onInfoMessage(pkt.info);
             }
           } else {
             log("ERROR: Unknown packet received.");
@@ -874,6 +897,22 @@
             cacheDel("topic", topic);
             return ctrl;
           });
+        },
+        // Send a read/recv notification
+        note: function(topic, what, seq) {
+          if (seq <= 0) {
+            throw new Error("Invalid message id");
+          }
+          var pkt = initPacket("note", topic);
+          pkt.note.what = what;
+          pkt.note.seq = seq;
+          return sendBasic(pkt);
+        },
+        // Send a key-press notification
+        noteKeyPress: function(topic) {
+          var pkt = initPacket("note", topic);
+          pkt.note.what = "kp";
+          return sendBasic(pkt);
         },
         // Get named topic, either pull it from cache or create a new instance.
         getTopic: function(name) {
@@ -1129,10 +1168,11 @@
     //return Tinode.getInstance().get(uid);
   }
 
-    // Iterate over stored messages
+    // Iterate over stored messages. If callback is undefined, use the onData callback.
     // Iteration stops if callback returns true
   Topic.prototype.messages = function(callback, context) {
-    this._messages.forEach(callback, context);
+    var cb = (callback || this.onData);
+    this._messages.forEach(cb, context);
   }
 
   // Process data message
