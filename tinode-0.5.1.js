@@ -790,7 +790,7 @@
             // Is this a new topic? Replace "new" with the issued name and add topic to cache.
             if (topic === TOPIC_NEW) {
               topic.name = ctrl.topic;
-              tinode.cachePut("topic", ctrl.topic, topic);
+              cachePut("topic", ctrl.topic, topic);
             }
             return ctrl;
           });
@@ -871,7 +871,7 @@
           pkt.del.what = "topic";
 
           return sendWithPromise(pkt, pkt.del.id).then(function(ctrl) {
-            instance.cacheDel("topic", topic);
+            cacheDel("topic", topic);
             return ctrl;
           });
         },
@@ -881,13 +881,13 @@
           if (!topic) {
             topic = new Topic(name);
             topic._cacheGetUser = function(uid) {
-              return instance.cacheGet("user", uid);
+              return cacheGet("user", uid);
             };
             topic._cachePutUser = function(uid, user) {
-              return instance.cachePut("user", uid, user);
+              return cachePut("user", uid, user);
             };
             topic._cacheDelUser = function(uid) {
-              return instance.cacheDel("user", uid);
+              return cacheDel("user", uid);
             };
             cachePut("topic", name, topic);
           }
