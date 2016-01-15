@@ -559,7 +559,7 @@
                 // no id by design
                 "topic": topic,
                 "what": null, // one of "recv", "read", "kp"
-                "seq": 0 // the server-side message id aknowledged as received or read
+                "seq": undefined // the server-side message id aknowledged as received or read
               }
             };
           default:
@@ -1156,6 +1156,22 @@
         topic.onDeleteTopic();
       }
     });
+  }
+
+  // Send a read/recv notification
+  Topic.prototype.note = function(what, seq) {
+    if (!this._subscribed) {
+      throw new Error("Cannot delete inactive topic");
+    }
+    Tinode.getInstance().note(this.name, what, seq);
+  }
+
+  // Send a key-press notification
+  Topic.prototype.noteKeyPress = function() {
+    if (!this._subscribed) {
+      throw new Error("Cannot delete inactive topic");
+    }
+    Tinode.getInstance().noteKeyPress(this.name);
   }
 
   Topic.prototype.userInfo = function(uid) {
