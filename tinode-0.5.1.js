@@ -437,6 +437,7 @@
       // Resolve or reject a pending promise.
       // Pending promises are stored in _pendingPromises
       function execPromise(id, code, onOK, errorText) {
+        console.log("execPromise: id=" + id + ", code=" + code);
         var callbacks = _pendingPromises[id];
         if (callbacks) {
           delete _pendingPromises[id];
@@ -709,7 +710,8 @@
         enableLogging: function(val) {
           _loggingEnabled = val;
         },
-        // Create new user
+
+        // Create a new user
         createUser: function(auth, params) {
           var pkt = initPacket("acc");
           pkt.acc.user = USER_NEW;
@@ -722,9 +724,8 @@
             }
           }
           if (params) {
-            if (params.login) {
-              pkt.acc.login = scheme;
-            }
+            // Log in to the new account using selected scheme
+            pkt.acc.login = params.login;
             pkt.acc.init.defacs = params.acs;
             pkt.acc.init.public = params.public;
             pkt.acc.init.private = params.private;
@@ -734,9 +735,11 @@
         },
         // Create user using 'basic' authentication scheme
         createUserBasic: function(username, password, params) {
-          return instance.CreateUser([{
-            "basic": username + ":" + password
-          }], params);
+          return instance.createUser(
+            [{
+              scheme: "basic",
+              secret: username + ":" + password
+            }], params);
         },
 
         // Authenticate current session
@@ -1028,55 +1031,6 @@
     return this._subscribed;
   }
 
-  Topic.prototype._resetSub = function() {
-    // clear all caches
-  }
-
-  // Called by Tinode when meta.info packet is received.
-  Topic.prototype._processInfo = function(info) {
-    // Copy parameters from info object to this topic.
-    for (var prop in info) {
-      if (info.hasOwnProperty(prop) && info[prop]) {
-        this[prop] = info[prop];
-      }
-    }
-
-    if (typeof this.created === "string") {
-      this.created = new Date(this.created);
-    }
-    if (typeof this.updated === "string") {
-        this.updated = new Date(this.updated);
-    }
-
-    if (this.onInfoChange) {
-        this.onInfoChange(info);
-    }
-  };
-
-  // Called by Tinode when meta.sub is recived.
-  Topic.prototype._processSub = function(subs) {
-    var tinode = Tinode.getInstance();
-    for (var idx in subs) {
-      var sub = subs[idx];
-      if (sub.user) { // response to get.sub on !me topic does not have .user set
-        // Same the object to global cache
-        this._cachePutUser(sub.user, sub);
-        // Save the reference to user in the topic.
-        this._users[sub.user] = sub.user;
-      }
-    }
-
-    if (this.onSubsChange) {
-      for (var idx in subs) {
-        this.onSubsChange(subs[idx]);
-      }
-    }
-
-    if (this.onSubsUpdated) {
-      this.onSubsUpdated(Object.keys(this._users));
-    }
-  };
-
   // Subscribe to topic
   Topic.prototype.subscribe = function(params) {
     // If the topic is already subscribed, return resolved promise
@@ -1193,6 +1147,15 @@
 
   // Process data message
   Topic.prototype._routeData = function(data) {
+    // Generate a topic-unique index for the sender. It can be used to assign
+    // topic-unique properties to users, such as message background color.
+    var idx = this._users.indexOf(data.from);
+    if (idx < 0) {
+      idx = this._users.length;
+      this._user.push(data.from);
+    }
+    data.$userIndex = idx;
+
     this._messages.put(data);
     if (this.onData) {
       this.onData(data);
@@ -1218,6 +1181,53 @@
       this.onPres(pres);
     }
   }
+
+  // Called by Tinode when meta.info packet is received.
+  Topic.prototype._processInfo = function(info) {
+    // Copy parameters from info object to this topic.
+    for (var prop in info) {
+      if (info.hasOwnProperty(prop) && info[prop]) {
+        this[prop] = info[prop];
+      }
+    }
+
+    if (typeof this.created === "string") {
+      this.created = new Date(this.created);
+    }
+    if (typeof this.updated === "string") {
+        this.updated = new Date(this.updated);
+    }
+
+    if (this.onInfoChange) {
+        this.onInfoChange(info);
+    }
+  };
+
+  // Called by Tinode when meta.sub is recived.
+  Topic.prototype._processSub = function(subs) {
+    var tinode = Tinode.getInstance();
+    for (var idx in subs) {
+      var sub = subs[idx];
+      if (sub.user) { // response to get.sub on !me topic does not have .user set
+        // Save the object to global cache
+        this._cachePutUser(sub.user, sub);
+        // Save the reference to user in the topic. Make sure it's unique.
+        if (this._users.indexOf(sub.user) < 0) {
+          this._users.push(sub.user);
+        }
+      }
+    }
+
+    if (this.onSubsChange) {
+      for (var idx in subs) {
+        this.onSubsChange(subs[idx]);
+      }
+    }
+
+    if (this.onSubsUpdated) {
+      this.onSubsUpdated(Object.keys(this._users));
+    }
+  };
 
   // Reset subscribed state
   // TODO(gene): should it also clear the message cache?
