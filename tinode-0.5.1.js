@@ -38,6 +38,15 @@
       'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) + 'Z';
   }
 
+  // Copy src's own properties to dst.
+  var mergeObj = function(dst, src) {
+    for (var prop in src) {
+      if (src.hasOwnProperty(prop) && src[prop]) {
+        dst[prop] = src[prop];
+      }
+    }
+  }
+
   // Basic cross-domain requester. Supports normal browsers and IE8+
   var xdreq = function() {
     var xdreq = null;
@@ -460,7 +469,6 @@
       // Resolve or reject a pending promise.
       // Pending promises are stored in _pendingPromises
       function execPromise(id, code, onOK, errorText) {
-        console.log("execPromise: id=" + id + ", code=" + code);
         var callbacks = _pendingPromises[id];
         if (callbacks) {
           delete _pendingPromises[id];
@@ -729,14 +737,6 @@
         disconnect: function() {
           _connection.disconnect();
         },
-        // Return ID of the current authenticated user.
-        getCurrentUserID: function() {
-          return _myUID;
-        },
-        // Toggle console logging. Logging is off by default.
-        enableLogging: function(val) {
-          _loggingEnabled = val;
-        },
 
         // Create a new user
         createUser: function(auth, params) {
@@ -947,19 +947,25 @@
         // Get named topic, either pull it from cache or create a new instance.
         getTopic: function(name) {
           var topic = cacheGet("topic", name);
-          if (!topic) {
-            topic = new Topic(name);
-            topic._cacheGetUser = function(uid) {
-              return cacheGet("user", uid);
-            };
-            topic._cachePutUser = function(uid, user) {
-              return cachePut("user", uid, user);
-            };
-            topic._cacheDelUser = function(uid) {
-              return cacheDel("user", uid);
-            };
+          if (!topic && name) {
+            if (name === TOPIC_ME) {
+              topic = new TopicMe();
+            } else {
+              topic = new Topic(name);
+            }
             cachePut("topic", name, topic);
           }
+
+          topic._cacheGetUser = function(uid) {
+            return cacheGet("user", uid);
+          };
+          topic._cachePutUser = function(uid, user) {
+            return cachePut("user", uid, user);
+          };
+          topic._cacheDelUser = function(uid) {
+            return cacheDel("user", uid);
+          };
+
           return topic;
         },
         // Instantiate 'me' topic or get it from cache.
@@ -968,6 +974,14 @@
         },
         newTopic: function(callbacks) {
           return new Topic(undefined, callbacks);
+        },
+        // Return ID of the current authenticated user.
+        getCurrentUserID: function() {
+          return _myUID;
+        },
+        // Toggle console logging. Logging is off by default.
+        enableLogging: function(val) {
+          _loggingEnabled = val;
         },
         // Deprecated? Remove?
         wantAkn: function(status) {
@@ -1017,7 +1031,7 @@
    * Logic for a single topic
    */
   var Topic = function(name, callbacks) {
-    // Server-side data
+    // Server-provided data, locally immutable.
     // topic name
     this.name = name;
     // timestamp when the topic was created
@@ -1032,11 +1046,13 @@
     this.public = null;
 
     // Locally cached data
-    // List of subscribed users' IDs
+    // Subscribed users, for tracking read/recv notifications.
     this._users = {};
+    // The maximum known {data.seq} value.
+    this._seq = 0;
     // Message cache, sorted by message timestamp, from old to new, keep up to 100 messages
     this._messages = CBuffer(100);
-    // boolean, true if the topic is currently live
+    // Boolean, true if the topic is currently live
     this._subscribed = false;
 
     // Callbacks
@@ -1044,257 +1060,335 @@
       this.onData = callbacks.onData;
       this.onMeta = callbacks.onMeta;
       this.onPres = callbacks.onPres;
+      this.onInfo = callbacks.onInfo;
       // A single info update;
-      this.onInfoChange = callbacks.onInfoChange;
+      this.onMetaInfo = callbacks.onMetaInfo;
       // A single subscription record;
-      this.onSubsChange = callbacks.onSubsChange;
+      this.onMetaSub = callbacks.onMetaSub;
       // All subscription records received;
       this.onSubsUpdated = callbacks.onSubsUpdated;
       this.onDeleteTopic = callbacks.onDeleteTopic;
     }
   };
 
-  Topic.prototype.isSubscribed = function() {
-    return this._subscribed;
-  }
+  Topic.prototype = {
+    isSubscribed: function() {
+      return this._subscribed;
+    },
 
-  // Subscribe to topic
-  Topic.prototype.subscribe = function(params) {
-    // If the topic is already subscribed, return resolved promise
-    if (this._subscribed) {
-      return Promise.resolve(this);
-    }
+    // Subscribe to topic
+    subscribe: function(params) {
+      // If the topic is already subscribed, return resolved promise
+      if (this._subscribed) {
+        return Promise.resolve(this);
+      }
 
-    var name = this.name;
-    var tinode = Tinode.getInstance();
-    // Closure for the promise below.
-    var topic = this;
-    // Send subscribe message, handle async response
-    return tinode.subscribe((name || TOPIC_NEW), params).then(function(ctrl) {
-      topic._subscribed = true;
-      return topic;
-    });
-  }
+      var name = this.name;
+      var tinode = Tinode.getInstance();
+      // Closure for the promise below.
+      var topic = this;
+      // Send subscribe message, handle async response
+      return tinode.subscribe((name || TOPIC_NEW), params).then(function(ctrl) {
+        topic._subscribed = true;
+        return topic;
+      });
+    },
 
-  Topic.prototype.publish = function(data, params) {
-    if (!this._subscribed) {
-      throw new Error("Cannot publish on inactive topic");
-    }
-    // Send data
-    return Tinode.getInstance().publish(this.name, data, params);
-  }
+    // Send {data} message
+    publish: function(data, params) {
+      if (!this._subscribed) {
+        throw new Error("Cannot publish on inactive topic");
+      }
+      // Send data
+      return Tinode.getInstance().publish(this.name, data, params);
+    },
 
-  // Leave topic
-  // @unsub: boolean, leave and unsubscribe
-  Topic.prototype.leave = function(unsub) {
-    // FIXME(gene): It's possible to unsubscribe (unsub==true) from inactive topic.
-    if (!this._subscribed && !unsub) {
-      throw new Error("Cannot leave inactive topic");
-    }
-    // Send unsubscribe message, handle async response
-    var topic = this;
-    return Tinode.getInstance().leave(this.name, unsub).then(function(obj) {
-      topic._resetSub();
-    });
-  }
+    // Leave topic
+    // @unsub: boolean, leave and unsubscribe
+    leave: function(unsub) {
+      // FIXME(gene): It's possible to unsubscribe (unsub==true) from inactive topic.
+      if (!this._subscribed && !unsub) {
+        throw new Error("Cannot leave inactive topic");
+      }
+      // Send unsubscribe message, handle async response
+      var topic = this;
+      return Tinode.getInstance().leave(this.name, unsub).then(function(obj) {
+        topic._resetSub();
+      });
+    },
 
-  Topic.prototype.get = function(what, browse) {
-    if (!this._subscribed) {
-      throw new Error("Cannot query inactive topic");
-    }
-    // Send {get} message, return promise.
-    return Tinode.getInstance().get(this.name, what, browse);
-  }
+    // Get topic metadata
+    getMeta: function(what, browse) {
+      if (!this._subscribed) {
+        throw new Error("Cannot query inactive topic");
+      }
+      // Send {get} message, return promise.
+      return Tinode.getInstance().get(this.name, what, browse);
+    },
 
-  Topic.prototype.set = function(params) {
-    if (!this._subscribed) {
-      throw new Error("Cannot update inactive topic");
-    }
-    // Send Set message, handle async response
-    return Tinode.getInstance().set(topic.name, params);
-  }
+    setMeta: function(params) {
+      if (!this._subscribed) {
+        throw new Error("Cannot update inactive topic");
+      }
+      // Send Set message, handle async response
+      return Tinode.getInstance().set(topic.name, params);
+    },
 
-  // Delete messages
-  Topic.prototype.delete = function(params) {
-    if (!this._subscribed) {
-      throw new Error("Cannot delete messages in inactive topic");
-    }
-    // Send {del} message, return promise
-    return Tinode.getInstance().delMessages(this.name, params);
-  }
-
-  Topic.prototype.delTopic = function(params) {
-    if (!this._subscribed) {
-      throw new Error("Cannot delete inactive topic");
-    }
+    // Delete messages
+    delete: function(params) {
+      if (!this._subscribed) {
+        throw new Error("Cannot delete messages in inactive topic");
+      }
+      // Send {del} message, return promise
+      return Tinode.getInstance().delMessages(this.name, params);
+    },
 
     // Delete topic
-    var topic = this;
-    var tinode = Tinode.getInstance();
-    return tinode.delTopic(this.name).then(function(obj) {
-      topic._resetSub();
-      if (topic.onDeleteTopic) {
-        topic.onDeleteTopic();
+    delTopic: function(params) {
+      if (!this._subscribed) {
+        throw new Error("Cannot delete inactive topic");
       }
-    });
-  }
 
-  // Send a read/recv notification
-  Topic.prototype.note = function(what, seq) {
-    if (!this._subscribed) {
-      throw new Error("Cannot delete inactive topic");
-    }
-    Tinode.getInstance().note(this.name, what, seq);
-  }
+      var topic = this;
+      var tinode = Tinode.getInstance();
+      return tinode.delTopic(this.name).then(function(obj) {
+        topic._resetSub();
+        if (topic.onDeleteTopic) {
+          topic.onDeleteTopic();
+        }
+      });
+    },
 
-  // Send a key-press notification
-  Topic.prototype.noteKeyPress = function() {
-    if (!this._subscribed) {
-      throw new Error("Cannot delete inactive topic");
-    }
-    Tinode.getInstance().noteKeyPress(this.name);
-  }
-
-  Topic.prototype.userInfo = function(uid) {
-    // TODO(gene): handle asynchronous requests
-
-    var user = this._cacheGetUser(uid);
-    if (user) {
-      return user; // Promise.resolve(user)
-    }
-    //return Tinode.getInstance().get(uid);
-  }
-
-    // Iterate over stored messages. If callback is undefined, use the onData callback.
-    // Iteration stops if callback returns true
-  Topic.prototype.messages = function(callback, context) {
-    var cb = (callback || this.onData);
-    this._messages.forEach(cb, context);
-  }
-
-  // Process data message
-  Topic.prototype._routeData = function(data) {
-    // Generate a topic-unique index for the sender. It can be used to assign
-    // topic-unique properties to users, such as message background color.
-    var idx = this._users.indexOf(data.from);
-    if (idx < 0) {
-      idx = this._users.length;
-      this._user.push(data.from);
-    }
-    data.$userIndex = idx;
-
-    this._messages.put(data);
-    if (this.onData) {
-      this.onData(data);
-    }
-  }
-
-  // Process metadata message
-  Topic.prototype._routeMeta = function(meta) {
-    if (meta.info) {
-      this._processInfo(meta.info);
-    }
-    if (meta.sub && meta.sub.length > 0) {
-      this._processSub(meta.sub);
-    }
-    if (this.onMeta) {
-      this.onMeta(meta);
-    }
-  }
-
-  // Process presence change message
-  Topic.prototype._routePres = function(pres) {
-    if (this.onPres) {
-      this.onPres(pres);
-    }
-  }
-
-  // Called by Tinode when meta.info packet is received.
-  Topic.prototype._processInfo = function(info) {
-    // Copy parameters from info object to this topic.
-    for (var prop in info) {
-      if (info.hasOwnProperty(prop) && info[prop]) {
-        this[prop] = info[prop];
+    // Send a read/recv notification
+    note: function(what, seq) {
+      var tinode = Tinode.getInstance();
+      var user = this._users[tinode.getCurrentUserID()];
+      if (user) {
+        if (!user[what] || user[what] < seq) {
+          if (!this._subscribed) {
+            throw new Error("Cannot send notification in inactive topic");
+          }
+          tinode.note(this.name, what, seq);
+        }
+        user[what] = seq;
       }
-    }
+    },
 
-    if (typeof this.created === "string") {
-      this.created = new Date(this.created);
-    }
-    if (typeof this.updated === "string") {
-        this.updated = new Date(this.updated);
-    }
+    // Send received notification
+    noteRecv: function(seq) {
+      this.note("recv", seq);
+    },
 
-    if (this.onInfoChange) {
-        this.onInfoChange(info);
-    }
-  };
+    // Send read notification
+    noteRead: function(seq) {
+      this.note("read", seq);
+    },
 
-  // Called by Tinode when meta.sub is recived.
-  Topic.prototype._processSub = function(subs) {
-    var tinode = Tinode.getInstance();
-    for (var idx in subs) {
-      var sub = subs[idx];
-      if (sub.user) { // response to get.sub on !me topic does not have .user set
-        // Save the object to global cache
-        this._cachePutUser(sub.user, sub);
-        // Save the reference to user in the topic. Make sure it's unique.
-        if (this._users.indexOf(sub.user) < 0) {
-          this._users.push(sub.user);
+    // Send a key-press notification
+    noteKeyPress: function() {
+      if (!this._subscribed) {
+        throw new Error("Cannot send notification in inactive topic");
+      }
+      Tinode.getInstance().noteKeyPress(this.name);
+    },
+
+    // Get user
+    userInfo: function(uid) {
+      // TODO(gene): handle asynchronous requests
+
+      var user = this._cacheGetUser(uid);
+      if (user) {
+        return user; // Promise.resolve(user)
+      }
+      //return Tinode.getInstance().get(uid);
+    },
+
+    // Iterate over cached messages. If callback is undefined, use this.onData.
+    // Iteration stops if callback returns true.
+    messages: function(callback, context) {
+      var cb = (callback || this.onData);
+      this._messages.forEach(cb, context);
+    },
+
+    // Get the number of topic subscribers who marked this message as read.
+    msgReadCount: function(seq) {
+      var count = 0;
+      if (seq > 0) {
+        for (var idx in this._users) {
+          if (this._users[idx].read >= seq) {
+            count++;
+          }
         }
       }
-    }
+      return count;
+    },
+    // Get the number of topic subscribers who marked this message as received.
+    msgRecvCount: function(seq) {
+      var count = 0;
+      if (seq > 0) {
+        for (var idx in this._users) {
+          if (this._users[idx].recv >= seq) {
+            count++;
+          }
+        }
+      }
+      return count;
+    },
+    // Get topic type: me, p2p, grp
+    getType: function() {
+      var topicType;
+      if (this.name) {
+        topicType = this.name.substring(0, 3);
+      }
+      return topicType;
+    },
 
-    if (this.onSubsChange) {
+    // Process data message
+    _routeData: function(data) {
+      // Generate a topic-unique index for the sender. It can be used to
+      // differentiate messages by sender, such as different message background
+      // for different senders.
+      var idx = Object.keys(this._users).indexOf(data.from);
+      if (idx < 0) {
+        idx = Object.keys(this._users).length;
+        this._user[data.from] = {user: data.from};
+      }
+      data.$userIndex = idx;
+
+      this._messages.put(data);
+
+      if (data.seq > this._seq) {
+        this._seq = data.seq;
+      }
+
+      if (this.onData) {
+        this.onData(data);
+      }
+    },
+
+    // Process metadata message
+    _routeMeta: function(meta) {
+      if (meta.info) {
+        this._processMetaInfo(meta.info);
+      }
+      if (meta.sub && meta.sub.length > 0) {
+        this._processMetaSub(meta.sub);
+      }
+      if (this.onMeta) {
+        this.onMeta(meta);
+      }
+    },
+
+    // Process presence change message
+    _routePres: function(pres) {
+      if (this.onPres) {
+        this.onPres(pres);
+      }
+    },
+
+    // Process {info} message
+    _routeInfo: function(info) {
+      if (info.what !== "kp") {
+        var user = this._users[info.from];
+        if (user) {
+          user[info.what] = info.seq;
+        }
+      }
+      if (this.onInfo) {
+        this.onInfo(info);
+      }
+    },
+
+    // Called by Tinode when meta.info packet is received.
+    _processMetaInfo: function(info) {
+      // Copy parameters from info object to this topic.
+      mergeObj(this, info);
+
+      if (typeof this.created === "string") {
+        this.created = new Date(this.created);
+      }
+      if (typeof this.updated === "string") {
+          this.updated = new Date(this.updated);
+      }
+
+      if (this.onMetaInfo) {
+          this.onMetaInfo(info);
+      }
+    },
+
+    // Called by Tinode when meta.sub is recived.
+    _processMetaSub: function(subs) {
       for (var idx in subs) {
-        this.onSubsChange(subs[idx]);
-      }
-    }
+        var sub = subs[idx];
+        if (sub.user) { // Response to get.sub on 'me' topic does not have .user set
+          // Save the object to global cache.
+          this._cachePutUser(sub.user, sub);
+          // Cache user in the topic as well.
+          var cached = this._users[sub.user];
+          if (cached) {
+            mergeObj(cached, sub);
+          } else {
+            this._users[sub.user] = sub;
+          }
+        }
 
-    if (this.onSubsUpdated) {
-      this.onSubsUpdated(Object.keys(this._users));
+        if (this.onMetaSub) {
+          this.onMetaSub(subs[idx]);
+        }
+      }
+
+      if (this.onSubsUpdated) {
+        this.onSubsUpdated(Object.keys(this._users));
+      }
+    },
+
+    // Reset subscribed state
+    // TODO(gene): should it also clear the message cache?
+    _resetSub: function() {
+      topic._subscribed = false;
     }
   };
 
-  // Reset subscribed state
-  // TODO(gene): should it also clear the message cache?
-  Topic.prototype._resetSub = function() {
-    topic._subscribed = false;
-  }
-
-  // Special 'me' topic
-  /*
+  // Special case: 'me' topic
   var TopicMe = function(callbacks) {
-    var me = this;
-    return new Topic(TOPIC_ME, {
-      onData: function(data) {
-        if (me.onData) {
-          me.onData(data)
+    Topic.call(this, TOPIC_ME, callbacks);
+    this._contacts = {};
+  };
+  // Inherit everyting from the generic Topic
+  TopicMe.prototype = Object.create(Topic.prototype, {
+    // Override the original Topic._processMetaSub
+    _processMetaSub: {
+      value: function(subs) {
+        for (var idx in subs) {
+          var cont = this._contacts[subs[idx].topic];
+          subs[idx].created = new Date(subs[idx].created);
+          subs[idx].updated = new Date(subs[idx].updated);
+          if (cont) {
+            mergeObj(cont, subs[idx]);
+          } else {
+            cont = subs[idx];
+          }
+          this._contacts[cont.topic] = cont;
+
+          if (this.onMetaSub) {
+            this.onMetaSub(subs[idx]);
+          }
+        }
+
+        if (this.onSubsUpdated) {
+          this.onSubsUpdated(Object.keys(this._users));
         }
       },
-      onMeta: function(meta) {
-        if (me.onMeta) {
-          me.onMeta(meta);
-        }
-      },
-      onPres: function(pres) {
-        if (me.onPres) {
-          me.onPres(pres);
-        }
-      },
-      onSubsChange: function(sub) {
-        if (me.onSubsChange) {
-          me.onSubsChange(sub);
-        }
-      },
-      onInfoChange: function(info) {
-        if (me.onInfoChange) {
-          me.onInfoChange(info);
-        }
-      }
-    });
-  }
-  */
+      enumerable: true,
+      configurable: true,
+      writable: true
+    },
+
+    getContact: function(name) {
+      return this._contacts[name];
+    }
+  });
+  TopicMe.prototype.constructor = TopicMe;
 
   // Export for the window object or node; Check that is not already defined.
   if (typeof(environment.Tinode) === 'undefined') {
