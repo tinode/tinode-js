@@ -945,6 +945,7 @@
           return sendBasic(pkt);
         },
         // Get named topic, either pull it from cache or create a new instance.
+        // There is a single instance of topic for each name.
         getTopic: function(name) {
           var topic = cacheGet("topic", name);
           if (!topic && name) {
@@ -1204,10 +1205,11 @@
     },
 
     // Iterate over cached messages. If callback is undefined, use this.onData.
-    // Iteration stops if callback returns true.
     messages: function(callback, context) {
       var cb = (callback || this.onData);
-      this._messages.forEach(cb, context);
+      if (cb) {
+        this._messages.forEach(cb, context);
+      }
     },
 
     // Get the number of topic subscribers who marked this message as read.
@@ -1352,7 +1354,15 @@
   // Special case: 'me' topic
   var TopicMe = function(callbacks) {
     Topic.call(this, TOPIC_ME, callbacks);
+    // List of contacts
     this._contacts = {};
+    // Map of p2p topics indexed by the other user ID.
+    this._p2p = {};
+
+    // me-specific callbacks
+    if (callbacks) {
+      this.onContactUpdate = callbacks.onContactUpdate;
+    }
   };
   // Inherit everyting from the generic Topic
   TopicMe.prototype = Object.create(Topic.prototype, {
@@ -1369,6 +1379,9 @@
             cont = subs[idx];
           }
           this._contacts[cont.topic] = cont;
+          if (cont.with) {
+            this._p2p[cont.with] = cont.topic;
+          }
 
           if (this.onMetaSub) {
             this.onMetaSub(subs[idx]);
@@ -1376,7 +1389,7 @@
         }
 
         if (this.onSubsUpdated) {
-          this.onSubsUpdated(Object.keys(this._users));
+          this.onSubsUpdated(Object.keys(this._contacts));
         }
       },
       enumerable: true,
@@ -1384,8 +1397,75 @@
       writable: true
     },
 
-    getContact: function(name) {
-      return this._contacts[name];
+    // Process presence change message
+    _routePres: {
+      value: function(pres) {
+        // p2p topics are not getting what=on/off/upd updates,
+        // such updates are sent with pres.topic set to user ID
+        var contactName = this._p2p[pres.src] || pres.src;
+        var cont = this._contacts[contactName];
+        if (cont) {
+          switch(pres.what) {
+            case "on": // topic came online
+              cont.$online = true;
+              break;
+            case "off": // topic went offline
+              cont.$online = false;
+              break;
+            case "msg": // new message received
+              cont.seq = pres.seq;
+              break;
+            case "upd": // info updated
+              // TODO(gene): request updated info
+              break;
+            case "ua": // user agent changed
+              cont.seen = {when: new Date(), ua: pres.ua};
+              break;
+            case "recv": // user's other session marked some messges as received
+              cont.recv = cont.recv ? Math.max(cont.recv, pres.seq) : pres.seq;
+              break;
+            case "read": // user's other session marked some messages as read
+              cont.read = cont.read ? Math.max(cont.read, pres.seq) : pres.seq;
+              break;
+            case "del": // messages or topic deleted in other session
+              // TODO(gene): add handling for del
+          }
+          if (this.onContactUpdate) {
+            this.onContactUpdate(pres.what, cont);
+          }
+        }
+        if (this.onPres) {
+          this.onPres(pres);
+        }
+      },
+      enumerable: true,
+      configurable: true,
+      writable: true
+    },
+
+    // Iterate over cached contacts. If callback is undefined, use this.onMetaSub.
+    contacts: {
+      value: function(callback, context) {
+        var cb = (callback || this.onMetaSub);
+        if (cb) {
+          for (var idx in this._contacts) {
+            cb.call(context, this._contacts[idx], idx, this._contacts);
+          }
+        }
+      },
+      enumerable: true,
+      configurable: true,
+      writable: true
+    },
+
+    // Get a single contact by name
+    getContact: {
+      value: function(name) {
+        return this._contacts[name];
+      },
+      enumerable: true,
+      configurable: true,
+      writable: true
     }
   });
   TopicMe.prototype.constructor = TopicMe;
