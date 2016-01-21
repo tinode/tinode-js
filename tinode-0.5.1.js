@@ -182,10 +182,26 @@
     var secure;
     var apiKey;
 
+    // Settings for exponential backoff
+    var _boffBase = 2000; // 2000 milliseconds, minimum delay between reconnects
+    var _boffMaxIter = 10; // Maximum delay between reconnects 2^10 * 2000 ~ 34 minutes
+    var _boffJitter = 0.3; // Add random delay
+    var _boffTimer = null;
+
     function log(text) {
       if (instance.logger) {
         instance.logger(text);
       }
+    }
+
+    function reconnect(iter) {
+      clearTimeout(_boffTimer);
+      var timeout = _boffBase * (Math.pow(2, iter) * (1.0 + 0.3 * Math.random()));
+      iter = (iter == _boffMaxIter ? iter : iter + 1);
+      _boffTimer = setTimeout(function() {
+        console.log("Reconnecting, iter=" + iter + ", timeout=" + timeout);
+        reconnect(iter);
+      }, timeout);
     }
 
     // Initialization for Websocket
@@ -339,6 +355,8 @@
             log("Connecting to: " + url);
             _poller = lp_poller(url);
             _poller.send(null)
+          }).catch(function() {
+
           });
         },
         disconnect: function() {
@@ -936,13 +954,13 @@
           var pkt = initPacket("note", topic);
           pkt.note.what = what;
           pkt.note.seq = seq;
-          return sendBasic(pkt);
+          sendBasic(pkt);
         },
         // Send a key-press notification
         noteKeyPress: function(topic) {
           var pkt = initPacket("note", topic);
           pkt.note.what = "kp";
-          return sendBasic(pkt);
+          sendBasic(pkt);
         },
         // Get named topic, either pull it from cache or create a new instance.
         // There is a single instance of topic for each name.
@@ -1173,6 +1191,15 @@
         }
         user[what] = seq;
       }
+
+      // Update locally cached contact with the new count
+      var me = tinode.getMeTopic();
+      if (me) {
+        me.setReadRecv(this.name, what, seq);
+        if (me.onContactUpdate) {
+          me.onContactUpdate(pres.what, cont);
+        }
+      }
     },
 
     // Send received notification
@@ -1373,6 +1400,9 @@
           var cont = this._contacts[subs[idx].topic];
           subs[idx].created = new Date(subs[idx].created);
           subs[idx].updated = new Date(subs[idx].updated);
+          if (subs[idx].seen && subs[idx].seen.when) {
+            subs[idx].seen.when = new Date(subs[idx].seen.when);
+          }
           if (cont) {
             mergeObj(cont, subs[idx]);
           } else {
@@ -1384,7 +1414,7 @@
           }
 
           if (this.onMetaSub) {
-            this.onMetaSub(subs[idx]);
+            this.onMetaSub(cont);
           }
         }
 
@@ -1407,10 +1437,15 @@
         if (cont) {
           switch(pres.what) {
             case "on": // topic came online
-              cont.$online = true;
+              cont.online = true;
               break;
             case "off": // topic went offline
-              cont.$online = false;
+              cont.online = false;
+              if (cont.seen) {
+                cont.seen.when = new Date();
+              } else {
+                cont.seen = {when: new Date()};
+              }
               break;
             case "msg": // new message received
               cont.seq = pres.seq;
@@ -1452,6 +1487,24 @@
             cb.call(context, this._contacts[idx], idx, this._contacts);
           }
         }
+      },
+      enumerable: true,
+      configurable: true,
+      writable: true
+    },
+
+    // Get a single contact by name
+    setReadRecv: {
+      value: function(contactName, what, seq) {
+        var cont = this._contacts[contactsName];
+        if (cont) {
+          if (what === "recv") {
+            cont.recv = cont.recv ? Math.max(cont.recv, seq) : seq;
+          } else if (what === "read") {
+            cont.read = cont.read ? Math.max(cont.read, seq) : seq;
+          } else {
+            return;
+          }
       },
       enumerable: true,
       configurable: true,
