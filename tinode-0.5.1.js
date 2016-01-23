@@ -1496,7 +1496,7 @@
     // Get a single contact by name
     setReadRecv: {
       value: function(contactName, what, seq) {
-        var cont = this._contacts[contactsName];
+        var cont = this._contacts[contactName];
         if (cont) {
           if (what === "recv") {
             cont.recv = cont.recv ? Math.max(cont.recv, seq) : seq;
@@ -1505,6 +1505,7 @@
           } else {
             return;
           }
+        }
       },
       enumerable: true,
       configurable: true,
