@@ -101,7 +101,7 @@
       contains = 0;
 
     return {
-      get: function(at) {
+      getAt: function(at) {
         if (at >= contains || at < 0) return undefined;
         return buffer[(at + base) % size];
       },
@@ -139,9 +139,7 @@
       },
       forEach: function(callback, context) {
         for (var i = 0; i < contains; i++) {
-          if (callback(buffer[(i + base) % size], context)) {
-            break;
-          }
+          callback.call(context, buffer[(i + base) % size], i);
         }
       }
     }
@@ -1190,6 +1188,8 @@
           tinode.note(this.name, what, seq);
         }
         user[what] = seq;
+      } else {
+        console.log("note(): user not found " + tinode.getCurrentUserID());
       }
 
       // Update locally cached contact with the new count
@@ -1197,7 +1197,9 @@
       if (me) {
         me.setReadRecv(this.name, what, seq);
         if (me.onContactUpdate) {
-          me.onContactUpdate(pres.what, cont);
+          console.log("this.onContactUpdate:");
+          console.log(user);
+          me.onContactUpdate(what, user);
         }
       }
     },
