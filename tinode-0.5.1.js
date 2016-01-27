@@ -1517,7 +1517,8 @@
     // Get a single contact by name
     getContact: {
       value: function(name) {
-        return this._contacts[name];
+        var contactName = this._p2p[name] || name;
+        return this._contacts[contactName];
       },
       enumerable: true,
       configurable: true,
