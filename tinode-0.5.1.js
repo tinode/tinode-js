@@ -1516,7 +1516,6 @@
     getContact: {
       value: function(name) {
         var contactName = this._p2p[name] || name;
-        console.log("TopicMe fetching contact for " + contactName);
         return this._contacts[contactName];
       },
       enumerable: true,
