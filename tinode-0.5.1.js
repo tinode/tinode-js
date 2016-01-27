@@ -882,20 +882,21 @@
           return sendWithPromise(pkt, pkt.pub.id);
         },
         // Request topic metadata
-        get: function(topic, what, browse) {
+        getMeta: function(topic, what, browse) {
           var pkt = initPacket("get", topic);
           pkt.get.what = (what || "info");
           pkt.get.browse = browse;
 
           return sendWithPromise(pkt, pkt.get.id);
         },
+        /**
+          Update topic's metadata: description (info), subscribtions (sub), or delete messages (del)
+            @topic: topic to Update
 
-        // Update topic's metadata: description (info), subscribtions (sub), or delete messages (del)
-        // @topic: topic to Update
-        // @params:
-        // 	@params.info: update to topic description
-        //  @params.sub: update to a subscription
-        set: function(topic, params) {
+        	  @params.info: update to topic description
+            @params.sub: update to a subscription
+        */
+        setMeta: function(topic, params) {
           var pkt = initPacket("set", topic);
           var what = [];
 
@@ -999,6 +1000,10 @@
         // Toggle console logging. Logging is off by default.
         enableLogging: function(val) {
           _loggingEnabled = val;
+        },
+        // Determine topic type from its name: grp, p2p, me
+        getTopicType: function(name) {
+          return name ? name.substring(0, 3) : undefined;
         },
         // Deprecated? Remove?
         wantAkn: function(status) {
@@ -1197,8 +1202,6 @@
       if (me) {
         me.setReadRecv(this.name, what, seq);
         if (me.onContactUpdate) {
-          console.log("this.onContactUpdate:");
-          console.log(user);
           me.onContactUpdate(what, user);
         }
       }
@@ -1267,11 +1270,7 @@
     },
     // Get topic type: me, p2p, grp
     getType: function() {
-      var topicType;
-      if (this.name) {
-        topicType = this.name.substring(0, 3);
-      }
-      return topicType;
+      return Tinode.getInstance().getTopicType(this.name);
     },
 
     // Process data message
@@ -1383,9 +1382,9 @@
   // Special case: 'me' topic
   var TopicMe = function(callbacks) {
     Topic.call(this, TOPIC_ME, callbacks);
-    // List of contacts
+    // List of contacts (topic_name -> Contact object)
     this._contacts = {};
-    // Map of p2p topics indexed by the other user ID.
+    // Map of p2p topics indexed by the other user ID (uid -> p2p_topic_name)
     this._p2p = {};
 
     // me-specific callbacks
@@ -1400,7 +1399,6 @@
       value: function(subs) {
         for (var idx in subs) {
           var cont = this._contacts[subs[idx].topic];
-          subs[idx].created = new Date(subs[idx].created);
           subs[idx].updated = new Date(subs[idx].updated);
           if (subs[idx].seen && subs[idx].seen.when) {
             subs[idx].seen.when = new Date(subs[idx].seen.when);
@@ -1514,10 +1512,11 @@
       writable: true
     },
 
-    // Get a single contact by name
+    // Get a single contact by uid or p2p topic name
     getContact: {
       value: function(name) {
         var contactName = this._p2p[name] || name;
+        console.log("TopicMe fetching contact for " + contactName);
         return this._contacts[contactName];
       },
       enumerable: true,
