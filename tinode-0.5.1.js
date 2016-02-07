@@ -838,14 +838,16 @@
           return instance.login("basic", uname + ":" + password);
         },
 
-        // Send a subscription request to topic
-        // 	@topic -- topic name to subscribe to
-        // 	@params -- optional object with request parameters:
-        //     @params.init -- initializing parameters for new topics. See streaming.Set
-        //		 @params.sub
-        //     @params.mode -- access mode, optional
-        //     @params.get -- list of data to fetch, see Tinode.get
-        //     @params.browse -- optional parameters for get.data. See streaming.Get
+        /**
+          Send a subscription request to topic
+          @topic -- topic name to subscribe to
+          @params -- optional object with request parameters:
+          @params.init -- initializing parameters for new topics. See streaming.Set
+          @params.sub
+          @params.mode -- access mode, optional
+          @params.get -- list of data to fetch, see Tinode.get
+          @params.browse -- optional parameters for get.data. See streaming.Get
+        */
         subscribe: function(topic, params) {
           var pkt = initPacket("sub", topic)
           if (params) {
@@ -867,14 +869,8 @@
               pkt.sub.browse = params.browse;
             }
           }
-          return sendWithPromise(pkt, pkt.sub.id).then(function(ctrl){
-            // Is this a new topic? Replace "new" with the issued name and add topic to cache.
-            if (topic === TOPIC_NEW) {
-              topic.name = ctrl.topic;
-              cachePut("topic", ctrl.topic, topic);
-            }
-            return ctrl;
-          });
+          
+          return sendWithPromise(pkt, pkt.sub.id);
         },
         // Leave topic
         leave: function(topic, unsub) {
@@ -1122,7 +1118,12 @@
       // Closure for the promise below.
       var topic = this;
       // Send subscribe message, handle async response
-      return tinode.subscribe((name || TOPIC_NEW), params).then(function(ctrl) {
+      return tinode.subscribe((name || TOPIC_NEW, params).then(function(ctrl) {
+        // Set topic name for new topics and add it to cache.
+        if (!name) {
+          topic.name = ctrl.topic;
+          tinode.cachePut("topic", topic.name, topic);
+        }
         topic._subscribed = true;
         return topic;
       });
