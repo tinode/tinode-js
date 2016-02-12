@@ -20,8 +20,8 @@
 
   // Global constants
   var PROTOVERSION = "0";
-  var VERSION = "0.5";
-  var LIBRARY = "tinodejs/0.5";
+  var VERSION = "0.6";
+  var LIBRARY = "tinodejs/" + VERSION;
 
   var TOPIC_NEW = "new";
   var TOPIC_ME = "me";
@@ -81,7 +81,7 @@
 
   // Attempt to convert some date strings to objects
   var jsonParseHelper = function(key, val) {
-    // Convert timestamps with optional milliseconds
+    // Convert string timestamps with optional milliseconds to Date
     // 2015-09-02T01:45:43[.123]Z
     if (key === 'ts' && typeof val == 'string' &&
       val.length >= 20 && val.length <= 24) {
@@ -89,6 +89,14 @@
       if (date) {
         return date;
       }
+    }
+    return val;
+  };
+
+  // Trims verly long strings (encoded images) to make logged packets more readable
+  var jsonLoggerHelper = function(key, val) {
+    if (typeof val == 'string' && val.length > 128) {
+      return "<" + val.length + " bytes: " + val.substring(0, 32) + "..." + val.substring(-32) + ">";
     }
     return val;
   };
@@ -431,6 +439,8 @@
       var _platform = navigator.platform;
       // Logging to console enabled
       var _loggingEnabled = false;
+      // When logging, trip long strings (base64-encoded images) for readability
+      var _trimLongStrings = false;
       // The name of the host and TCP port to connect to, i.e. api.tinode.co
       // or localhost:8000
       var _hostNameAndPort = '';
@@ -536,7 +546,7 @@
                 "user": null,
                 "auth": [],
                 "login": null,
-                "init": {}
+                "desc": {}
               }
             };
 
@@ -555,9 +565,8 @@
               "sub": {
                 "id": getNextMessageId(),
                 "topic": topic,
-                "mode": null,
-                "init": {},
-                "browse": {}
+                "set": {},
+                "get": {}
               }
             };
 
@@ -585,8 +594,10 @@
               "get": {
                 "id": getNextMessageId(),
                 "topic": topic,
-                "what": null, // data, sub, info, space separated list; unknown strings are ignored
-                "browse": {}
+                "what": null, // data, sub, desc, space separated list; unknown strings are ignored
+                "desc": {},
+                "sub": {},
+                "data": {}
               }
             };
 
@@ -595,8 +606,7 @@
               "set": {
                 "id": getNextMessageId(),
                 "topic": topic,
-                "what": null,
-                "info": {},
+                "desc": {},
                 "sub": {}
               }
             };
@@ -625,14 +635,14 @@
       // Send a packet
       function sendBasic(pkt) {
         var msg = JSON.stringify(pkt, jsonBuildHelper);
-        log("out: " + msg);
+        log("out: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
         _connection.sendText(msg);
       }
       // Send a packet returning a promise
       function sendWithPromise(pkt, id) {
         var promise = makePromise(id);
         var msg = JSON.stringify(pkt, jsonBuildHelper);
-        log("out: " + msg);
+        log("out: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
         _connection.sendText(msg);
         return promise;
       }
@@ -735,6 +745,29 @@
         }
       }
 
+      // Helper function to construct {get} and {sub.get} packet.
+      function parseGetParams(params) {
+        var what = [];
+        var result = {};
+
+        if (params) {
+          ["data", "sub", "desc"].map(function(key) {
+            if (params.hasOwnProperty(key)) {
+              what.push(key);
+              result[key] = params[key];
+            }
+          });
+        }
+
+        if (what.length > 0) {
+          result.what = what.join(" ");
+        } else {
+          throw new Error("Invalid {get} parameters.");
+        }
+
+        return result;
+      }
+
       // Returning an initialized instance with public methods;
       return {
         /** Instance configuration.
@@ -781,9 +814,9 @@
           if (params) {
             // Log in to the new account using selected scheme
             pkt.acc.login = params.login;
-            pkt.acc.init.defacs = params.acs;
-            pkt.acc.init.public = params.public;
-            pkt.acc.init.private = params.private;
+            pkt.acc.desc.defacs = params.desc.acs;
+            pkt.acc.desc.public = params.desc.public;
+            pkt.acc.desc.private = params.desc.private;
           }
 
           return sendWithPromise(pkt, pkt.acc.id);
@@ -841,32 +874,32 @@
         // Send a subscription request to topic
         // 	@topic -- topic name to subscribe to
         // 	@params -- optional object with request parameters:
-        //     @params.init -- initializing parameters for new topics. See streaming.Set
+        //     @params.desc -- initializing parameters for new topics. See setMeta()
         //		 @params.sub
-        //     @params.mode -- access mode, optional
         //     @params.get -- list of data to fetch, see Tinode.get
-        //     @params.browse -- optional parameters for get.data. See streaming.Get
+        //     @params.browse -- optional parameters for get.data. See getMeta()
         subscribe: function(topic, params) {
           var pkt = initPacket("sub", topic)
+          if (!topic) {
+            topic = TOPIC_NEW;
+          }
+
           if (params) {
-            pkt.sub.get = params.get;
-            if (params.sub) {
-              pkt.sub.sub.mode = params.sub.mode;
-              pkt.sub.sub.info = params.sub.info;
-            }
-            // .init params are used for new topics only
-            if (topic === undefined) {
-              topic = TOPIC_NEW;
-            }
-            if (topic === TOPIC_NEW) {
-              pkt.sub.init.defacs = params.init.acs;
-              pkt.sub.init.public = params.init.public;
-              pkt.sub.init.private = params.init.private;
-            } else {
-              // browse makes sense only in context of an existing topic
-              pkt.sub.browse = params.browse;
+            pkt.sub.get = parseGetParams(params.get);
+
+            if (params.set) {
+              pkt.sub.set.sub = params.set.sub;
+
+              if (topic === TOPIC_NEW) {
+                // set.desc params are used for new topics only
+                pkt.sub.set.desc = params.set.desc
+              } else {
+                // browse makes sense only in context of an existing topic
+                pkt.sub.set.data = params.set.data;
+              }
             }
           }
+
           return sendWithPromise(pkt, pkt.sub.id).then(function(ctrl){
             // Is this a new topic? Replace "new" with the issued name and add topic to cache.
             if (topic === TOPIC_NEW) {
@@ -893,19 +926,23 @@
 
           return sendWithPromise(pkt, pkt.pub.id);
         },
-        // Request topic metadata
-        getMeta: function(topic, what, browse) {
+
+        /**
+         * Request topic metadata
+         *
+         */
+        getMeta: function(topic, params) {
           var pkt = initPacket("get", topic);
-          pkt.get.what = (what || "info");
-          pkt.get.browse = browse;
+
+          pkt.get = parseGetParams(params);
 
           return sendWithPromise(pkt, pkt.get.id);
         },
         /**
-          Update topic's metadata: description (info), subscribtions (sub), or delete messages (del)
+          Update topic's metadata: description (desc), subscribtions (sub), or delete messages (del)
             @topic: topic to Update
 
-        	  @params.info: update to topic description
+        	  @params.desc: update to topic description
             @params.sub: update to a subscription
         */
         setMeta: function(topic, params) {
@@ -913,25 +950,15 @@
           var what = [];
 
           if (params) {
-            if ((typeof params.info === "object") && (Object.keys(params.info).length > 0)) {
-              what.push("info");
-
-              pkt.set.info.defacs = params.info.acs;
-              pkt.set.info.public = params.info.public;
-              pkt.set.info.private = params.info.private;
-            }
-            if ((typeof params.sub === "object") && (Object.keys(params.sub).length > 0)) {
-              what.push("sub");
-
-              pkt.set.sub.user = params.sub.user;
-              pkt.set.sub.mode = params.sub.mode;
-              pkt.set.sub.info = params.sub.info;
-            }
+            ["desc", "sub"].map(function(key){
+              if (params.hasOwnProperty(key)) {
+                what.push(key);
+                pkt.set[key] = params[key];
+              }
+            });
           }
 
-          if (what.length > 0) {
-            pkt.set.what = what.join(" ");
-          } else {
+          if (what.length == 0) {
             throw new Error("Invalid {set} parameters.");
           }
 
@@ -1010,8 +1037,9 @@
           return _myUID;
         },
         // Toggle console logging. Logging is off by default.
-        enableLogging: function(val) {
+        enableLogging: function(val, trimLongStrings) {
           _loggingEnabled = val;
+          _trimLongStrings = trimLongStrings;
         },
         // Determine topic type from its name: grp, p2p, me
         getTopicType: function(name) {
@@ -1095,8 +1123,8 @@
       this.onMeta = callbacks.onMeta;
       this.onPres = callbacks.onPres;
       this.onInfo = callbacks.onInfo;
-      // A single info update;
-      this.onMetaInfo = callbacks.onMetaInfo;
+      // A single desc update;
+      this.onMetaDesc = callbacks.onMetaDesc;
       // A single subscription record;
       this.onMetaSub = callbacks.onMetaSub;
       // All subscription records received;
@@ -1237,8 +1265,8 @@
       Tinode.getInstance().noteKeyPress(this.name);
     },
 
-    // Get user
-    userInfo: function(uid) {
+    // Get user description
+    userDesc: function(uid) {
       // TODO(gene): handle asynchronous requests
 
       var user = this._cacheGetUser(uid);
@@ -1311,8 +1339,8 @@
 
     // Process metadata message
     _routeMeta: function(meta) {
-      if (meta.info) {
-        this._processMetaInfo(meta.info);
+      if (meta.desc) {
+        this._processMetaDesc(meta.desc);
       }
       if (meta.sub && meta.sub.length > 0) {
         this._processMetaSub(meta.sub);
@@ -1342,10 +1370,10 @@
       }
     },
 
-    // Called by Tinode when meta.info packet is received.
-    _processMetaInfo: function(info) {
-      // Copy parameters from info object to this topic.
-      mergeObj(this, info);
+    // Called by Tinode when meta.desc packet is received.
+    _processMetaDesc: function(desc) {
+      // Copy parameters from desc object to this topic.
+      mergeObj(this, desc);
 
       if (typeof this.created === "string") {
         this.created = new Date(this.created);
@@ -1354,8 +1382,8 @@
           this.updated = new Date(this.updated);
       }
 
-      if (this.onMetaInfo) {
-          this.onMetaInfo(info);
+      if (this.onMetaDesc) {
+          this.onMetaDesc(desc);
       }
     },
 
@@ -1463,8 +1491,8 @@
             case "msg": // new message received
               cont.seq = pres.seq;
               break;
-            case "upd": // info updated
-              // TODO(gene): request updated info
+            case "upd": // desc updated
+              // TODO(gene): request updated description
               break;
             case "ua": // user agent changed
               cont.seen = {when: new Date(), ua: pres.ua};
