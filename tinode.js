@@ -1150,7 +1150,12 @@
       // Closure for the promise below.
       var topic = this;
       // Send subscribe message, handle async response
-      return tinode.subscribe((name || TOPIC_NEW), params).then(function(ctrl) {
+      return tinode.subscribe(name || TOPIC_NEW, params).then(function(ctrl) {
+        // Set topic name for new topics and add it to cache.
+        if (!name) {
+          topic.name = ctrl.topic;
+          tinode.cachePut("topic", topic.name, topic);
+        }
         topic._subscribed = true;
         return topic;
       });
