@@ -1245,10 +1245,7 @@
       // Update locally cached contact with the new count
       var me = tinode.getMeTopic();
       if (me) {
-        me.setReadRecv(this.name, what, seq);
-        if (me.onContactUpdate) {
-          me.onContactUpdate(what, user);
-        }
+        me.setMsgReadRecv(this.name, what, seq);
       }
     },
 
@@ -1339,6 +1336,12 @@
 
       if (this.onData) {
         this.onData(data);
+      }
+
+      // Update locally cached contact with the new message count
+      var me = Tinode.getInstance().getMeTopic();
+      if (me) {
+        me.setMsgReadRecv(this.name, "msg", data.seq);
       }
     },
 
@@ -1540,16 +1543,27 @@
     },
 
     // Get a single contact by name
-    setReadRecv: {
+    setMsgReadRecv: {
       value: function(contactName, what, seq) {
         var cont = this._contacts[contactName];
+        var oldVal, newVal;
         if (cont) {
           if (what === "recv") {
+            oldVal = cont.recv;
             cont.recv = cont.recv ? Math.max(cont.recv, seq) : seq;
+            newVal = cont.recv;
           } else if (what === "read") {
+            oldVal = cont.read;
             cont.read = cont.read ? Math.max(cont.read, seq) : seq;
-          } else {
-            return;
+            newVal = cont.read;
+          } else if (what === "msg") {
+            oldVal = cont.seq;
+            cont.seq = cont.seq ? Math.max(cont.seq, seq) : seq;
+            newVal = cont.seq;
+          }
+
+          if ((oldVal != newVal) && this.onContactUpdate) {
+            this.onContactUpdate(what, cont);
           }
         }
       },
