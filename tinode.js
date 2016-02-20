@@ -15,6 +15,17 @@
  * limitations under the License.
  */
 
+/**
+/**
+ * @file All the logic need to connect to tinode chat server.
+ * @name Tinode bindings
+ * @copyright 2015 Tinode
+ * @summary Javascript bindings for Tinode.
+ * @license Apache 2.0
+ * @version 0.6
+ */
+
+/** @namespace Tinode */
 (function(environment) { // closure for web browsers
   'use strict';
 
@@ -101,20 +112,37 @@
     return val;
   };
 
-  // Circular buffer: holds at most 'size' objects. Once the limit is reached,
-  // the new object overwrites the oldest one.
+  /**
+   * Circular buffer: holds at most 'size' objects. Once the limit is reached,
+   * the new object overwrites the oldest one.
+   * @class CBuffer
+   * @memberof Tinode
+   *
+   * @param {number} size - Maximum number of elements to hold in the buffer.
+   */
   var CBuffer = function(size) {
     var base = 0,
       buffer = [],
       contains = 0;
 
     return {
+      /**
+       * Get an element at the given position.
+       * @memberof Tinode.CBuffer#
+       * @param {number} position - Position to fetch from.
+       * @returns {Object} Element at the given position or <tt>undefined</tt>
+       */
       getAt: function(at) {
         if (at >= contains || at < 0) return undefined;
         return buffer[(at + base) % size];
       },
-      // Variadic: takes one or more arguments. If a single array is passed, it's elements are
-      // inserted individually
+
+      /** Add new element(s) to the buffer. Variadic: takes one or more arguments. If an array is passed as a single
+       * argument, its elements are inserted individually.
+       * @memberof Tinode.CBuffer#
+       *
+       * @param {(Array|...Object)} - One or more objects to insert.
+       */
       put: function() {
         var insert;
         // inspect arguments: if array, insert its elements, if one or more arguments, insert them one by one
@@ -132,12 +160,30 @@
           }
         }
       },
+
+      /**
+       * Return the maximum number of element the buffer can hold
+       * @memberof Tinode.CBuffer#
+       * @return {number} The size of the buffer.
+       */
       size: function() {
         return size;
       },
+
+      /**
+      * Return the number of elements the buffer holds
+      * @memberof Tinode.CBuffer#
+      * @returns {number} Number of elements in the buffer.
+      */
       contains: function() {
         return contains;
       },
+
+      /**
+       * Discard all elements and reset the buffer to the new size (maximum number of elements).
+       * @memberof Tinode.CBuffer#
+       * @param {number} newSize - New size of the buffer.
+       */
       reset: function(newSize) {
         if (newSize) {
           size = newSize;
@@ -145,6 +191,22 @@
         base = 0;
         contains = 0;
       },
+
+      /**
+       * Callback for iterating contents of buffer. See {@link Tinode.CBuffer#forEach}.
+       * @callback ForEachCallbackType
+       * @memberof Tinode.CBuffer#
+       * @param {Object} elem - Element of the buffer.
+       * @param {number} index - Index of the current element.
+       */
+
+      /**
+       * Apply given function <tt>callback</tt> to all elements of the buffer.
+       * @memberof Tinode.CBuffer#
+       *
+       * @param {ForEachCallbackType} callback - Function to call for each element.
+       * @param {Object} context - calling context (i.e. value of 'this' in callback)
+       */
       forEach: function(callback, context) {
         for (var i = 0; i < contains; i++) {
           callback.call(context, buffer[(i + base) % size], i);
@@ -176,10 +238,12 @@
   }
 
   /**
-    An abstract websocket or long polling connection.
-    * @constructor
-    * @param {string} transport_ - network transport to use, either "ws" for websocket or "lp" for long polling.
-    * @return {Connection} - a connection object.
+  * An abstraction for a websocket or a long polling connection.
+  *
+  * @class Connection
+  * @memberof Tinode
+  * @param {string} transport_ - network transport to use, either "ws" for websocket or "lp" for long polling.
+  * @returns a connection object.
   */
   var Connection = (function(transport_) {
     var instance;
@@ -217,7 +281,8 @@
       return {
         /**
         * Initiate a new connection
-        * @return {Promise} - Promise resolved/rejected when the connection call completes,
+        * @memberof Tinode.Connection#
+        * @return {Promise} Promise resolved/rejected when the connection call completes,
             resolution is called without parameters, rejection passes the {Error} as parameter.
         */
         connect: function() {
@@ -252,17 +317,23 @@
             _socket = conn;
           });
         },
-        /** Terminate the network connection */
+
+        /** Terminate the network connection
+         * @memberof Tinode.Connection#
+         */
         disconnect: function() {
           if (_socket) {
             _socket.close();
           }
           _socket = null;
         },
+
         /**
-         * Send a string to the remote host
+         * Send a string to the server.
+         * @memberof Tinode.Connection#
+         *
          * @param {string} msg - String to send.
-         * @throws Throws an exception if the underlying cponnection is not live.
+         * @throws Throws an exception if the underlying connection is not live.
          */
         sendText: function(msg) {
           if (_socket && (_socket.readyState == _socket.OPEN)) {
@@ -271,19 +342,47 @@
             throw new Error("Websocket is not connected");
           }
         },
+
         // Callbacks:
         /**
+         * A callback to pass incoming messages to. See {@link Tinode.Connection#onMessage}.
+         * @callback OnMessageCallbackType
+         * @memberof Tinode.Connection
+         * @param {string} message - Message to process.
+         */
+
+        /**
         * A callback to pass incoming messages to.
-        * @param {Object} message - Message to process.
+        * @type {Tinode.Connection.OnMessageCallbackType}
+        * @memberof Tinode.Connection#
         */
         onMessage: undefined,
-        /** A callback for reporting a dropped connection. */
+
+        /**
+        * A callback for reporting a dropped connection.
+        * @type {function}
+        * @memberof Tinode.Connection#
+        */
         onDisconnect: undefined,
-        /** A callback to call when the websocket is connected. Websocket connections only. */
+
+        /**
+         * A callback to call when the websocket is connected. There is no equivalent callback for long polling connections.
+         * @type {function}
+         * @memberof Tinode.Connection#
+         */
         onWebsocketOpen: undefined,
+
+        /**
+         * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
+         * @callback LoggerCallbackType
+         * @memberof Tinode.Connection
+         * @param {string} event - Event to log.
+         */
+
         /**
         * A callback to report logging events.
-        * @param {string} text - Message to log.
+        * @memberof Tinode.Connection#
+        * @type {Tinode.Connection.LoggerCallbackType}
         */
         logger: undefined
       }
@@ -423,10 +522,8 @@
     return instance;
   });
 
-  /**
-  * A singleton class which hold the base Tinode functionality.
-  * @constructor
-  */
+
+  // Core Tinode functionality.
   var Tinode = (function() {
     var instance;
 
@@ -771,6 +868,8 @@
       // Returning an initialized instance with public methods;
       return {
         /** Instance configuration.
+         * @memberof Tinode#
+         *
          * @param {string} appname - Name of the caliing application to be reported in User Agent
          * @param {string} host - Host name and port number to connect to.
          * @param {string} apiKey - API key generated by keygen
@@ -792,14 +891,53 @@
           _connection.onWebsocketOpen = instance.onWebsocketOpen;
           _connection.setup(host_, false, apiKey_);
         },
+
+        /**
+         * Connect to the server.
+         * @memberof Tinode#
+         */
         connect: function() {
           return _connection.connect();
         },
+
+        /**
+         * Disconnect from the server.
+         * @memberof Tinode#
+         */
         disconnect: function() {
           _connection.disconnect();
         },
+        /**
+         * @typedef AccountCreationParams
+         * @memberof Tinode
+         * @type Object
+         * @property {string} login - Name of the scheme to use to authenticate the session with the newly created account.
+         * @property {Tinode.DefAcs} defacs - Default access parameters.
+         * @property {Object} public - Public application-defined data.
+         * @property {Object} private - Private application-defined data.
+         */
+         /**
+          * @typedef DefAcs
+          * @memberof Tinode
+          * @type Object
+          * @property {string} auth - Access mode for authenticated users.
+          * @property {string} anon - Access mode for anonymous users.
+          */
+          /**
+           * @typedef AuthScheme
+           * @memberof Tinode
+           * @type Object
+           * @property {string} scheme - Name of the authentication scheme.
+           * @property {string} secret - Secret.
+           */
 
-        // Create a new user
+        /**
+         * Create a new user.
+         * @memberof Tinode#
+         *
+         * @param {Tinode.AuthScheme[]} auth - One or more authentication schemes.
+         * @param {Tinode.AccountCreationParams} params - User data to pass to the server.
+         */
         createUser: function(auth, params) {
           var pkt = initPacket("acc");
           pkt.acc.user = USER_NEW;
@@ -814,14 +952,18 @@
           if (params) {
             // Log in to the new account using selected scheme
             pkt.acc.login = params.login;
-            pkt.acc.desc.defacs = params.desc.acs;
-            pkt.acc.desc.public = params.desc.public;
-            pkt.acc.desc.private = params.desc.private;
+            pkt.acc.desc.defacs = params.defacs;
+            pkt.acc.desc.public = params.public;
+            pkt.acc.desc.private = params.private;
           }
 
           return sendWithPromise(pkt, pkt.acc.id);
         },
-        // Create user using 'basic' authentication scheme
+
+        /**
+         * Create user with 'basic' authentication scheme
+         * @memberof Tinode#
+         */
         createUserBasic: function(username, password, params) {
           return instance.createUser(
             [{
@@ -830,9 +972,14 @@
             }], params);
         },
 
-        // Authenticate current session
-        // 	@authentication scheme. "basic" is the only currently supported scheme
-        //	@secret	-- authentication secret
+        /**
+         * Authenticate current session.
+         * @memberof Tinode#
+         *
+         * @param {string} scheme - Authentication scheme; "basic" is the only currently supported scheme.
+         * @param {string} secret - Authentication secret.
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         */
         login: function(scheme, secret) {
           var pkt = initPacket("login");
           pkt.login.scheme = scheme
@@ -864,20 +1011,31 @@
           sendBasic(pkt);
           return promise;
         },
-        // Wrapper for Login with basic authentication
-        // @uname -- user name
-        // @password -- self explanatory
+
+        /**
+         * Wrapper for {@link Tinode#login} with basic authentication
+         * @memberof Tinode#
+         *
+         * @param {string} uname - User name.
+         * @param {string} password  - Password.
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         */
         loginBasic: function(uname, password) {
           return instance.login("basic", uname + ":" + password);
         },
 
-        // Send a subscription request to topic
-        // 	@topic -- topic name to subscribe to
-        // 	@params -- optional object with request parameters:
-        //     @params.desc -- initializing parameters for new topics. See setMeta()
-        //		 @params.sub
-        //     @params.get -- list of data to fetch, see Tinode.get
-        //     @params.browse -- optional parameters for get.data. See getMeta()
+        /**
+         * Send a topic subscription request.
+         * @memberof Tinode#
+         *
+         * @param {string} topic - Name of the topic to subscribe to.
+         * @param {Object} params - Optional subscription parameters:
+         *     desc - initializing parameters for new topics {@link Tinode#setMeta}
+         *		 sub -
+         *     get -- list of data to fetch, see Tinode.get
+         *     browse -- optional parameters for get.data. See getMeta()
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         */
         subscribe: function(topic, params) {
           var pkt = initPacket("sub", topic)
           if (!topic) {
@@ -909,27 +1067,72 @@
             return ctrl;
           });
         },
-        // Leave topic
+
+        /**
+         * Detach and optionally unsubscribe from topic
+         * @memberof Tinode#
+         *
+         * @param {string} topic - Topic to detach from.
+         * @param {boolean} unsub - If <tt>true</tt>, detach and unsubscribe, otherwise just detach.
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         */
         leave: function(topic, unsub) {
           var pkt = initPacket("leave", topic);
           pkt.leave.unsub = unsub;
 
           return sendWithPromise(pkt, pkt.leave.id);
         },
-        // Pub {data} to topic
-        publish: function(topic, data, params) {
+
+        /**
+         * Publish <tt>data</tt> to topic.
+         * @memberof Tinode#
+         *
+         * @param {string} topic - Name of the topic to publish to.
+         * @param {Object} data - Payload to publish.
+         * @param {boolean} noEcho - If <tt>true</tt>, do not echo the message to the original session.
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         */
+        publish: function(topic, data, noEcho) {
           var pkt = initPacket("pub", topic);
-          if (params) {
-            pkt.pub.params = params;
-          }
+          pkt.pub.noecho = noEcho;
           pkt.pub.content = data;
 
           return sendWithPromise(pkt, pkt.pub.id);
         },
 
         /**
+         * @typedef GetQuery
+         * @type Object
+         * @memberof Tinode
+         * @property {Tinode.GetOptsType} desc - If provided (even if empty), fetch topic description.
+         * @property {Tinode.GetOptsType} sub - If provided (even if empty), fetch topic subscriptions.
+         * @property {Tinode.GetDataType} data - If provided (even if empty), get messages.
+         */
+
+        /**
+         * @typedef GetOptsType
+         * @type Object
+         * @memberof Tinode
+         * @property {Date} ims - "If modified since", fetch data only it was was modified since stated date.
+         * @property {number} limit - Maximum number of results to return. Ignored when querying topic description.
+         */
+
+         /**
+          * @typedef GetDataType
+          * @type Object
+          * @memberof Tinode
+          * @property {number} since - Load messages with seq id equal or greater than this value.
+          * @property {number} before - Load messages with seq id lower than this number.
+          * @property {number} limit - Maximum number of results to return.
+          */
+
+        /**
          * Request topic metadata
+         * @memberof Tinode#
          *
+         * @param {string} topic - Name of the topic to query.
+         * @param {Tinode.GetQuery} params - Parameters of the query.
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         getMeta: function(topic, params) {
           var pkt = initPacket("get", topic);
@@ -938,13 +1141,16 @@
 
           return sendWithPromise(pkt, pkt.get.id);
         },
-        /**
-          Update topic's metadata: description (desc), subscribtions (sub), or delete messages (del)
-            @topic: topic to Update
 
-        	  @params.desc: update to topic description
-            @params.sub: update to a subscription
-        */
+        /**
+         * Update topic's metadata: description (desc), subscribtions (sub).
+         * @memberof Tinode#
+         *
+         * @param {string} topic - Topic to update.
+         * @param {Object} desc - Update to topic description.
+         * @param {Object} sub - Update to a subscription.
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         */
         setMeta: function(topic, params) {
           var pkt = initPacket("set", topic);
           var what = [];
@@ -964,7 +1170,15 @@
 
           return sendWithPromise(pkt, pkt.set.id);
         },
-        // Delete some or all messages in a topic
+
+        /**
+         * Delete some or all messages in a topic.
+         * @memberof Tinode#
+         *
+         * @param {string} topic - Topic name to delete messages from.
+         * @param {Object} params - What messages to delete.
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         */
         delMessages: function(topic, params) {
           var pkt = initPacket("del", topic);
 
@@ -1089,8 +1303,10 @@
     };
   })();
 
-  /*
-   * Logic for a single topic
+  /**
+   * Topic - a logical communication channel
+   * @class Topic
+   * @memberof Tinode
    */
   var Topic = function(name, callbacks) {
     // Server-provided data, locally immutable.
@@ -1428,7 +1644,11 @@
     }
   };
 
-  // Special case: 'me' topic
+  /**
+   * @class TopicMe - special case of {@link Tinode.Topic} for receiving and confirming invitations,
+   * managing data of the current user, including contact list.
+   * @memberof Tinode
+   */
   var TopicMe = function(callbacks) {
     Topic.call(this, TOPIC_ME, callbacks);
     // List of contacts (topic_name -> Contact object)
@@ -1527,7 +1747,13 @@
       writable: true
     },
 
-    // Iterate over cached contacts. If callback is undefined, use this.onMetaSub.
+    /**
+     * Iterate over cached contacts. If callback is undefined, use this.onMetaSub.
+     * @function
+     * @memberof Tinode.TopicMe#
+     * @param {function} callback - callback to call for each contact.
+     * @param {Object} context - Context to use for calling the <tt>callback</tt>, i.e. value of <tt>this</tt> inside the callback.
+     */
     contacts: {
       value: function(callback, context) {
         var cb = (callback || this.onMetaSub);
@@ -1542,7 +1768,15 @@
       writable: true
     },
 
-    // Get a single contact by name
+    /**
+     * Update a cached contact with new read/received/message count.
+     * @function
+     * @memberof Tinode.TopicMe#
+     *
+     * @param {string} contactName - UID of contact to update.
+     * @param {string} what - Whach count to update, one of <tt>"read", "recv", "msg"</tt>
+     * @param {number} seq - New value of the count.
+     */
     setMsgReadRecv: {
       value: function(contactName, what, seq) {
         var cont = this._contacts[contactName];
