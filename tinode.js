@@ -16,16 +16,56 @@
  */
 
 /**
-/**
- * @file All the logic need to connect to tinode chat server.
- * @name Tinode bindings
+ * @file All the logic need to connect to Tinode chat server. Tinode is a single js
+ * file with no dependencies. Just include <tt>tinode.js</tt> into your project.
+ * It will add a singleton Tinode object to the top level object, usually <tt>window</tt>.
+ * See <a href="https://github.com/tinode/example-react-js">https://github.com/tinode/example-react-js</a> for real-life usage.
+ *
  * @copyright 2015 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
  * @version 0.6
+ *
+ * @example
+ * <head>
+ * <script src=".../tinode.js"></script>
+ * </head>
+ *
+ * <body>
+ *  ...
+ * <script>
+ *  Tinode.enableLogging(true);
+ *  // Add logic to handle disconnects.
+ *  Tinode.onDisconnect = function() { ... };
+ *  // Setup with the default transport, usually websocket.
+ *  Tinode.setup(APP_NAME, HOST, API_KEY);
+ *  // Connect to the server.
+ *  Tinode.connect().then(function() {
+ *    // Login.
+ *    return Tinode.loginBasic(login, password);
+ *  }).then(function(ctrl) {
+ *    // Loggedin fine, attach callbacks, subscribe to 'me'.
+ *    var me = Tinode.getMeTopic();
+ *    me.onMetaDesc = function(meta) { ... };
+ *    me.onData = function(invite) { ... };
+ *    // Subscribe, fetch topic description, the list of contacts and messages (invites).
+ *    me.subscribe({get: {desc: {}, sub: {}, data: {}}});
+ *  }).catch(function(err) {
+ *    // Login or subscription failed, do something.
+ *    ...
+ *  });
+ *  ...
+ * </script>
+ * </body>
  */
 
-/** @namespace Tinode */
+/**
+ * Tinode object is automatically accessible in the top scope, usually <tt>window</tt>.
+ * <i>DO NOT call the constructor. It's shown here due to a
+ * <a href="https://github.com/jsdoc3/jsdoc/issues/952">deficiency in jsdoc</a>.</i>
+ *
+ * @class Tinode
+ */
 (function(environment) { // closure for web browsers
   'use strict';
 
@@ -115,8 +155,10 @@
   /**
    * Circular buffer: holds at most 'size' objects. Once the limit is reached,
    * the new object overwrites the oldest one.
+   *
    * @class CBuffer
    * @memberof Tinode
+   * @protected
    *
    * @param {number} size - Maximum number of elements to hold in the buffer.
    */
@@ -161,11 +203,11 @@
         }
       },
 
-      /**
-       * Return the maximum number of element the buffer can hold
-       * @memberof Tinode.CBuffer#
-       * @return {number} The size of the buffer.
-       */
+    /**
+     * Return the maximum number of element the buffer can hold
+     * @memberof Tinode.CBuffer#
+     * @return {number} The size of the buffer.
+     */
       size: function() {
         return size;
       },
@@ -201,7 +243,7 @@
        */
 
       /**
-       * Apply given function <tt>callback</tt> to all elements of the buffer.
+       * Apply given function `callback` to all elements of the buffer.
        * @memberof Tinode.CBuffer#
        *
        * @param {ForEachCallbackType} callback - Function to call for each element.
@@ -242,7 +284,9 @@
   *
   * @class Connection
   * @memberof Tinode
-  * @param {string} transport_ - network transport to use, either "ws" for websocket or "lp" for long polling.
+  * @protected
+  *
+  * @param {string} transport_ - network transport to use, either `ws`/`wss` for websocket or `lp` for long polling.
   * @returns a connection object.
   */
   var Connection = (function(transport_) {
@@ -346,14 +390,13 @@
         // Callbacks:
         /**
          * A callback to pass incoming messages to. See {@link Tinode.Connection#onMessage}.
-         * @callback OnMessageCallbackType
+         * @callback Tinode.Connection.OnMessage
          * @memberof Tinode.Connection
          * @param {string} message - Message to process.
          */
-
         /**
         * A callback to pass incoming messages to.
-        * @type {Tinode.Connection.OnMessageCallbackType}
+        * @type {Tinode.Connection.OnMessage}
         * @memberof Tinode.Connection#
         */
         onMessage: undefined,
@@ -372,13 +415,12 @@
          */
         onWebsocketOpen: undefined,
 
-        /**
-         * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
-         * @callback LoggerCallbackType
-         * @memberof Tinode.Connection
-         * @param {string} event - Event to log.
-         */
-
+       /**
+        * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
+        * @callback LoggerCallbackType
+        * @memberof Tinode.Connection
+        * @param {string} event - Event to log.
+        */
         /**
         * A callback to report logging events.
         * @memberof Tinode.Connection#
@@ -593,7 +635,7 @@
       }
 
       // Resolve or reject a pending promise.
-      // Pending promises are stored in _pendingPromises
+      // Unresolved promises are stored in _pendingPromises.
       function execPromise(id, code, onOK, errorText) {
         var callbacks = _pendingPromises[id];
         if (callbacks) {
@@ -632,6 +674,7 @@
       function getUserAgent() {
         return _appName + " (" + _platform + ") " + LIBRARY;
       }
+
       // Generator of packets stubs
       function initPacket(type, topic) {
         var pkt = null;
@@ -729,13 +772,14 @@
         }
       }
 
-      // Send a packet
+      // Send a packet.
       function sendBasic(pkt) {
         var msg = JSON.stringify(pkt, jsonBuildHelper);
         log("out: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
         _connection.sendText(msg);
       }
-      // Send a packet returning a promise
+
+      // Send a packet returning a promise.
       function sendWithPromise(pkt, id) {
         var promise = makePromise(id);
         var msg = JSON.stringify(pkt, jsonBuildHelper);
@@ -744,7 +788,7 @@
         return promise;
       }
 
-      // The main message dispatcher
+      // The main message dispatcher.
       function dispatchMessage(data) {
         // Skip empty response. This happens when LP times out.
         if (!data) return;
@@ -859,7 +903,7 @@
         if (what.length > 0) {
           result.what = what.join(" ");
         } else {
-          throw new Error("Invalid {get} parameters.");
+          throw new Error("Invalid 'get' parameters.");
         }
 
         return result;
@@ -867,16 +911,17 @@
 
       // Returning an initialized instance with public methods;
       return {
+
         /** Instance configuration.
          * @memberof Tinode#
          *
-         * @param {string} appname - Name of the caliing application to be reported in User Agent
+         * @param {string} appname - Name of the caliing application to be reported in User Agent.
          * @param {string} host - Host name and port number to connect to.
          * @param {string} apiKey - API key generated by keygen
-         * @param {string} transport - See {@link Connection#transport}
+         * @param {string} transport - See {@link Tinode.Connection#transport}.
          */
         setup: function(appname_, host_, apiKey_, transport_) {
-          // Initialize with a random id each time, to avoid confusing packet
+          // Initialize with a random id each time, to avoid confusing with a packet
           // from a previous session.
           _messageId = Math.floor((Math.random() * 0xFFFF) + 0xFFFF);
 
@@ -895,6 +940,9 @@
         /**
          * Connect to the server.
          * @memberof Tinode#
+         *
+         * @return {Promise} Promise resolved/rejected when the connection call completes:
+         * <tt>resolve()</tt> is called without parameters, <tt>reject()</tt> receives the <tt>Error</tt> as a single parameter.
          */
         connect: function() {
           return _connection.connect();
@@ -912,24 +960,24 @@
          * @memberof Tinode
          * @type Object
          * @property {string} login - Name of the scheme to use to authenticate the session with the newly created account.
-         * @property {Tinode.DefAcs} defacs - Default access parameters.
-         * @property {Object} public - Public application-defined data.
-         * @property {Object} private - Private application-defined data.
+         * @property {Tinode.DefAcs=} defacs - Default access parameters for user's <tt>me</tt> topic.
+         * @property {Object=} public - Public application-defined data exposed on <tt>me</tt> topic.
+         * @property {Object=} private - Private application-defined data accessible on <tt>me</tt> topic.
          */
-         /**
-          * @typedef DefAcs
-          * @memberof Tinode
-          * @type Object
-          * @property {string} auth - Access mode for authenticated users.
-          * @property {string} anon - Access mode for anonymous users.
-          */
-          /**
-           * @typedef AuthScheme
-           * @memberof Tinode
-           * @type Object
-           * @property {string} scheme - Name of the authentication scheme.
-           * @property {string} secret - Secret.
-           */
+        /**
+         * @typedef DefAcs
+         * @memberof Tinode
+         * @type Object
+         * @property {string=} auth - Access mode for <tt>me</tt> for authenticated users.
+         * @property {string=} anon - Access mode for <tt>me</tt>  anonymous users.
+         */
+        /**
+         * @typedef AuthScheme
+         * @memberof Tinode
+         * @type Object
+         * @property {string} scheme - Name of the authentication scheme.
+         * @property {string} secret - Secret.
+         */
 
         /**
          * Create a new user.
@@ -976,9 +1024,9 @@
          * Authenticate current session.
          * @memberof Tinode#
          *
-         * @param {string} scheme - Authentication scheme; "basic" is the only currently supported scheme.
+         * @param {string} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
          * @param {string} secret - Authentication secret.
-         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
          */
         login: function(scheme, secret) {
           var pkt = initPacket("login");
@@ -1025,15 +1073,39 @@
         },
 
         /**
+         * @typedef SetParams
+         * @memberof Tinode
+         * @property {Tinode.SetDesc=} desc - Topic initialization parameters when creating a new topic or a new subscription.
+         * @property {Tinode.SetSub=} sub - Subscription initialization parameters.
+         */
+       /**
+        * @typedef SetDesc
+        * @memberof Tinode
+        * @property {Tinode.DefAcs=} defacs - Default access mode.
+        * @property {Object=} public - Free-form topic description, publically accessible.
+        * @property {Object=} private - Free-form topic descriptionaccessible only to the owner.
+        */
+        /**
+         * @typedef SetSub
+         * @memberof Tinode
+         * @property {string=} user - UID of the user affected by the request. Default (empty) - current user.
+         * @property {string=} mode - User access mode, either requested or assigned dependent on context.
+         * @property {Object=} info - Free-form payload to pass to the invited user or topic manager.
+         */
+        /**
+         * Parameters passed to {@link Tinode#subscribe}
+         * @typedef SubscriptionParams
+         * @memberof Tinode
+         * @property {Tinode.SetParams=} set - Parameters used to initialize topic
+         * @property {Tinode.GetQuery=} get - Query for fetching data from topic.
+         */
+
+        /**
          * Send a topic subscription request.
          * @memberof Tinode#
          *
          * @param {string} topic - Name of the topic to subscribe to.
-         * @param {Object} params - Optional subscription parameters:
-         *     desc - initializing parameters for new topics {@link Tinode#setMeta}
-         *		 sub -
-         *     get -- list of data to fetch, see Tinode.get
-         *     browse -- optional parameters for get.data. See getMeta()
+         * @param {Tinode.SubscriptionParams=} params - Optional subscription parameters:
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         subscribe: function(topic, params) {
@@ -1069,7 +1141,7 @@
         },
 
         /**
-         * Detach and optionally unsubscribe from topic
+         * Detach and optionally unsubscribe from the topic
          * @memberof Tinode#
          *
          * @param {string} topic - Topic to detach from.
@@ -1084,7 +1156,7 @@
         },
 
         /**
-         * Publish <tt>data</tt> to topic.
+         * Publish {data} message to topic.
          * @memberof Tinode#
          *
          * @param {string} topic - Name of the topic to publish to.
@@ -1188,7 +1260,14 @@
 
           return sendWithPromise(pkt, pkt.del.id);
         },
-        // Delete entire topic
+
+        /**
+         * Delete the topic alltogether. Requires Owner permission.
+         * @memberof Tinode#
+         *
+         * @param {string} topic - Name of the topic to delete
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         */
         delTopic: function(topic) {
           var pkt = initPacket("del", topic);
           pkt.del.what = "topic";
@@ -1198,7 +1277,15 @@
             return ctrl;
           });
         },
-        // Send a read/recv notification
+
+        /**
+         * Notify server that a message or messages were a read or received.
+         * @memberof Tinode#
+         *
+         * @param {string} topic - Name of the topic where the mesage is being aknowledged.
+         * @param {string} what - Action being aknowledged, either "read" or "recv".
+         * @param {number} seq - Maximum id of the message being acknowledged.
+         */
         note: function(topic, what, seq) {
           if (seq <= 0) {
             throw new Error("Invalid message id");
@@ -1208,14 +1295,28 @@
           pkt.note.seq = seq;
           sendBasic(pkt);
         },
-        // Send a key-press notification
+
+        /**
+         * Broadcast a key-press notification to topic subscribers. Used to show
+         * typing notifications "user X is typing...".
+         * @memberof Tinode#
+         *
+         * @param {string} topic - Name of the topic to broadcast to.
+         */
         noteKeyPress: function(topic) {
           var pkt = initPacket("note", topic);
           pkt.note.what = "kp";
           sendBasic(pkt);
         },
-        // Get named topic, either pull it from cache or create a new instance.
-        // There is a single instance of topic for each name.
+
+        /**
+         * Get a named topic, either pull it from cache or create a new instance.
+         * There is a single instance of topic for each name.
+         * @memberof Tinode#
+         *
+         * @param {string} topic - Name of the topic to get.
+         * @returns {Tinode.Topic} Requested or newly created topic or <tt>undefined</tt> if topic name is invalid.
+         */
         getTopic: function(name) {
           var topic = cacheGet("topic", name);
           if (!topic && name) {
@@ -1239,27 +1340,66 @@
           }
           return topic;
         },
-        // Instantiate 'me' topic or get it from cache.
+
+        /**
+         * Instantiate 'me' topic or get it from cache.
+         * @memberof Tinode#
+         *
+         * @returns {Tinode.TopicMe} Instance of 'me' topic.
+         */
         getMeTopic: function() {
           return instance.getTopic(TOPIC_ME);
         },
+
+        /**
+         * Instantiate a new unnamed topic. Name will be assigned by the server on {@link Tinode.Topic.subscribe}.
+         * @memberof Tinode#
+         *
+         * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
+         * @returns {Tinode.Topic} Newly created topic.
+         */
         newTopic: function(callbacks) {
           return new Topic(undefined, callbacks);
         },
-        // Return ID of the current authenticated user.
+
+        /**
+         * Get the UID of the the current authenticated user.
+         * @memberof Tinode#
+         * @returns {string} UID of the current user or <tt>undefined</uu> if the session is not yet authenticated or if there is no session.
+         */
         getCurrentUserID: function() {
           return _myUID;
         },
-        // Toggle console logging. Logging is off by default.
-        enableLogging: function(val, trimLongStrings) {
-          _loggingEnabled = val;
+
+        /**
+         * Toggle console logging. Logging is off by default.
+         * @memberof Tinode#
+         * @param {boolean} enabled - Set to <tt>true</tt> to enable logging to console.
+         */
+        enableLogging: function(enabled, trimLongStrings) {
+          _loggingEnabled = enabled;
           _trimLongStrings = trimLongStrings;
         },
-        // Determine topic type from its name: grp, p2p, me
+
+        /**
+         * Determine topic type from topic's name: grp, p2p, me.
+         * @memberof Tinode
+         *
+         * @param {string} name - Name of the topic to test.
+         * @returns {string} One of <tt>'me'</tt>, <tt>'grp'</tt>, <tt>'p2p'</tt> or <tt>undefined</tt>.
+         */
         getTopicType: function(name) {
-          return name ? name.substring(0, 3) : undefined;
+          var tp = name ? name.substring(0, 3) : undefined;
+          return (tp === "me" || tp === "grp" || tp === "p2p") ? tp : undefined;
         },
-        // Deprecated? Remove?
+
+        /**
+         * Request server to aknowledge messages. Required for promises to function. Default "on".
+         * @memberof Tinode#
+         *
+         * @param {boolean} status - Turn aknowledgemens on or off.
+         * @deprecated
+         */
         wantAkn: function(status) {
           if (status) {
             _messageId = Math.floor((Math.random() * 0xFFFFFF) + 0xFFFFFF);
@@ -1267,27 +1407,89 @@
             _messageId = 0;
           }
         },
+
         // Callbacks:
-        // Websocket opened
+         /**
+         * Callback to report when the websocket is opened. The callback has no parameters.
+         * @memberof Tinode#
+         * @type {Tinode.onWebsocketOpen}
+         */
         onWebsocketOpen: undefined,
-        // Connection completed, sucess or failure
-        // @code -- result code
-        // @text -- "OK" or text of an error message
-        // @params -- connection parametes
+
+        /**
+         * @typedef Tinode.ServerParams
+         * @memberof Tinode
+         * @type Object
+         * @property {string} ver - Server version
+         * @property {string} build - Server build
+         * @property {string=} sid - Session ID, long polling connections only.
+         */
+
+        /**
+         * @callback Tinode.onConnect
+         * @param {number} code - Result code
+         * @param {string} text - Text epxplaining the completion, i.e "OK" or an error message.
+         * @param {Tinode.ServerParams} params - Parameters returned by the server.
+         */
+        /**
+         * Callback to report when connection with Tinode server is established.
+         * @memberof Tinode#
+         * @type {Tinode.onConnect}
+         */
         onConnect: undefined,
-        // Connection closed
+
+        /**
+         * Callback to report when connection is lost. The callback has no parameters.
+         * @memberof Tinode#
+         * @type {Tinode.onDisconnect}
+         */
         onDisconnect: undefined,
-        // Login completed
+
+        /**
+         * @callback Tinode.onLogin
+         * @param {number} code - NUmeric completion code, same as HTTP status codes.
+         * @param {string} text - Explanation of the completion code.
+         */
+        /**
+         * Callback to report login completion.
+         * @memberof Tinode#
+         * @type {Tinode.onLogin}
+         */
         onLogin: undefined,
-        // Control message received
+
+        /**
+         * Callback to receive {ctrl} (control) messages.
+         * @memberof Tinode#
+         * @type {Tinode.onCtrlMessage}
+         */
         onCtrlMessage: undefined,
-        // Content message received
+
+        /**
+         * Callback to recieve {data} (content) messages.
+         * @memberof Tinode#
+         * @type {Tinode.onDataMessage}
+         */
         onDataMessage: undefined,
-        // Presence message received
+
+        /**
+         * Callback to receive {pres} (presence) messages.
+         * @memberof Tinode#
+         * @type {Tinode.onPresMessage}
+         */
         onPresMessage: undefined,
-        // Complete data packet, as object
+
+        /**
+         * Callback to receive all messages as objects.
+         * @memberof Tinode#
+         * @type {Tinode.onMessage}
+         */
         onMessage: undefined,
-        // Unparsed data as text
+
+        /**
+         * Callback to receive all messages as unparsed text.
+         * @memberof Tinode#
+         * @type {Tinode.onRawMessage}
+         */
         onRawMessage: undefined
       };
     }
@@ -1304,9 +1506,24 @@
   })();
 
   /**
-   * Topic - a logical communication channel
+   * @callback Tinode.Topic.onData
+   * @param {Data} data - Data packet
+   */
+  /**
+   * Topic is a class representing a logical communication channel.
    * @class Topic
    * @memberof Tinode
+   *
+   * @param {string} name - Name of the topic to create.
+   * @param {Object} callbacks - Object with various event callbacks.
+   * @param {Tinode.Topic.onData} callbacks.onData - Callback which receives a {data} message.
+   * @param {callback} callbacks.onMeta - Callback which receives a {meta} message.
+   * @param {callback} callbacks.onPres - Callback which receives a {pres} message.
+   * @param {callback} callbacks.onInfo - Callback which receives an {info} message.
+   * @param {callback} callbacks.onMetaDesc - Callback which receives changes to topic desctioption {@link desc}.
+   * @param {callback} callbacks.onMetaSub - Called for a single subscription record change.
+   * @param {callback} callbacks.onSubsUpdated - Called after a batch of subscription changes have been recieved and cached.
+   * @param {callback} callbacks.onDeleteTopic - Called when the topic is being deleted.
    */
   var Topic = function(name, callbacks) {
     // Server-provided data, locally immutable.
@@ -1324,7 +1541,7 @@
     this.public = null;
 
     // Locally cached data
-    // Subscribed users, for tracking read/recv notifications.
+    // Subscribed users, for tracking read/recv/msg notifications.
     this._users = {};
     // The maximum known {data.seq} value.
     this._seq = 0;
@@ -1350,11 +1567,23 @@
   };
 
   Topic.prototype = {
+
+    /**
+     * Check if the topic is subscribed.
+     * @memberof Tinode.Topic#
+     * @returns {boolean} True is topic is subscribed, false otherwise.
+     */
     isSubscribed: function() {
       return this._subscribed;
     },
 
-    // Subscribe to topic
+    /**
+     * Request topic to subscribe. Wrapper for {@link Tinode#subscribe}.
+     * @memberof Tinode.Topic#
+     *
+     * @param {Tinode.Topic.Subscription} params - Subscription parameters.
+     * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
+     */
     subscribe: function(params) {
       // If the topic is already subscribed, return resolved promise
       if (this._subscribed) {
@@ -1377,30 +1606,49 @@
       });
     },
 
-    // Send {data} message
-    publish: function(data, params) {
+    /**
+     * Publish data to topic. Wrapper for {@link Tinode#publish}.
+     * @memberof Tinode.Topic#
+     *
+     * @param {Object} data - Data to publish.
+     * @param {boolean} noEcho - If <tt>true</tt> server will not echo message back to originating session.
+     * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
+     */
+    publish: function(data, noEcho) {
       if (!this._subscribed) {
         throw new Error("Cannot publish on inactive topic");
       }
       // Send data
-      return Tinode.getInstance().publish(this.name, data, params);
+      return Tinode.getInstance().publish(this.name, data, noEcho);
     },
 
-    // Leave topic
-    // @unsub: boolean, leave and unsubscribe
+    /**
+     * Leave the topic, optionally unsibscribe. Leaving the topic means the topic will stop
+     * receiving updates from the server. Unsubscribing will terminate user's relationship with the topic.
+     * Wrapper for {@link Tinode#leave}.
+     * @memberof Tinode.Topic#
+     *
+     * @param {boolean} unsub - If true, unsubscribe, otherwise just leave.
+     * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
+     */
     leave: function(unsub) {
       // FIXME(gene): It's possible to unsubscribe (unsub==true) from inactive topic.
       if (!this._subscribed && !unsub) {
         throw new Error("Cannot leave inactive topic");
       }
-      // Send unsubscribe message, handle async response
+      // Send a 'leave' message, handle async response
       var topic = this;
       return Tinode.getInstance().leave(this.name, unsub).then(function(obj) {
         topic._resetSub();
       });
     },
 
-    // Get topic metadata
+    /**
+     * Request topic metagate from the server.
+     * @memberof Tinode.Topic#
+     *
+     * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+     */
     getMeta: function(what, browse) {
       if (!this._subscribed) {
         throw new Error("Cannot query inactive topic");
@@ -1417,8 +1665,19 @@
       return Tinode.getInstance().set(topic.name, params);
     },
 
-    // Delete messages
-    delete: function(params) {
+    /**
+     * @typedef Tinode.Topic.DelMessages
+     * @type Object
+     * @property {number} before - Delete messages with id less or equal to <tt>before</tt>.
+     * @property {boolean} hard - Hard-delete messages, i.e. delete from storage. Otherwise just hide them. Requires Owner permission.
+     */
+    /**
+     * Delete messages. Hard-deleting messages requires Owner permission. Wrapper for {@link Tinode#delMessages}.
+     * @memberof Tinode.Topic#
+     *
+     * @param {Tinode.Topic.DelMessages} params - What messages to delete.
+     */
+    delMessages: function(params) {
       if (!this._subscribed) {
         throw new Error("Cannot delete messages in inactive topic");
       }
@@ -1426,8 +1685,13 @@
       return Tinode.getInstance().delMessages(this.name, params);
     },
 
-    // Delete topic
-    delTopic: function(params) {
+    /**
+     * Delete topic. Requires Owner permission. Wrapper for {@link Tinode#delTopic}.
+     * @memberof Tinode.Topic#
+     *
+     * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
+     */
+    delTopic: function() {
       if (!this._subscribed) {
         throw new Error("Cannot delete inactive topic");
       }
@@ -1465,17 +1729,30 @@
       }
     },
 
-    // Send received notification
+    /**
+     * Send a 'recv' receipt. Wrapper for {@link Tinode#noteRecv}.
+     * @memberof Tinode.Topic#
+     *
+     * @param {number} seq - ID of the message to aknowledge.
+     */
     noteRecv: function(seq) {
       this.note("recv", seq);
     },
 
-    // Send read notification
+    /**
+     * Send a 'read' receipt. Wrapper for {@link Tinode#noteRead}.
+     * @memberof Tinode.Topic#
+     *
+     * @param {number} seq - ID of the message to aknowledge.
+     */
     noteRead: function(seq) {
       this.note("read", seq);
     },
 
-    // Send a key-press notification
+    /**
+     * Send a key-press notification. Wrapper for {@link Tinode#noteKeyPress}.
+     * @memberof Tinode.Topic#
+     */
     noteKeyPress: function() {
       if (!this._subscribed) {
         throw new Error("Cannot send notification in inactive topic");
@@ -1494,7 +1771,13 @@
       //return Tinode.getInstance().get(uid);
     },
 
-    // Iterate over cached messages. If callback is undefined, use this.onData.
+    /**
+     * Iterate over cached messages. If callback is undefined, use this.onData.
+     * @memberof Tinode.Topic#
+     *
+     * @param {function} callback - Callback which will receive messages one by one.
+     * @param {Object} context - Value of `this` inside the `callback`.
+     */
     messages: function(callback, context) {
       var cb = (callback || this.onData);
       if (cb) {
@@ -1503,7 +1786,7 @@
     },
 
     // Get the number of topic subscribers who marked this message as either recv or read
-    // Current user excluded from the count.
+    // Current user is excluded from the count.
     msgReceiptCount: function(what, seq) {
       var count = 0;
       var me = Tinode.getInstance().getCurrentUserID();
@@ -1517,17 +1800,37 @@
       }
       return count;
     },
-    // Get the number of topic subscribers who marked this message as read
-    // Current user excluded from the count.
+
+    /**
+     * Get the number of topic subscribers who marked this message (and all older messages) as read.
+     * The current user is excluded from the count.
+     * @memberof Tinode.Topic#
+     *
+     * @param {number} seq - Message id to check.
+     * @returns {number} Number of subscribers who claim to have received the message.
+     */
     msgReadCount: function(seq) {
       return this.msgReceiptCount("read", seq);
     },
-    // Get the number of topic subscribers who marked this message as received.
-    // Current user excluded from the count.
+
+    /**
+     * Get the number of topic subscribers who marked this message (and all older messages) as received.
+     * The current user is excluded from the count.
+     * @memberof Tinode.Topic#
+     *
+     * @param {number} seq - Message id to check.
+     * @returns {number} Number of subscribers who claim to have received the message.
+     */
     msgRecvCount: function(seq) {
       return this.msgReceiptCount("recv", seq);
     },
-    // Get topic type: me, p2p, grp
+
+    /**
+     * Get type of the topic: me, p2p, grp.
+     * @memberof Tinode.Topic#
+     *
+     * @returns {string} One of 'me', 'p2p', 'grp' or <tt>undefined</tt>.
+     */
     getType: function() {
       return Tinode.getInstance().getTopicType(this.name);
     },
@@ -1647,7 +1950,10 @@
   /**
    * @class TopicMe - special case of {@link Tinode.Topic} for receiving and confirming invitations,
    * managing data of the current user, including contact list.
+   * @extends Tinode.Topic
    * @memberof Tinode
+   *
+   * @param {TopicMe.Callbacks} callbacks - Callbacks to receive various events.
    */
   var TopicMe = function(callbacks) {
     Topic.call(this, TOPIC_ME, callbacks);
@@ -1661,6 +1967,7 @@
       this.onContactUpdate = callbacks.onContactUpdate;
     }
   };
+
   // Inherit everyting from the generic Topic
   TopicMe.prototype = Object.create(Topic.prototype, {
     // Override the original Topic._processMetaSub
@@ -1748,11 +2055,25 @@
     },
 
     /**
-     * Iterate over cached contacts. If callback is undefined, use this.onMetaSub.
+     * Publishing to TopicMe is not supported. {@link Topic#publish} is overriden and thows an {Error} if called.
+     * @memberof Tinode.TopicMe#
+     * @throws {Error} Always throws an error.
+     */
+    publish: {
+      value: function(data, noEcho) {
+        throw new Error("Publishing to 'me' is not supported");
+      },
+      enumerable: true,
+      configurable: true,
+      writable: true
+    },
+
+    /**
+     * Iterate over cached contacts. If callback is undefined, use {@link this.onMetaSub}.
      * @function
      * @memberof Tinode.TopicMe#
-     * @param {function} callback - callback to call for each contact.
-     * @param {Object} context - Context to use for calling the <tt>callback</tt>, i.e. value of <tt>this</tt> inside the callback.
+     * @param {TopicMe.ContactCallback} callback - Callback to call for each contact.
+     * @param {Object} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
      */
     contacts: {
       value: function(callback, context) {
@@ -1806,7 +2127,13 @@
       writable: true
     },
 
-    // Get a single contact by uid or p2p topic name
+    /**
+     * Get a contact from cache.
+     * @memberof Tinode.TopicMe#
+     *
+     * @param {string} name - Name of the contact to get, aither a UID (for p2p topics) or a topic name.
+     * @returns {Tinode.Contact} - Contact or `undefined`.
+     */
     getContact: {
       value: function(name) {
         var contactName = this._p2p[name] || name;
