@@ -1549,6 +1549,8 @@
     this._messages = CBuffer(100);
     // Boolean, true if the topic is currently live
     this._subscribed = false;
+    // Timestap of the last update that the topic has recived.
+    this._lastUpdate = null;
 
     // Callbacks
     if (callbacks) {
@@ -1837,6 +1839,8 @@
 
     // Process data message
     _routeData: function(data) {
+      this._lastUpdate = data.ts;
+
       // Generate a topic-unique index for the sender. It can be used to
       // differentiate messages by sender, such as different message background
       // for different senders.
@@ -1866,6 +1870,8 @@
 
     // Process metadata message
     _routeMeta: function(meta) {
+      this._lastUpdate = meta.ts;
+
       if (meta.desc) {
         this._processMetaDesc(meta.desc);
       }
