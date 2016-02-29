@@ -76,6 +76,7 @@
 
   var TOPIC_NEW = "new";
   var TOPIC_ME = "me";
+  var TOPIC_FIND = "fnd";
   var USER_NEW = "new";
 
   // Utility functions
@@ -1352,6 +1353,16 @@
         },
 
         /**
+         * Instantiate 'fnd' (find) topic or get it from cache.
+         * @memberof Tinode#
+         *
+         * @returns {Tinode.Topic} Instance of 'fnd' topic.
+         */
+        getFndTopic: function() {
+          return instance.getTopic(TOPIC_FND);
+        },
+
+        /**
          * Instantiate a new unnamed topic. Name will be assigned by the server on {@link Tinode.Topic.subscribe}.
          * @memberof Tinode#
          *
@@ -1390,7 +1401,7 @@
          */
         getTopicType: function(name) {
           var tp = name ? name.substring(0, 3) : undefined;
-          return (tp === "me" || tp === "grp" || tp === "p2p") ? tp : undefined;
+          return (tp === "me" || tp === "fin" || tp === "grp" || tp === "p2p") ? tp : undefined;
         },
 
         /**
