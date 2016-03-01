@@ -76,7 +76,7 @@
 
   var TOPIC_NEW = "new";
   var TOPIC_ME = "me";
-  var TOPIC_FIND = "fnd";
+  var TOPIC_FND = "fnd";
   var USER_NEW = "new";
 
   // Utility functions
@@ -1119,14 +1119,20 @@
             pkt.sub.get = parseGetParams(params.get);
 
             if (params.set) {
-              pkt.sub.set.sub = params.set.sub;
+              if (params.set.sub) {
+                pkt.sub.set.sub = params.set.sub;
+              }
 
               if (topic === TOPIC_NEW) {
                 // set.desc params are used for new topics only
-                pkt.sub.set.desc = params.set.desc
+                if (params.set.desc) {
+                  pkt.sub.set.desc = params.set.desc
+                }
               } else {
                 // browse makes sense only in context of an existing topic
-                pkt.sub.set.data = params.set.data;
+                if (params.set.data) {
+                  pkt.sub.set.data = params.set.data;
+                }
               }
             }
           }
@@ -1209,8 +1215,8 @@
          */
         getMeta: function(topic, params) {
           var pkt = initPacket("get", topic);
-
-          pkt.get = parseGetParams(params);
+          
+          mergeObj(pkt.get, parseGetParams(params));
 
           return sendWithPromise(pkt, pkt.get.id);
         },
@@ -1667,7 +1673,7 @@
         throw new Error("Cannot query inactive topic");
       }
       // Send {get} message, return promise.
-      return Tinode.getInstance().get(this.name, what, browse);
+      return Tinode.getInstance().getMeta(this.name, what, browse);
     },
 
     setMeta: function(params) {
@@ -1675,7 +1681,7 @@
         throw new Error("Cannot update inactive topic");
       }
       // Send Set message, handle async response
-      return Tinode.getInstance().set(topic.name, params);
+      return Tinode.getInstance().setMeta(this.name, params);
     },
 
     /**
