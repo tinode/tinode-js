@@ -635,6 +635,25 @@
         }
       }
 
+      // Make limited cache management available to topic.
+      function attachCacheToTopic(topic) {
+        topic._cacheGetUser = function(uid) {
+          return cacheGet("user", uid);
+        };
+        topic._cachePutUser = function(uid, user) {
+          return cachePut("user", uid, user);
+        };
+        topic._cacheDelUser = function(uid) {
+          return cacheDel("user", uid);
+        };
+        topic._cachePutSelf = function() {
+          return cachePut("topic", topic.name, topic);
+        }
+        topic._cacheDelSelf = function() {
+          return cacheDel("topic", topic.name);
+        }
+      }
+
       // Resolve or reject a pending promise.
       // Unresolved promises are stored in _pendingPromises.
       function execPromise(id, code, onOK, errorText) {
@@ -890,9 +909,10 @@
       // Helper function to construct {get} and {sub.get} packet.
       function parseGetParams(params) {
         var what = [];
-        var result = {};
+        var result;
 
         if (params) {
+          result = {};
           ["data", "sub", "desc"].map(function(key) {
             if (params.hasOwnProperty(key)) {
               what.push(key);
@@ -904,7 +924,7 @@
         if (what.length > 0) {
           result.what = what.join(" ");
         } else {
-          throw new Error("Invalid 'get' parameters.");
+          result = undefined;
         }
 
         return result;
@@ -1109,10 +1129,10 @@
          * @param {Tinode.SubscriptionParams=} params - Optional subscription parameters:
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
-        subscribe: function(topic, params) {
-          var pkt = initPacket("sub", topic)
-          if (!topic) {
-            topic = TOPIC_NEW;
+        subscribe: function(topicName, params) {
+          var pkt = initPacket("sub", topicName)
+          if (!topicName) {
+            topicName = TOPIC_NEW;
           }
 
           if (params) {
@@ -1123,7 +1143,7 @@
                 pkt.sub.set.sub = params.set.sub;
               }
 
-              if (topic === TOPIC_NEW) {
+              if (topicName === TOPIC_NEW) {
                 // set.desc params are used for new topics only
                 if (params.set.desc) {
                   pkt.sub.set.desc = params.set.desc
@@ -1137,14 +1157,7 @@
             }
           }
 
-          return sendWithPromise(pkt, pkt.sub.id).then(function(ctrl){
-            // Is this a new topic? Replace "new" with the issued name and add topic to cache.
-            if (topic === TOPIC_NEW) {
-              topic.name = ctrl.topic;
-              cachePut("topic", ctrl.topic, topic);
-            }
-            return ctrl;
-          });
+          return sendWithPromise(pkt, pkt.sub.id);
         },
 
         /**
@@ -1215,7 +1228,7 @@
          */
         getMeta: function(topic, params) {
           var pkt = initPacket("get", topic);
-          
+
           mergeObj(pkt.get, parseGetParams(params));
 
           return sendWithPromise(pkt, pkt.get.id);
@@ -1335,16 +1348,21 @@
             cachePut("topic", name, topic);
           }
           if (topic) {
-            topic._cacheGetUser = function(uid) {
-              return cacheGet("user", uid);
-            };
-            topic._cachePutUser = function(uid, user) {
-              return cachePut("user", uid, user);
-            };
-            topic._cacheDelUser = function(uid) {
-              return cacheDel("user", uid);
-            };
+            attachCacheToTopic(topic);
           }
+          return topic;
+        },
+
+        /**
+         * Instantiate a new unnamed topic. Name will be assigned by the server on {@link Tinode.Topic.subscribe}.
+         * @memberof Tinode#
+         *
+         * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
+         * @returns {Tinode.Topic} Newly created topic.
+         */
+        newTopic: function(callbacks) {
+          var topic = new Topic(undefined, callbacks);
+          attachCacheToTopic(topic);
           return topic;
         },
 
@@ -1366,17 +1384,6 @@
          */
         getFndTopic: function() {
           return instance.getTopic(TOPIC_FND);
-        },
-
-        /**
-         * Instantiate a new unnamed topic. Name will be assigned by the server on {@link Tinode.Topic.subscribe}.
-         * @memberof Tinode#
-         *
-         * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
-         * @returns {Tinode.Topic} Newly created topic.
-         */
-        newTopic: function(callbacks) {
-          return new Topic(undefined, callbacks);
         },
 
         /**
@@ -1618,7 +1625,26 @@
         // Set topic name for new topics and add it to cache.
         if (!name) {
           topic.name = ctrl.topic;
-          tinode.cachePut("topic", topic.name, topic);
+          topic.created = ctrl.ts;
+          topic.updated = ctrl.ts;
+
+          topic._cachePutSelf();
+
+          if (params && params.set) {
+            topic._processMetaDesc(params.set.desc);
+          }
+          // Add the new topic to the list of contacts maintained by the 'me' topic.
+          var me = tinode.getMeTopic();
+          if (me) {
+            me._processMetaSub([{
+              topic: topic.name,
+              created: ctrl.ts,
+              updated: ctrl.ts,
+              mode: ctrl.params ? ctrl.params.mode : null,
+              public: (params && params.set && params.set.desc ? params.set.desc.public : null),
+              private: (params && params.set && params.set.desc ? params.set.desc.private : null)
+            }]);
+          }
         }
         topic._subscribed = true;
         return topic;
@@ -1791,6 +1817,21 @@
     },
 
     /**
+     * Iterate over cached subscribers. If callback is undefined, use this.onMetaSub.
+     * @memberof Tinode.Topic#
+     *
+     * @param {function} callback - Callback which will receive subscribers one by one.
+     * @param {Object} context - Value of `this` inside the `callback`.
+     */
+    subscribers: function(callback, context) {
+      var cb = (callback || this.onMetaSub);
+      if (cb) {
+        for (var idx in this._users) {
+          cb.call(context, this._users[idx], idx, this._users);
+        }
+      }
+    },
+    /**
      * Iterate over cached messages. If callback is undefined, use this.onData.
      * @memberof Tinode.Topic#
      *
@@ -1864,7 +1905,7 @@
       var idx = Object.keys(this._users).indexOf(data.from);
       if (idx < 0) {
         idx = Object.keys(this._users).length;
-        this._user[data.from] = {user: data.from};
+        this._users[data.from] = {user: data.from};
       }
       data.$userIndex = idx;
 
