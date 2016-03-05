@@ -147,8 +147,8 @@
 
   // Trims verly long strings (encoded images) to make logged packets more readable
   var jsonLoggerHelper = function(key, val) {
-    if (typeof val == 'string' && val.length > 128) {
-      return "<" + val.length + " bytes: " + val.substring(0, 32) + "..." + val.substring(-32) + ">";
+    if (typeof val === 'string' && val.length > 128) {
+      return "<" + val.length + ", bytes: " + val.substring(0, 12) + '...' + val.substring(val.length-12) + ">";
     }
     return val;
   };
@@ -815,8 +815,6 @@
 
         _inPacketCount++;
 
-        log("in: " + data);
-
         // Send raw message to listener
         if (instance.onRawMessage) {
           instance.onRawMessage(data);
@@ -824,8 +822,11 @@
 
         var pkt = JSON.parse(data, jsonParseHelper);
         if (!pkt) {
-          log("ERROR: failed to parse data '" + data + "'");
+          log("in: " + data);
+          log("ERROR: failed to parse data");
         } else {
+          log("in: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : data));
+
           // Send complete packet to listener
           if (instance.onMessage) {
             instance.onMessage(pkt);
@@ -1367,6 +1368,23 @@
         },
 
         /**
+         * Instantiate a new P2P topic with a given peer. Actual name will be assigned by the server on
+         * {@link Tinode.Topic.subscribe}.
+         * @memberof Tinode#
+         *
+         * @param {string} peer - UId of the peer to start topic with.
+         * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
+         * @returns {Tinode.Topic} Newly created topic.
+         */
+        newTopicWith: function(peer, callbacks) {
+          var topic = new Topic(undefined, callbacks);
+          topic.with = peer;
+          attachCacheToTopic(topic);
+          return topic;
+        },
+
+
+        /**
          * Instantiate 'me' topic or get it from cache.
          * @memberof Tinode#
          *
@@ -1406,15 +1424,15 @@
         },
 
         /**
-         * Determine topic type from topic's name: grp, p2p, me.
+         * Determine topic type from topic's name: grp, p2p, me, fnd.
          * @memberof Tinode
          *
          * @param {string} name - Name of the topic to test.
          * @returns {string} One of <tt>'me'</tt>, <tt>'grp'</tt>, <tt>'p2p'</tt> or <tt>undefined</tt>.
          */
         getTopicType: function(name) {
-          var tp = name ? name.substring(0, 3) : undefined;
-          return (tp === "me" || tp === "fin" || tp === "grp" || tp === "p2p") ? tp : undefined;
+          var tp = (typeof name === "string") ? name.substring(0, 3) : undefined;
+          return (tp === "me" || tp === "fnd" || tp === "grp" || tp === "p2p") ? tp : undefined;
         },
 
         /**
@@ -1620,8 +1638,10 @@
       var tinode = Tinode.getInstance();
       // Closure for the promise below.
       var topic = this;
-      // Send subscribe message, handle async response
-      return tinode.subscribe(name || TOPIC_NEW, params).then(function(ctrl) {
+      // Send subscribe message, handle async response.
+      // If topic name is explicitly provided, use it. If no name, then it's a new topic:
+      // use either topic.with for p2p topics or "new" for group topics.
+      return tinode.subscribe(name || topic.with || TOPIC_NEW, params).then(function(ctrl) {
         // Set topic name for new topics and add it to cache.
         if (!name) {
           topic.name = ctrl.topic;
@@ -1641,6 +1661,7 @@
               created: ctrl.ts,
               updated: ctrl.ts,
               mode: ctrl.params ? ctrl.params.mode : null,
+              with: topic.with,
               public: (params && params.set && params.set.desc ? params.set.desc.public : null),
               private: (params && params.set && params.set.desc ? params.set.desc.private : null)
             }]);
