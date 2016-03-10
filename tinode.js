@@ -588,6 +588,8 @@
       var _connection = null;
       // UID of the currently authenticated user
       var _myUID = null;
+      // Token which can be used for login instead of login/password.
+      var _loginToken = null;
       // Counter of received packets
       var _inPacketCount = 0;
       // Counter for generating unique message IDs
@@ -1064,6 +1066,10 @@
                 "resolve": function(ctrl) {
                   // This is a response to a successful login, extract UID and security token, save it in Tinode module
                   _myUID = ctrl.params.uid;
+                  _loginToken = {
+                    token: ctrl.params.token,
+                    expires: ctrl.params.expires
+                  };
 
                   if (instance.onLogin) {
                     instance.onLogin(ctrl.code, ctrl.text);
@@ -1547,6 +1553,97 @@
     };
   })();
 
+  var AccessMode = function(mode) {
+    this._MODE_SUB = 0x01;
+    this._MODE_PUB = 0x02;
+    this._MODE_PRES = 0x04;
+    this._MODE_SHARE = 0x08;
+    this._MODE_DELETE = 0x10;
+    this._MODE_OWNER = 0x20;
+    this._MODE_BANNED = 0x40;
+
+    this._mode = this.parse(mode);
+  };
+
+  /**
+   * AccessMode is a class representing topic access mode.
+   * @class Topic
+   * @memberof Tinode
+   *
+   * @param {string} mode - String representation of the access mode.
+   */
+  AccessMode.prototype = {
+    /**
+    * Parse string into an access mode value.
+    *
+    * @memberof Tinode.AccessMode
+    * @static
+    *
+    * @param {string} mode - String representation of the access mode to parse.
+    * @returns {number} - Access mode as a numeric value.
+    */
+    parse: function(str) {
+      var mode = 0;
+      if (str === 'N') {
+        return 0;
+      }
+
+      var bitmask = {
+        'R': this._MODE_SUB,
+        'W': this._MODE_PUB,
+        'P': this._MODE_PRES,
+        'S': this._MODE_SHARE,
+        'D': this._MODE_DELETE,
+        'O': this._MODE_OWNER,
+        'X': this._MODE_BANNED
+      };
+
+      for (var i=0; i<str.length; i++) {
+        var c = str.charAt(i).toUpperCase();
+        var bit = bitmask[c];
+        if (bit === this._MODE_BANNED) {
+          // BANNED cannot be mixed with any other access modes.
+          return this._MODE_BANNED;
+        }
+        mode |= bit;
+      }
+      return mode;
+    },
+    toString: function() {
+      var bitmask = ['R','W','P','S','D','O','X'];
+      var res = "";
+      for (var i=0; i<bitmask.length; i++) {
+        if ((this.mode & (1 << i)) != 0) {
+          res = res + bitmask[i];
+        }
+      }
+      return res;
+    },
+    // Add bits to access mode
+    addMode: function(add) {
+      var mode = this.parse(add);
+      if (mode & this._MODE_BANNED) {
+        this.mode = this._MODE_BANNED;
+      } else {
+        this.mode |= mode;
+      }
+      return this;
+    },
+    // Clear bits from access mode
+    clearMode: function(clear) {
+      var mode = this.parse(clear);
+      this.mode &= ~mode;
+      return this;
+    },
+    isOwner:    function() { return ((this._mode & this._MODE_OWNER) != 0); },
+    isBanned:   function() { return ((this._mode & this._MODE_BANNED) != 0); },
+    canSub:     function() { return ((this._mode & this._MODE_SUB) != 0); },
+    canPub:     function() { return ((this._mode & this._MODE_PUB) != 0); },
+    canShare:   function() { return ((this._mode & this._MODE_SHARE) != 0); },
+    canDelete:  function() { return ((this._mode & this._MODE_DELETE) != 0); },
+    canPresence: function() { return ((this._mode & this._MODE_PRES) != 0); }
+  };
+
   /**
    * @callback Tinode.Topic.onData
    * @param {Data} data - Data packet
@@ -1650,9 +1747,6 @@
 
           topic._cachePutSelf();
 
-          if (params && params.set) {
-            topic._processMetaDesc(params.set.desc);
-          }
           // Add the new topic to the list of contacts maintained by the 'me' topic.
           var me = tinode.getMeTopic();
           if (me) {
@@ -1661,10 +1755,12 @@
               created: ctrl.ts,
               updated: ctrl.ts,
               mode: ctrl.params ? ctrl.params.mode : null,
-              with: topic.with,
-              public: (params && params.set && params.set.desc ? params.set.desc.public : null),
-              private: (params && params.set && params.set.desc ? params.set.desc.private : null)
+              with: topic.with
             }]);
+          }
+
+          if (params && params.set) {
+            topic._processMetaDesc(params.set.desc);
           }
         }
         topic._subscribed = true;
@@ -1758,14 +1854,19 @@
      * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
      */
     delTopic: function() {
-      if (!this._subscribed) {
-        throw new Error("Cannot delete inactive topic");
-      }
-
       var topic = this;
       var tinode = Tinode.getInstance();
       return tinode.delTopic(this.name).then(function(obj) {
         topic._resetSub();
+
+        var me = tinode.getMeTopic();
+        if (me) {
+          me._routePres({
+            what: "del",
+            topic: "me",
+            src: topic.name
+          });
+        }
         if (topic.onDeleteTopic) {
           topic.onDeleteTopic();
         }
@@ -1916,6 +2017,16 @@
       return Tinode.getInstance().getTopicType(this.name);
     },
 
+    /**
+     * Get user's cumulative access mode of the topic.
+     * @memberof Tinode.Topic#
+     *
+     * @returns {Tinode.AccessMode} - user's access mode
+     */
+    getAccessMode: function() {
+      return new AccessMode(this.mode);
+    },
+
     // Process data message
     _routeData: function(data) {
       this._lastUpdate = data.ts;
@@ -1994,6 +2105,19 @@
           this.updated = new Date(this.updated);
       }
 
+      // Update relevant contact in the me topic, if available:
+      if (this.name !== 'me') {
+        var me = Tinode.getInstance().getMeTopic();
+        if (me) {
+          me._processMetaSub([{
+            topic: this.name,
+            updated: this.updated,
+            public: this.public,
+            private: this.private
+          }]);
+        }
+      }
+
       if (this.onMetaDesc) {
           this.onMetaDesc(desc);
       }
@@ -2028,7 +2152,7 @@
     // Reset subscribed state
     // TODO(gene): should it also clear the message cache?
     _resetSub: function() {
-      topic._subscribed = false;
+      this._subscribed = false;
     }
   };
 
@@ -2123,8 +2247,10 @@
             case "read": // user's other session marked some messages as read
               cont.read = cont.read ? Math.max(cont.read, pres.seq) : pres.seq;
               break;
-            case "del": // messages or topic deleted in other session
-              // TODO(gene): add handling for del
+            case "del": // messages deleted in other session
+              // FIXME(gene): messages are deleted, not the topic. Topic deletion is not properly reported to 'me'
+              delete this._contacts[contactName];
+              break;
           }
           if (this.onContactUpdate) {
             this.onContactUpdate(pres.what, cont);
@@ -2187,7 +2313,9 @@
       value: function(contactName, what, seq) {
         var cont = this._contacts[contactName];
         var oldVal, newVal;
+        var mode = null;
         if (cont) {
+          mode = new AccessMode(cont.mode);
           if (what === "recv") {
             oldVal = cont.recv;
             cont.recv = cont.recv ? Math.max(cont.recv, seq) : seq;
@@ -2202,7 +2330,7 @@
             newVal = cont.seq;
           }
 
-          if ((oldVal != newVal) && this.onContactUpdate) {
+          if ((oldVal != newVal) && (!mode || mode.canPresence()) && this.onContactUpdate) {
             this.onContactUpdate(what, cont);
           }
         }
@@ -2216,7 +2344,7 @@
      * Get a contact from cache.
      * @memberof Tinode.TopicMe#
      *
-     * @param {string} name - Name of the contact to get, aither a UID (for p2p topics) or a topic name.
+     * @param {string} name - Name of the contact to get, either a UID (for p2p topics) or a topic name.
      * @returns {Tinode.Contact} - Contact or `undefined`.
      */
     getContact: {
@@ -2227,7 +2355,26 @@
       enumerable: true,
       configurable: true,
       writable: true
+    },
+
+    /**
+     * Get access mode of a given contact.
+     * @memberof Tinode.TopicMe#
+     *
+     * @param {string} name - Name of the contact to get access mode for, aither a UID (for p2p topics) or a topic name.
+     * @returns {string} - access mode, such as `RWP`.
+     */
+    getAccessMode: {
+      value: function(name) {
+        var contactName = this._p2p[name] || name;
+        var cont = this._contacts[contactName];
+        return cont ? new AccessMode(cont.mode) : null;
+      },
+      enumerable: true,
+      configurable: true,
+      writable: true
     }
+
   });
   TopicMe.prototype.constructor = TopicMe;
 
