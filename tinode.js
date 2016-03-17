@@ -290,18 +290,22 @@
   * @param {string} transport_ - network transport to use, either `ws`/`wss` for websocket or `lp` for long polling.
   * @returns a connection object.
   */
-  var Connection = (function(transport_) {
+  var Connection = (function(transport_, autoreconnect_) {
     var instance;
 
     var host;
     var secure;
     var apiKey;
 
+    var autoreconnect = autoreconnect_;
+
     // Settings for exponential backoff
-    var _boffBase = 2000; // 2000 milliseconds, minimum delay between reconnects
-    var _boffMaxIter = 10; // Maximum delay between reconnects 2^10 * 2000 ~ 34 minutes
-    var _boffJitter = 0.3; // Add random delay
+    const _BOFF_BASE = 2000; // 2000 milliseconds, minimum delay between reconnects
+    const _BOFF_MAX_ITER = 10; // Maximum delay between reconnects 2^10 * 2000 ~ 34 minutes
+    const _BOFF_JITTER = 0.3; // Add random delay
     var _boffTimer = null;
+    var _boffIteration = 0;
+    var _boffClosed = false; // Indicator if socket was manually closed - don't autoreconnect if true.
 
     function log(text) {
       if (instance.logger) {
@@ -309,13 +313,15 @@
       }
     }
 
-    function reconnect(iter) {
-      clearTimeout(_boffTimer);
-      var timeout = _boffBase * (Math.pow(2, iter) * (1.0 + 0.3 * Math.random()));
-      iter = (iter == _boffMaxIter ? iter : iter + 1);
+    // Reconnect after a timeout.
+    function reconnect() {
+      window.clearTimeout(_boffTimer);
+      var timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 +_BOFF_JITTER * Math.random()));
+      _boffIteration = (_boffIteration >= _BOFF_MAX_ITER ? _boffIteration : _boffIteration + 1);
+      console.log("1. Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
       _boffTimer = setTimeout(function() {
-        console.log("Reconnecting, iter=" + iter + ", timeout=" + timeout);
-        reconnect(iter);
+        console.log("2. Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
+        instance.connect().catch(function(){/* do nothing */});
       }, timeout);
     }
 
@@ -331,6 +337,10 @@
             resolution is called without parameters, rejection passes the {Error} as parameter.
         */
         connect: function() {
+          if (_socket && _socket.readyState === 1) {
+            return Promise.resolve();
+          }
+
           return new Promise(function(resolve, reject) {
             var url = makeBaseUrl(host, secure ? "wss" : "ws", apiKey);
 
@@ -339,21 +349,36 @@
             var conn = new WebSocket(url);
 
             conn.onopen = function(evt) {
+              _boffClosed = false;
+
               if (instance.onWebsocketOpen) {
                 instance.onWebsocketOpen();
               }
               resolve();
+
+              if (autoreconnect) {
+                window.clearTimeout(_boffTimer);
+                _boffTimer = null;
+                _boffIteration = 0;
+              }
             }
+
             conn.onclose = function(evt) {
               _socket = null;
 
               if (instance.onDisconnect) {
                 instance.onDisconnect();
               }
+
+              if (!_boffClosed && autoreconnect) {
+                reconnect();
+              }
             }
+
             conn.onerror = function(err) {
               reject(err);
             }
+
             conn.onmessage = function(evt) {
               if (instance.onMessage) {
                 instance.onMessage(evt.data);
@@ -368,6 +393,7 @@
          */
         disconnect: function() {
           if (_socket) {
+            _boffClosed = true;
             _socket.close();
           }
           _socket = null;
@@ -386,6 +412,15 @@
           } else {
             throw new Error("Websocket is not connected");
           }
+        },
+
+        /**
+         * Check if socket is alive.
+         * @memberof Tinode.Connection#
+         * @returns {boolean} true if connection is live, false otherwise
+         */
+        isConnected: function() {
+          return (_socket && (_socket.readyState === 1));
         },
 
         // Callbacks:
@@ -631,7 +666,7 @@
       // Enumeration stops if func returns true.
       function cacheMap(func, context) {
         for (var idx in _cache) {
-          if (func(_cache[idx], context)) {
+          if (func(_cache[idx], idx, context)) {
             break;
           }
         }
@@ -933,6 +968,20 @@
         return result;
       }
 
+      function handleDisconnect() {
+        _inPacketCount = 0;
+
+        cacheMap(function(obj, key) {
+          if (key.lastIndexOf("topic:", 0) === 0) {
+            obj._resetSub();
+          }
+        });
+
+        if (instance.onDisconnect) {
+          instance.onDisconnect();
+        }
+      }
+
       // Returning an initialized instance with public methods;
       return {
 
@@ -953,10 +1002,10 @@
             _appName = appname_;
           }
 
-          _connection = Connection(transport_);
+          _connection = Connection(transport_, true);
           _connection.logger = log;
           _connection.onMessage = dispatchMessage;
-          _connection.onDisconnect = instance.onDisconnect;
+          _connection.onDisconnect = handleDisconnect;
           _connection.onWebsocketOpen = instance.onWebsocketOpen;
           _connection.setup(host_, false, apiKey_);
         },
@@ -979,6 +1028,16 @@
         disconnect: function() {
           _connection.disconnect();
         },
+
+        /**
+        * Check for live connection to server
+        * @memberof Tinode#
+        * @returns {boolean} true if there is a live connection, false otherwise.
+        */
+        isConnected: function() {
+          return _connection.isConnected();
+        },
+
         /**
          * @typedef AccountCreationParams
          * @memberof Tinode
@@ -1066,10 +1125,14 @@
                 "resolve": function(ctrl) {
                   // This is a response to a successful login, extract UID and security token, save it in Tinode module
                   _myUID = ctrl.params.uid;
-                  _loginToken = {
-                    token: ctrl.params.token,
-                    expires: ctrl.params.expires
-                  };
+                  if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
+                    _loginToken = {
+                      token: ctrl.params.token,
+                      expires: new Date(ctrl.params.expires)
+                    };
+                  } else {
+                    _loginToken = null;
+                  }
 
                   if (instance.onLogin) {
                     instance.onLogin(ctrl.code, ctrl.text);
@@ -1100,6 +1163,25 @@
           return instance.login("basic", uname + ":" + password);
         },
 
+        /**
+         * Wrapper for {@link Tinode#login} with token authentication
+         * @memberof Tinode#
+         *
+         * @param {string} token - Token received in response to earlier login.
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         */
+        loginToken: function(token) {
+          return instance.login("token", token);
+        },
+
+        getLoginToken: function() {
+          if (_loginToken && (_loginToken.expires.getTime() > Date.now())) {
+            return _loginToken;
+          } else {
+            _loginToken = null;
+          }
+          return null;
+        },
         /**
          * @typedef SetParams
          * @memberof Tinode
@@ -1862,7 +1944,7 @@
         var me = tinode.getMeTopic();
         if (me) {
           me._routePres({
-            what: "del",
+            what: "gone",
             topic: "me",
             src: topic.name
           });
@@ -2247,9 +2329,11 @@
             case "read": // user's other session marked some messages as read
               cont.read = cont.read ? Math.max(cont.read, pres.seq) : pres.seq;
               break;
-            case "del": // messages deleted in other session
-              // FIXME(gene): messages are deleted, not the topic. Topic deletion is not properly reported to 'me'
+            case "gone": // topic deleted or unsubscribed from
               delete this._contacts[contactName];
+              break;
+            case "del":
+              // Handle message deletion
               break;
           }
           if (this.onContactUpdate) {
