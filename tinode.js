@@ -131,11 +131,11 @@
     return val;
   }
 
-  // Attempt to convert some date strings to objects
+  // Attempt to convert date strings to objects.
   var jsonParseHelper = function(key, val) {
     // Convert string timestamps with optional milliseconds to Date
     // 2015-09-02T01:45:43[.123]Z
-    if (key === 'ts' && typeof val == 'string' &&
+    if (key === 'ts' && typeof val === 'string' &&
       val.length >= 20 && val.length <= 24) {
       var date = new Date(val);
       if (date) {
@@ -145,12 +145,12 @@
     return val;
   };
 
-  // Trims verly long strings (encoded images) to make logged packets more readable
+  // Trims very long strings (encoded images) to make logged packets more readable.
   var jsonLoggerHelper = function(key, val) {
     if (typeof val === 'string' && val.length > 128) {
       return "<" + val.length + ", bytes: " + val.substring(0, 12) + '...' + val.substring(val.length-12) + ">";
     }
-    return val;
+    return jsonBuildHelper(key, val);
   };
 
   /**
