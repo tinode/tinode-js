@@ -71,7 +71,7 @@
 
   // Global constants
   var PROTOVERSION = "0";
-  var VERSION = "0.6";
+  var VERSION = "0.7";
   var LIBRARY = "tinodejs/" + VERSION;
 
   var TOPIC_NEW = "new";
@@ -305,7 +305,7 @@
     const _BOFF_JITTER = 0.3; // Add random delay
     var _boffTimer = null;
     var _boffIteration = 0;
-    var _boffClosed = false; // Indicator if socket was manually closed - don't autoreconnect if true.
+    var _boffClosed = false; // Indicator if the socket was manually closed - don't autoreconnect if true.
 
     function log(text) {
       if (instance.logger) {
@@ -315,13 +315,18 @@
 
     // Reconnect after a timeout.
     function reconnect() {
+      // Clear timer
       window.clearTimeout(_boffTimer);
+      // Calculate when to fire the reconnect attempt
       var timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 +_BOFF_JITTER * Math.random()));
+      // Update iteration counter for future use
       _boffIteration = (_boffIteration >= _BOFF_MAX_ITER ? _boffIteration : _boffIteration + 1);
-      console.log("1. Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
       _boffTimer = setTimeout(function() {
-        console.log("2. Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
-        instance.connect().catch(function(){/* do nothing */});
+        console.log("Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
+        // Maybe the socket was closed while we waited for the timer?
+        if (!_boffClosed) {
+          instance.connect().catch(function(){/* do nothing */});
+        }
       }, timeout);
     }
 
@@ -351,8 +356,8 @@
             conn.onopen = function(evt) {
               _boffClosed = false;
 
-              if (instance.onWebsocketOpen) {
-                instance.onWebsocketOpen();
+              if (instance.onOpen) {
+                instance.onOpen();
               }
               resolve();
 
@@ -421,48 +426,7 @@
          */
         isConnected: function() {
           return (_socket && (_socket.readyState === 1));
-        },
-
-        // Callbacks:
-        /**
-         * A callback to pass incoming messages to. See {@link Tinode.Connection#onMessage}.
-         * @callback Tinode.Connection.OnMessage
-         * @memberof Tinode.Connection
-         * @param {string} message - Message to process.
-         */
-        /**
-        * A callback to pass incoming messages to.
-        * @type {Tinode.Connection.OnMessage}
-        * @memberof Tinode.Connection#
-        */
-        onMessage: undefined,
-
-        /**
-        * A callback for reporting a dropped connection.
-        * @type {function}
-        * @memberof Tinode.Connection#
-        */
-        onDisconnect: undefined,
-
-        /**
-         * A callback to call when the websocket is connected. There is no equivalent callback for long polling connections.
-         * @type {function}
-         * @memberof Tinode.Connection#
-         */
-        onWebsocketOpen: undefined,
-
-       /**
-        * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
-        * @callback LoggerCallbackType
-        * @memberof Tinode.Connection
-        * @param {string} event - Event to log.
-        */
-        /**
-        * A callback to report logging events.
-        * @memberof Tinode.Connection#
-        * @type {Tinode.Connection.LoggerCallbackType}
-        */
-        logger: undefined
+        }
       }
     }
 
@@ -494,6 +458,7 @@
 
         poller.onreadystatechange = function(evt) {
           if (poller.readyState == 4) { // 4 == DONE
+            console.log("got response: " + poller.responseText);
             if (poller.status == 201) { // 201 == HTTP.Created, get SID
               var pkt = JSON.parse(poller.responseText);
               var text = poller.responseText;
@@ -536,7 +501,7 @@
           return new Promise(function(resolve, reject){
             var url = makeBaseUrl(host, secure ? "https" : "http", apiKey);
             log("Connecting to: " + url);
-            _poller = lp_poller(url);
+            _poller = lp_poller(url, resolve, reject);
             _poller.send(null)
           }).catch(function() {
 
@@ -565,11 +530,9 @@
             throw new Error("Long poller failed to connect");
           }
         },
-        // Callbacks:
-        onMessage: undefined,
-        onDisconnect: undefined,
-        // Callback for logging
-        logger: undefined
+        isConnected: function() {
+          return (_poller && true);
+        }
       };
     }
 
@@ -596,6 +559,48 @@
       secure = secure_;
       apiKey = apiKey_;
     };
+
+    // Callbacks:
+    /**
+     * A callback to pass incoming messages to. See {@link Tinode.Connection#onMessage}.
+     * @callback Tinode.Connection.OnMessage
+     * @memberof Tinode.Connection
+     * @param {string} message - Message to process.
+     */
+    /**
+    * A callback to pass incoming messages to.
+    * @type {Tinode.Connection.OnMessage}
+    * @memberof Tinode.Connection#
+    */
+    instance.onMessage = undefined;
+
+    /**
+    * A callback for reporting a dropped connection.
+    * @type {function}
+    * @memberof Tinode.Connection#
+    */
+    instance.onDisconnect = undefined;
+
+    /**
+     * A callback called when the connection is ready to be used for sending. For websockets it's socket open,
+     * for long polling it's readyState=1 (OPENED)
+     * @type {function}
+     * @memberof Tinode.Connection#
+     */
+    instance.onOpen = undefined;
+
+   /**
+    * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
+    * @callback LoggerCallbackType
+    * @memberof Tinode.Connection
+    * @param {string} event - Event to log.
+    */
+    /**
+    * A callback to report logging events.
+    * @memberof Tinode.Connection#
+    * @type {Tinode.Connection.LoggerCallbackType}
+    */
+    instance.logger = undefined;
 
     return instance;
   });
@@ -629,6 +634,9 @@
       var _inPacketCount = 0;
       // Counter for generating unique message IDs
       var _messageId = 0;
+
+      // Information about the server, if connected
+      var _serverInfo = null;
 
       // Generic cache, currently used for topics/users
       var _cache = {};
@@ -736,6 +744,15 @@
       function initPacket(type, topic) {
         var pkt = null;
         switch (type) {
+          case "hi":
+            return {
+              "hi": {
+                "id": getNextMessageId(),
+                "ver": VERSION,
+                "ua": getUserAgent(),
+              }
+            };
+
           case "acc":
             return {
               "acc": {
@@ -751,7 +768,6 @@
             return {
               "login": {
                 "id": getNextMessageId(),
-                "ua": getUserAgent(),
                 "scheme": null,
                 "secret": null
               }
@@ -815,6 +831,7 @@
                 "topic": topic
               }
             };
+
           case "note":
             return {
               "note": {
@@ -824,6 +841,7 @@
                 "seq": undefined // the server-side message id aknowledged as received or read
               }
             };
+
           default:
             throw new Error("Unknown packet type requested: " + type);
         }
@@ -876,11 +894,13 @@
             }
 
             // The very first incoming packet. This is a response to the connection attempt
+            /*
             if (_inPacketCount == 1) {
               if (instance.onConnect) {
                 instance.onConnect(pkt.ctrl.code, pkt.ctrl.text, pkt.ctrl.params);
               }
             }
+            */
 
             // Resolve or reject a pending promise, if any
             if (pkt.ctrl.id) {
@@ -968,8 +988,14 @@
         return result;
       }
 
+      function handleReadyToSend() {
+        instance.hello();
+      }
+
       function handleDisconnect() {
         _inPacketCount = 0;
+        _myUID = null;
+        _serverInfo = null;
 
         cacheMap(function(obj, key) {
           if (key.lastIndexOf("topic:", 0) === 0) {
@@ -985,7 +1011,7 @@
       // Returning an initialized instance with public methods;
       return {
 
-        /** Instance configuration.
+        /** Instance configuration. Can be calle dmultiple times.
          * @memberof Tinode#
          *
          * @param {string} appname - Name of the caliing application to be reported in User Agent.
@@ -1002,11 +1028,15 @@
             _appName = appname_;
           }
 
+          if (_connection) {
+            _connection.disconnect();
+          }
+
           _connection = Connection(transport_, true);
           _connection.logger = log;
           _connection.onMessage = dispatchMessage;
           _connection.onDisconnect = handleDisconnect;
-          _connection.onWebsocketOpen = instance.onWebsocketOpen;
+          _connection.onOpen = handleReadyToSend;
           _connection.setup(host_, false, apiKey_);
         },
 
@@ -1026,7 +1056,9 @@
          * @memberof Tinode#
          */
         disconnect: function() {
-          _connection.disconnect();
+          if (_connection) {
+            _connection.disconnect();
+          }
         },
 
         /**
@@ -1035,7 +1067,8 @@
         * @returns {boolean} true if there is a live connection, false otherwise.
         */
         isConnected: function() {
-          return _connection.isConnected();
+          console.log(_connection);
+          return _connection && _connection.isConnected();
         },
 
         /**
@@ -1103,6 +1136,45 @@
             }], params);
         },
 
+
+        /**
+         * Send handshake to the server.
+         * @memberof Tinode#
+         *
+         * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
+         */
+        hello: function() {
+          var pkt = initPacket("hi");
+          // Setup promise
+          var promise = null;
+          if (pkt.hi.id) {
+            var promise = new Promise(function(resolve, reject) {
+              // Stored callbacks will be called when the response packet with this Id arrives
+              _pendingPromises[pkt.hi.id] = {
+                "resolve": function(ctrl) {
+                  // Server response contains server protocol version, build, and session ID for long polling.
+                  // Save them.
+                  if (ctrl.params) {
+                    _serverInfo = ctrl.params;
+                  }
+                  if (resolve) {
+                    resolve(ctrl);
+                  }
+
+                  if (instance.onConnect) {
+                    instance.onConnect();
+                  }
+                },
+                "reject": reject
+              }
+            });
+          }
+
+          sendBasic(pkt);
+          return promise;
+
+        },
+
         /**
          * Authenticate current session.
          * @memberof Tinode#
@@ -1113,8 +1185,8 @@
          */
         login: function(scheme, secret) {
           var pkt = initPacket("login");
-          pkt.login.scheme = scheme
-          pkt.login.secret = secret
+          pkt.login.scheme = scheme;
+          pkt.login.secret = secret;
 
           // Setup promise
           var promise = null;
@@ -1499,6 +1571,15 @@
          */
         getCurrentUserID: function() {
           return _myUID;
+        },
+
+        /**
+         * Return information about the server: protocol version and build timestamp.
+         * @memberof Tinode#
+         * @returns {Object} build and version of the server or <tt>null</uu> if there is no connection or if the first server response has not been received yet.
+         */
+        getServerInfo: function() {
+          return _serverInfo;
         },
 
         /**
