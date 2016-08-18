@@ -1776,7 +1776,7 @@
       var bitmask = ['R','W','P','S','D','O','X'];
       var res = "";
       for (var i=0; i<bitmask.length; i++) {
-        if ((this.mode & (1 << i)) != 0) {
+        if ((this._mode & (1 << i)) != 0) {
           res = res + bitmask[i];
         }
       }
@@ -1786,16 +1786,16 @@
     addMode: function(add) {
       var mode = this.parse(add);
       if (mode & this._MODE_BANNED) {
-        this.mode = this._MODE_BANNED;
+        this._mode = this._MODE_BANNED;
       } else {
-        this.mode |= mode;
+        this._mode |= mode;
       }
       return this;
     },
     // Clear bits from access mode
     clearMode: function(clear) {
       var mode = this.parse(clear);
-      this.mode &= ~mode;
+      this._mode &= ~mode;
       return this;
     },
     isOwner:    function() { return ((this._mode & this._MODE_OWNER) != 0); },
@@ -1917,7 +1917,7 @@
               topic: topic.name,
               created: ctrl.ts,
               updated: ctrl.ts,
-              mode: ctrl.params ? ctrl.params.mode : null,
+              mode: ctrl.params.mode,
               with: topic.with
             }]);
           }
@@ -1926,6 +1926,10 @@
             topic._processMetaDesc(params.set.desc);
           }
         }
+
+        topic.mode = ctrl.params.mode;
+        console.log("Topic '" + topic.name + "' mode assigned: " + topic.mode);
+
         topic._subscribed = true;
         return topic;
       });
