@@ -1928,7 +1928,6 @@
         }
 
         topic.mode = ctrl.params.mode;
-        console.log("Topic '" + topic.name + "' mode assigned: " + topic.mode);
 
         topic._subscribed = true;
         return topic;
