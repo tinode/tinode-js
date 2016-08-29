@@ -21,10 +21,10 @@
  * It will add a singleton Tinode object to the top level object, usually <tt>window</tt>.
  * See <a href="https://github.com/tinode/example-react-js">https://github.com/tinode/example-react-js</a> for real-life usage.
  *
- * @copyright 2015 Tinode
+ * @copyright 2015-2016 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.6
+ * @version 0.8
  *
  * @example
  * <head>
@@ -71,7 +71,7 @@
 
   // Global constants
   var PROTOVERSION = "0";
-  var VERSION = "0.7";
+  var VERSION = "0.8";
   var LIBRARY = "tinodejs/" + VERSION;
 
   var TOPIC_NEW = "new";
@@ -758,8 +758,9 @@
               "acc": {
                 "id": getNextMessageId(),
                 "user": null,
-                "auth": [],
-                "login": null,
+                "scheme": null,
+                "secret": null,
+                "login": false,
                 "desc": {}
               }
             };
@@ -1087,35 +1088,25 @@
          * @property {string=} auth - Access mode for <tt>me</tt> for authenticated users.
          * @property {string=} anon - Access mode for <tt>me</tt>  anonymous users.
          */
-        /**
-         * @typedef AuthScheme
-         * @memberof Tinode
-         * @type Object
-         * @property {string} scheme - Name of the authentication scheme.
-         * @property {string} secret - Secret.
-         */
 
         /**
          * Create a new user.
          * @memberof Tinode#
          *
-         * @param {Tinode.AuthScheme[]} auth - One or more authentication schemes.
+         * @param {string} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
+         * @param {string} secret - Authentication secret, assumed to be already base64 encoded.
+         * @param {boolean} login - Use new account to authenticate current session
          * @param {Tinode.AccountCreationParams} params - User data to pass to the server.
          */
-        createUser: function(auth, params) {
+        createUser: function(scheme, secret, login, params) {
           var pkt = initPacket("acc");
           pkt.acc.user = USER_NEW;
-          for (var idx in auth) {
-            if (auth[idx].scheme && auth[idx].secret) {
-              pkt.acc.auth.push({
-                "scheme": auth[idx].scheme,
-                "secret": auth[idx].secret
-              });
-            }
-          }
+          pkt.acc.scheme = scheme;
+          pkt.acc.secret = secret;
+          // Log in to the new account using selected scheme
+          pkt.acc.login = login;
+
           if (params) {
-            // Log in to the new account using selected scheme
-            pkt.acc.login = params.login;
             pkt.acc.desc.defacs = params.defacs;
             pkt.acc.desc.public = params.public;
             pkt.acc.desc.private = params.private;
@@ -1129,13 +1120,8 @@
          * @memberof Tinode#
          */
         createUserBasic: function(username, password, params) {
-          return instance.createUser(
-            [{
-              scheme: "basic",
-              secret: username + ":" + password
-            }], params);
+          return instance.createUser("basic", btoa(username + ":" + password), false, params);
         },
-
 
         /**
          * Send handshake to the server.
@@ -1180,7 +1166,7 @@
          * @memberof Tinode#
          *
          * @param {string} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
-         * @param {string} secret - Authentication secret.
+         * @param {string} secret - Authentication secret, assumed to be already base64 encoded.
          * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
          */
         login: function(scheme, secret) {
@@ -1232,7 +1218,7 @@
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         loginBasic: function(uname, password) {
-          return instance.login("basic", uname + ":" + password);
+          return instance.login("basic", btoa(uname + ":" + password));
         },
 
         /**
