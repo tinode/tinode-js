@@ -1569,6 +1569,15 @@
         },
 
         /**
+         * Return information about the current version of this Tinode client library.
+         * @memberof Tinode#
+         * @returns {string} current version in the MAJOR.MINOR format, e.g. '0.8'.
+         */
+        getVersion: function() {
+          return VERSION;
+        },
+
+        /**
          * Toggle console logging. Logging is off by default.
          * @memberof Tinode#
          * @param {boolean} enabled - Set to <tt>true</tt> to enable logging to console.
@@ -1958,19 +1967,27 @@
     },
 
     /**
-     * Request topic metagate from the server.
+     * Request topic metadata from the server.
      * @memberof Tinode.Topic#
      *
+     * @param {Tinode.GetQuery} request parameters
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
-    getMeta: function(what, browse) {
+    getMeta: function(params) {
       if (!this._subscribed) {
         throw new Error("Cannot query inactive topic");
       }
       // Send {get} message, return promise.
-      return Tinode.getInstance().getMeta(this.name, what, browse);
+      return Tinode.getInstance().getMeta(this.name, params);
     },
 
+    /**
+     * Update topic metadata.
+     * @memberof Tinode.Topic#
+     *
+     * @param {Object} parameters to update
+     * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+     */
     setMeta: function(params) {
       if (!this._subscribed) {
         throw new Error("Cannot update inactive topic");
