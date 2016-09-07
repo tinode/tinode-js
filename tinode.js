@@ -2351,7 +2351,13 @@
     // Override the original Topic._processMetaSub
     _processMetaSub: {
       value: function(subs) {
+        var updateCount  = 0;
         for (var idx in subs) {
+          // Don't show 'fnd' table in the list of contacts
+          if (subs[idx].topic == TOPIC_FND) {
+            console.log("me._processMetaSub: skipping fnd table");
+            continue;
+          }
           var cont = this._contacts[subs[idx].topic];
           subs[idx].updated = new Date(subs[idx].updated);
           if (subs[idx].seen && subs[idx].seen.when) {
@@ -2367,12 +2373,14 @@
             this._p2p[cont.with] = cont.topic;
           }
 
+          updateCount ++;
+
           if (this.onMetaSub) {
             this.onMetaSub(cont);
           }
         }
 
-        if (this.onSubsUpdated) {
+        if (updateCount > 0 && this.onSubsUpdated) {
           this.onSubsUpdated(Object.keys(this._contacts));
         }
       },
