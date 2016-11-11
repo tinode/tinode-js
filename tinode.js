@@ -71,7 +71,7 @@
 
   // Global constants
   var PROTOVERSION = "0";
-  var VERSION = "0.8";
+  var VERSION = "0.9";
   var LIBRARY = "tinodejs/" + VERSION;
 
   var TOPIC_NEW = "new";
@@ -1068,7 +1068,6 @@
         * @returns {boolean} true if there is a live connection, false otherwise.
         */
         isConnected: function() {
-          console.log(_connection);
           return _connection && _connection.isConnected();
         },
 
@@ -2337,8 +2336,6 @@
     Topic.call(this, TOPIC_ME, callbacks);
     // List of contacts (topic_name -> Contact object)
     this._contacts = {};
-    // Map of p2p topics indexed by the other user ID (uid -> p2p_topic_name)
-    this._p2p = {};
 
     // me-specific callbacks
     if (callbacks) {
@@ -2353,9 +2350,8 @@
       value: function(subs) {
         var updateCount  = 0;
         for (var idx in subs) {
-          // Don't show 'fnd' table in the list of contacts
+          // Don't show 'fnd' topic in the list of contacts
           if (subs[idx].topic == TOPIC_FND) {
-            console.log("me._processMetaSub: skipping fnd table");
             continue;
           }
           var cont = this._contacts[subs[idx].topic];
@@ -2369,10 +2365,6 @@
             cont = subs[idx];
           }
           this._contacts[cont.topic] = cont;
-          if (cont.with) {
-            this._p2p[cont.with] = cont.topic;
-          }
-
           updateCount ++;
 
           if (this.onMetaSub) {
@@ -2392,10 +2384,7 @@
     // Process presence change message
     _routePres: {
       value: function(pres) {
-        // p2p topics are not getting what=on/off/upd updates,
-        // such updates are sent with pres.topic set to user ID
-        var contactName = this._p2p[pres.src] || pres.src;
-        var cont = this._contacts[contactName];
+        var cont = this._contacts[pres.src];
         if (cont) {
           switch(pres.what) {
             case "on": // topic came online
@@ -2425,7 +2414,7 @@
               cont.read = cont.read ? Math.max(cont.read, pres.seq) : pres.seq;
               break;
             case "gone": // topic deleted or unsubscribed from
-              delete this._contacts[contactName];
+              delete this._contacts[pres.src];
               break;
             case "del":
               // Handle message deletion
@@ -2528,8 +2517,7 @@
      */
     getContact: {
       value: function(name) {
-        var contactName = this._p2p[name] || name;
-        return this._contacts[contactName];
+        return this._contacts[name];
       },
       enumerable: true,
       configurable: true,
@@ -2545,8 +2533,7 @@
      */
     getAccessMode: {
       value: function(name) {
-        var contactName = this._p2p[name] || name;
-        var cont = this._contacts[contactName];
+        var cont = this._contacts[name];
         return cont ? new AccessMode(cont.mode) : null;
       },
       enumerable: true,
