@@ -21,10 +21,10 @@
  * It will add a singleton Tinode object to the top level object, usually <tt>window</tt>.
  * See <a href="https://github.com/tinode/example-react-js">https://github.com/tinode/example-react-js</a> for real-life usage.
  *
- * @copyright 2015-2016 Tinode
+ * @copyright 2015-2017 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.8
+ * @version 0.10
  *
  * @example
  * <head>
@@ -71,7 +71,7 @@
 
   // Global constants
   var PROTOVERSION = "0";
-  var VERSION = "0.9";
+  var VERSION = "0.10";
   var LIBRARY = "tinodejs/" + VERSION;
 
   var TOPIC_NEW = "new";
@@ -1710,16 +1710,128 @@
     };
   })();
 
-  var AccessMode = function(mode) {
-    this._MODE_SUB = 0x01;
-    this._MODE_PUB = 0x02;
-    this._MODE_PRES = 0x04;
-    this._MODE_SHARE = 0x08;
-    this._MODE_DELETE = 0x10;
-    this._MODE_OWNER = 0x20;
-    this._MODE_BANNED = 0x40;
+  var AccessMode = function(acs) {
+    if (acs != null) {
+      this.given = typeof acs.given === 'number' ? acs.given : AccessMode.decode(acs.given);
+      this.want = typeof acs.want === 'number' ? acs.want : AccessMode.decode(acs.want);
+      this.mode = typeof acs.mode === 'number' ? acs.mode : AccessMode.decode(acs.mode);
+    }
+  };
 
-    this._mode = this.parse(mode);
+  AccessMode._MODE_NONE = 0x00;
+  AccessMode._MODE_SUB = 0x01;
+  AccessMode._MODE_PUB = 0x02;
+  AccessMode._MODE_PRES = 0x04;
+  AccessMode._MODE_SHARE = 0x08;
+  AccessMode._MODE_DELETE = 0x10;
+  AccessMode._MODE_OWNER = 0x20;
+  AccessMode._MODE_BANNED = 0x40;
+  AccessMode._MODE_INVALID = 0x100000;
+
+  /**
+  * Parse string into an access mode value.
+  *
+  * @memberof Tinode.AccessMode
+  * @static
+  *
+  * @param {string} mode - String representation of the access mode to parse.
+  * @returns {number} - Access mode as a numeric value.
+  */
+  AccessMode.decode = function(str) {
+    if (!str) {
+      return null;
+    } else if (str === 'N' || str === 'n') {
+      return AccessMode._MODE_NONE;
+    }
+
+    var bitmask = {
+      'R': AccessMode._MODE_SUB,
+      'W': AccessMode._MODE_PUB,
+      'P': AccessMode._MODE_PRES,
+      'S': AccessMode._MODE_SHARE,
+      'D': AccessMode._MODE_DELETE,
+      'O': AccessMode._MODE_OWNER,
+      'X': AccessMode._MODE_BANNED
+    };
+
+    var m0 = AccessMode._MODE_NONE;
+
+    for (var i=0; i<str.length; i++) {
+      var c = str.charAt(i).toUpperCase();
+      var bit = bitmask[c];
+      if (!bit) {
+        // Unrecognized bit, skip.
+        continue;
+      } else if (bit === AccessMode._MODE_BANNED) {
+        // BANNED cannot be mixed with any other access modes.
+        return AccessMode._MODE_BANNED;
+      }
+      m0 |= bit;
+    }
+    return m0;
+  };
+
+  /**
+  * Convert numeric representation of the access mode into a string.
+  *
+  * @memberof Tinode.AccessMode
+  * @static
+  *
+  * @param {number} val - access mode value to convert to a string.
+  * @returns {string} - Access mode as a string.
+  */
+  AccessMode.encode = function(val) {
+    if (val === null || val === AccessMode._MODE_INVALID) {
+      return null;
+    } else if (val === AccessMode._MODE_NONE) {
+      return 'N';
+    }
+
+    var bitmask = ['R','W','P','S','D','O','X'];
+    var res = "";
+    for (var i=0; i<bitmask.length; i++) {
+      if ((val & (1 << i)) != 0) {
+        res = res + bitmask[i];
+      }
+    }
+    return res;
+  };
+  /**
+  * Update numeric representation of access mode with the new value. The value
+  * is a string starting with '+' or '-' then the bits to add or remove, e.g. '+R' or '-ps'.
+  *
+  * @memberof Tinode.AccessMode
+  * @static
+  *
+  * @param {number} val - access mode value to update.
+  * @param {string} upd - update to apply to val.
+  * @returns {number} - updated access mode.
+  */
+  AccessMode.update = function(val, upd) {
+    if (!upd || upd.length < 2) {
+      return val;
+    }
+
+    var m0 = AccessMode.decode(upd.substring(1));
+    if (!m0 || m0 === AccessMode._MODE_INVALID) {
+      return val;
+    }
+
+    var action = upd.charAt(0);
+    if (action === '+') {
+      if (m0 & AccessMode._MODE_BANNED) {
+        val = AccessMode._MODE_BANNED;
+      } else {
+        val |= m0;
+      }
+    } else if (action === '-') {
+      if (m0 & AccessMode._MODE_BANNED) {
+        val = AccessMode._MODE_NONE;
+      } else {
+        val &= ~m0;
+      }
+    }
+    return val;
   };
 
   /**
@@ -1730,75 +1842,25 @@
    * @param {string} mode - String representation of the access mode.
    */
   AccessMode.prototype = {
-    /**
-    * Parse string into an access mode value.
-    *
-    * @memberof Tinode.AccessMode
-    * @static
-    *
-    * @param {string} mode - String representation of the access mode to parse.
-    * @returns {number} - Access mode as a numeric value.
-    */
-    parse: function(str) {
-      var mode = 0;
-      if (str === 'N') {
-        return 0;
-      }
+    setMode: function(m) { this.mode = AccessMode.decode(m); },
+    updateMode: function(u) { this.mode = AccessMode.update(this.mode, u); },
+    getMode: function() { return AccessMode.encode(this.mode); },
 
-      var bitmask = {
-        'R': this._MODE_SUB,
-        'W': this._MODE_PUB,
-        'P': this._MODE_PRES,
-        'S': this._MODE_SHARE,
-        'D': this._MODE_DELETE,
-        'O': this._MODE_OWNER,
-        'X': this._MODE_BANNED
-      };
+    setGiven: function(g) { this.given = AccessMode.decode(g); },
+    updateGiven: function(u) { this.given = AccessMode.update(this.given, u); },
+    getGiven: function() { return AccessMode.encode(this.given); },
 
-      for (var i=0; i<str.length; i++) {
-        var c = str.charAt(i).toUpperCase();
-        var bit = bitmask[c];
-        if (bit === this._MODE_BANNED) {
-          // BANNED cannot be mixed with any other access modes.
-          return this._MODE_BANNED;
-        }
-        mode |= bit;
-      }
-      return mode;
-    },
-    toString: function() {
-      var bitmask = ['R','W','P','S','D','O','X'];
-      var res = "";
-      for (var i=0; i<bitmask.length; i++) {
-        if ((this._mode & (1 << i)) != 0) {
-          res = res + bitmask[i];
-        }
-      }
-      return res;
-    },
-    // Add bits to access mode
-    addMode: function(add) {
-      var mode = this.parse(add);
-      if (mode & this._MODE_BANNED) {
-        this._mode = this._MODE_BANNED;
-      } else {
-        this._mode |= mode;
-      }
-      return this;
-    },
-    // Clear bits from access mode
-    clearMode: function(clear) {
-      var mode = this.parse(clear);
-      this._mode &= ~mode;
-      return this;
-    },
-    isOwner:    function() { return ((this._mode & this._MODE_OWNER) != 0); },
-    isBanned:   function() { return ((this._mode & this._MODE_BANNED) != 0); },
-    canSub:     function() { return ((this._mode & this._MODE_SUB) != 0); },
-    canPub:     function() { return ((this._mode & this._MODE_PUB) != 0); },
-    canShare:   function() { return ((this._mode & this._MODE_SHARE) != 0); },
-    canDelete:  function() { return ((this._mode & this._MODE_DELETE) != 0); },
-    canPresence: function() { return ((this._mode & this._MODE_PRES) != 0); }
+    setWant: function(w) { this.want = AccessMode.decode(w); },
+    updateWant: function(u) { this.want = AccessMode.update(this.want, u); },
+    getWant: function() { return AccessMode.encode(this.want); },
+
+    isOwner:   function() { return ((this.mode & AccessMode._MODE_OWNER) != 0); },
+    isBanned:  function() { return ((this.mode & AccessMode._MODE_BANNED) != 0); },
+    isMuted:   function() { return ((this.mode & AccessMode._MODE_PRES) == 0); },
+    canSub:    function() { return ((this.mode & AccessMode._MODE_SUB) != 0); },
+    canPub:    function() { return ((this.mode & AccessMode._MODE_PUB) != 0); },
+    canShare:  function() { return ((this.mode & AccessMode._MODE_SHARE) != 0); },
+    canDelete: function() { return ((this.mode & AccessMode._MODE_DELETE) != 0); }
   };
 
   /**
@@ -1829,8 +1891,8 @@
     this.created = null;
     // timestamp when the topic was last updated
     this.updated = null;
-    // access mode
-    this.mode = null;
+    // access mode, see AccessMode
+    this.acs = new AccessMode(null);
     // per-topic private data
     this.private = null;
     // per-topic public data
@@ -1911,7 +1973,7 @@
               topic: topic.name,
               created: ctrl.ts,
               updated: ctrl.ts,
-              mode: ctrl.params.mode,
+              acs: new AccessMode(ctrl.params.acs),
               with: topic.with
             }]);
           }
@@ -1921,7 +1983,7 @@
           }
         }
 
-        topic.mode = ctrl.params.mode;
+        topic.acs = new AccessMode(ctrl.params.acs);
 
         topic._subscribed = true;
         return topic;
@@ -2192,7 +2254,7 @@
      * @returns {Tinode.AccessMode} - user's access mode
      */
     getAccessMode: function() {
-      return new AccessMode(this.mode);
+      return this.acs;
     },
 
     // Process data message
@@ -2270,8 +2332,9 @@
         this.created = new Date(this.created);
       }
       if (typeof this.updated === "string") {
-          this.updated = new Date(this.updated);
+        this.updated = new Date(this.updated);
       }
+      this.acs = new AccessMode(this.acs);
 
       // Update relevant contact in the me topic, if available:
       if (this.name !== 'me') {
@@ -2280,6 +2343,7 @@
           me._processMetaSub([{
             topic: this.name,
             updated: this.updated,
+            acs: this.acs,
             public: this.public,
             private: this.private
           }]);
@@ -2295,6 +2359,7 @@
     _processMetaSub: function(subs) {
       for (var idx in subs) {
         var sub = subs[idx];
+        sub.acs = new AccessMode(sub.acs);
         if (sub.user) { // Response to get.sub on 'me' topic does not have .user set
           // Save the object to global cache.
           this._cachePutUser(sub.user, sub);
@@ -2356,6 +2421,7 @@
           }
           var cont = this._contacts[subs[idx].topic];
           subs[idx].updated = new Date(subs[idx].updated);
+          subs[idx].acs = new AccessMode(subs[idx].acs);
           if (subs[idx].seen && subs[idx].seen.when) {
             subs[idx].seen.when = new Date(subs[idx].seen.when);
           }
@@ -2483,7 +2549,6 @@
         var oldVal, newVal;
         var mode = null;
         if (cont) {
-          mode = new AccessMode(cont.mode);
           if (what === "recv") {
             oldVal = cont.recv;
             cont.recv = cont.recv ? Math.max(cont.recv, seq) : seq;
@@ -2498,7 +2563,7 @@
             newVal = cont.seq;
           }
 
-          if ((oldVal != newVal) && (!mode || mode.canPresence()) && this.onContactUpdate) {
+          if ((oldVal != newVal) && (!cont.acs || cont.acs.canPresence()) && this.onContactUpdate) {
             this.onContactUpdate(what, cont);
           }
         }
@@ -2534,7 +2599,7 @@
     getAccessMode: {
       value: function(name) {
         var cont = this._contacts[name];
-        return cont ? new AccessMode(cont.mode) : null;
+        return cont ? cont.acs : null;
       },
       enumerable: true,
       configurable: true,
