@@ -341,9 +341,14 @@
         * @return {Promise} Promise resolved/rejected when the connection call completes,
             resolution is called without parameters, rejection passes the {Error} as parameter.
         */
-        connect: function() {
+        connect: function(host_) {
+          console.log("Connection.ws.connect(" + host_ + ");");
           if (_socket && _socket.readyState === 1) {
             return Promise.resolve();
+          }
+
+          if (host_) {
+            host = host_;
           }
 
           return new Promise(function(resolve, reject) {
@@ -497,7 +502,11 @@
       }
 
       return {
-        connect: function() {
+        connect: function(host_) {
+          if (host_) {
+            host = host_;
+          }
+
           return new Promise(function(resolve, reject){
             var url = makeBaseUrl(host, secure ? "https" : "http", apiKey);
             log("Connecting to: " + url);
@@ -621,9 +630,6 @@
       var _loggingEnabled = false;
       // When logging, trip long strings (base64-encoded images) for readability
       var _trimLongStrings = false;
-      // The name of the host and TCP port to connect to, i.e. api.tinode.co
-      // or localhost:8000
-      var _hostNameAndPort = '';
       // A connection object, see Connection above.
       var _connection = null;
       // UID of the currently authenticated user
@@ -894,15 +900,6 @@
               instance.onCtrlMessage(pkt.ctrl);
             }
 
-            // The very first incoming packet. This is a response to the connection attempt
-            /*
-            if (_inPacketCount == 1) {
-              if (instance.onConnect) {
-                instance.onConnect(pkt.ctrl.code, pkt.ctrl.text, pkt.ctrl.params);
-              }
-            }
-            */
-
             // Resolve or reject a pending promise, if any
             if (pkt.ctrl.id) {
               execPromise(pkt.ctrl.id, pkt.ctrl.code, pkt.ctrl, pkt.ctrl.text);
@@ -1048,8 +1045,9 @@
          * @return {Promise} Promise resolved/rejected when the connection call completes:
          * <tt>resolve()</tt> is called without parameters, <tt>reject()</tt> receives the <tt>Error</tt> as a single parameter.
          */
-        connect: function() {
-          return _connection.connect();
+        connect: function(host_) {
+          console.log("Tinode.connect(" + host_ + ");");
+          return _connection.connect(host_);
         },
 
         /**
