@@ -342,7 +342,6 @@
             resolution is called without parameters, rejection passes the {Error} as parameter.
         */
         connect: function(host_) {
-          console.log("Connection.ws.connect(" + host_ + ");");
           if (_socket && _socket.readyState === 1) {
             return Promise.resolve();
           }
@@ -1046,7 +1045,6 @@
          * <tt>resolve()</tt> is called without parameters, <tt>reject()</tt> receives the <tt>Error</tt> as a single parameter.
          */
         connect: function(host_) {
-          console.log("Tinode.connect(" + host_ + ");");
           return _connection.connect(host_);
         },
 
