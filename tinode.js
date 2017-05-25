@@ -1,20 +1,3 @@
-/*****************************************************************************
- *
- * Copyright 2014-2016, Tinode, All Rights Reserved
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 /**
  * @file All the logic need to connect to Tinode chat server. Tinode is a single js
  * file with no dependencies. Just include <tt>tinode.js</tt> into your project.
@@ -24,7 +7,7 @@
  * @copyright 2015-2017 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.10
+ * @version 0.11
  *
  * @example
  * <head>
@@ -71,7 +54,7 @@
 
   // Global constants
   var PROTOVERSION = "0";
-  var VERSION = "0.10";
+  var VERSION = "0.11";
   var LIBRARY = "tinodejs/" + VERSION;
 
   var TOPIC_NEW = "new";
@@ -376,7 +359,7 @@
               _socket = null;
 
               if (instance.onDisconnect) {
-                instance.onDisconnect();
+                instance.onDisconnect(null);
               }
 
               if (!_boffClosed && autoreconnect) {
@@ -491,7 +474,7 @@
                 instance.onMessage(poller.responseText);
               }
               if (instance.onDisconnect) {
-                instance.onDisconnect();
+                instance.onDisconnect(new Error("" + poller.status + " " + poller.responseText));
               }
             }
           }
@@ -525,7 +508,7 @@
             _poller = null;
           }
           if (instance.onDisconnect) {
-            instance.onDisconnect();
+            instance.onDisconnect(null);
           }
           // Ensure it's reconstructed
           _lpURL = null;
@@ -989,7 +972,7 @@
         instance.hello();
       }
 
-      function handleDisconnect() {
+      function handleDisconnect(err) {
         _inPacketCount = 0;
         _myUID = null;
         _serverInfo = null;
@@ -1001,7 +984,7 @@
         });
 
         if (instance.onDisconnect) {
-          instance.onDisconnect();
+          instance.onDisconnect(err);
         }
       }
 
@@ -1146,7 +1129,15 @@
                     instance.onConnect();
                   }
                 },
-                "reject": reject
+                "reject": function(err) {
+                  if (reject) {
+                    reject(err);
+                  }
+
+                  if (instance.onDisconnect) {
+                    instance.onDisconnect(err);
+                  }
+                }
               }
             });
           }
