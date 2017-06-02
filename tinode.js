@@ -54,7 +54,7 @@
 
   // Global constants
   var PROTOVERSION = "0";
-  var VERSION = "0.11";
+  var VERSION = "0.13";
   var LIBRARY = "tinodejs/" + VERSION;
 
   var TOPIC_NEW = "new";
@@ -1168,7 +1168,7 @@
               _pendingPromises[pkt.login.id] = {
                 "resolve": function(ctrl) {
                   // This is a response to a successful login, extract UID and security token, save it in Tinode module
-                  _myUID = ctrl.params.uid;
+                  _myUID = ctrl.params.user;
                   if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
                     _loginToken = {
                       token: ctrl.params.token,
@@ -1500,8 +1500,7 @@
         },
 
         /**
-         * Instantiate a new P2P topic with a given peer. Actual name will be assigned by the server on
-         * {@link Tinode.Topic.subscribe}.
+         * Instantiate a new P2P topic with a given peer.
          * @memberof Tinode#
          *
          * @param {string} peer - UId of the peer to start topic with.
@@ -1509,8 +1508,7 @@
          * @returns {Tinode.Topic} Newly created topic.
          */
         newTopicWith: function(peer, callbacks) {
-          var topic = new Topic(undefined, callbacks);
-          topic.with = peer;
+          var topic = new Topic(peer, callbacks);
           attachCacheToTopic(topic);
           return topic;
         },
@@ -1582,7 +1580,8 @@
          */
         getTopicType: function(name) {
           var tp = (typeof name === "string") ? name.substring(0, 3) : undefined;
-          return (tp === "me" || tp === "fnd" || tp === "grp" || tp === "p2p") ? tp : undefined;
+          if (tp === 'usr') return 'p2p';
+          return (tp === "me" || tp === "fnd" || tp === "grp") ? tp : undefined;
         },
 
         /**
@@ -1705,15 +1704,16 @@
     }
   };
 
-  AccessMode._MODE_NONE = 0x00;
-  AccessMode._MODE_SUB = 0x01;
-  AccessMode._MODE_PUB = 0x02;
-  AccessMode._MODE_PRES = 0x04;
-  AccessMode._MODE_SHARE = 0x08;
-  AccessMode._MODE_DELETE = 0x10;
-  AccessMode._MODE_OWNER = 0x20;
-  AccessMode._MODE_BANNED = 0x40;
-  AccessMode._MODE_INVALID = 0x100000;
+  AccessMode._MODE_NONE     = 0x00;
+  AccessMode._MODE_JOIN     = 0x01;
+  AccessMode._MODE_READ     = 0x02;
+  AccessMode._MODE_WRITE    = 0x04;
+  AccessMode._MODE_PRES     = 0x08;
+  AccessMode._MODE_APPROVE  = 0x10;
+  AccessMode._MODE_SHARE    = 0x20;
+  AccessMode._MODE_DELETE   = 0x40;
+  AccessMode._MODE_OWNER    = 0x80;
+  AccessMode._MODE_INVALID  = 0x100000;
 
   /**
   * Parse string into an access mode value.
@@ -1732,13 +1732,14 @@
     }
 
     var bitmask = {
-      'R': AccessMode._MODE_SUB,
-      'W': AccessMode._MODE_PUB,
+      'J': AccessMode._MODE_JOIN,
+      'R': AccessMode._MODE_READ,
+      'W': AccessMode._MODE_WRITE,
       'P': AccessMode._MODE_PRES,
+      'A': AccessMode._MODE_APPROVE,
       'S': AccessMode._MODE_SHARE,
       'D': AccessMode._MODE_DELETE,
-      'O': AccessMode._MODE_OWNER,
-      'X': AccessMode._MODE_BANNED
+      'O': AccessMode._MODE_OWNER
     };
 
     var m0 = AccessMode._MODE_NONE;
@@ -1749,9 +1750,6 @@
       if (!bit) {
         // Unrecognized bit, skip.
         continue;
-      } else if (bit === AccessMode._MODE_BANNED) {
-        // BANNED cannot be mixed with any other access modes.
-        return AccessMode._MODE_BANNED;
       }
       m0 |= bit;
     }
@@ -1774,7 +1772,7 @@
       return 'N';
     }
 
-    var bitmask = ['R','W','P','S','D','O','X'];
+    var bitmask = ['J','R','W','P','A','S','D','O'];
     var res = "";
     for (var i=0; i<bitmask.length; i++) {
       if ((val & (1 << i)) != 0) {
@@ -1799,25 +1797,19 @@
       return val;
     }
 
+    var action = upd.charAt(0);
     var m0 = AccessMode.decode(upd.substring(1));
+
     if (!m0 || m0 === AccessMode._MODE_INVALID) {
       return val;
     }
 
-    var action = upd.charAt(0);
     if (action === '+') {
-      if (m0 & AccessMode._MODE_BANNED) {
-        val = AccessMode._MODE_BANNED;
-      } else {
-        val |= m0;
-      }
+      val |= m0;
     } else if (action === '-') {
-      if (m0 & AccessMode._MODE_BANNED) {
-        val = AccessMode._MODE_NONE;
-      } else {
-        val &= ~m0;
-      }
+      val &= ~m0;
     }
+
     return val;
   };
 
@@ -1841,13 +1833,14 @@
     updateWant: function(u) { this.want = AccessMode.update(this.want, u); },
     getWant: function() { return AccessMode.encode(this.want); },
 
-    isOwner:   function() { return ((this.mode & AccessMode._MODE_OWNER) != 0); },
-    isBanned:  function() { return ((this.mode & AccessMode._MODE_BANNED) != 0); },
-    isMuted:   function() { return ((this.mode & AccessMode._MODE_PRES) == 0); },
-    canSub:    function() { return ((this.mode & AccessMode._MODE_SUB) != 0); },
-    canPub:    function() { return ((this.mode & AccessMode._MODE_PUB) != 0); },
-    canShare:  function() { return ((this.mode & AccessMode._MODE_SHARE) != 0); },
-    canDelete: function() { return ((this.mode & AccessMode._MODE_DELETE) != 0); }
+    isOwner:    function() { return ((this.mode & AccessMode._MODE_OWNER) != 0); },
+    isMuted:    function() { return ((this.mode & AccessMode._MODE_PRES) == 0); },
+    isJoiner:   function() { return ((this.mode & AccessMode._MODE_JOIN) != 0); },
+    isReader:   function() { return ((this.mode & AccessMode._MODE_READ) != 0); },
+    isWriter:   function() { return ((this.mode & AccessMode._MODE_WRITE) != 0); },
+    isApprover: function() { return ((this.mode & AccessMode._MODE_APPROVE) != 0); },
+    isSharer:   function() { return ((this.mode & AccessMode._MODE_SHARE) != 0); },
+    isDeleter:  function() { return ((this.mode & AccessMode._MODE_DELETE) != 0); }
   };
 
   /**
@@ -1942,9 +1935,9 @@
       // Closure for the promise below.
       var topic = this;
       // Send subscribe message, handle async response.
-      // If topic name is explicitly provided, use it. If no name, then it's a new topic:
-      // use either topic.with for p2p topics or "new" for group topics.
-      return tinode.subscribe(name || topic.with || TOPIC_NEW, params).then(function(ctrl) {
+      // If topic name is explicitly provided, use it. If no name, then it's a new group topic,
+      // use "new".
+      return tinode.subscribe(name || TOPIC_NEW, params).then(function(ctrl) {
         // Set topic name for new topics and add it to cache.
         if (!name) {
           topic.name = ctrl.topic;
@@ -1961,7 +1954,6 @@
               created: ctrl.ts,
               updated: ctrl.ts,
               acs: new AccessMode(ctrl.params.acs),
-              with: topic.with
             }]);
           }
 
@@ -2225,10 +2217,10 @@
     },
 
     /**
-     * Get type of the topic: me, p2p, grp.
+     * Get type of the topic: me, p2p, grp, fnd...
      * @memberof Tinode.Topic#
      *
-     * @returns {string} One of 'me', 'p2p', 'grp' or <tt>undefined</tt>.
+     * @returns {string} One of 'me', 'p2p', 'grp', 'fnd' or <tt>undefined</tt>.
      */
     getType: function() {
       return Tinode.getInstance().getTopicType(this.name);
@@ -2550,7 +2542,7 @@
             newVal = cont.seq;
           }
 
-          if ((oldVal != newVal) && (!cont.acs || cont.acs.canPresence()) && this.onContactUpdate) {
+          if ((oldVal != newVal) && (!cont.acs || !cont.acs.isMuted()) && this.onContactUpdate) {
             this.onContactUpdate(what, cont);
           }
         }
