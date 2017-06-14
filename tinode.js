@@ -82,6 +82,19 @@
     }
   }
 
+  // Update object stored in a cache. Returns updated value.
+  var mergeToCache = function(cache, key, newval) {
+    var oldval = cache[key];
+    if (oldval) {
+      mergeObj(oldval, newval);
+    } else {
+      cache[key] = newval;
+      oldval = newval;
+    }
+
+    return oldval;
+  }
+
   // Basic cross-domain requester. Supports normal browsers and IE8+
   var xdreq = function() {
     var xdreq = null;
@@ -2341,18 +2354,23 @@
         sub.acs = new AccessMode(sub.acs);
         if (sub.user) { // Response to get.sub on 'me' topic does not have .user set
           // Save the object to global cache.
-          this._cachePutUser(sub.user, sub);
-          // Cache user in the topic as well.
-          var cached = this._users[sub.user];
-          if (cached) {
-            mergeObj(cached, sub);
+          sub.updated = new Date(sub.updated);
+          sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
+
+          var cached = null;
+          if (!sub.deleted) {
+            // Cache user in the topic
+            cached = mergeToCache(this._users, sub.user, sub);
+            this._cachePutUser(sub.user, cached);
           } else {
-            this._users[sub.user] = sub;
+            // Subscription is deleted, remove it from topic (but leave in Users cache)
+            delete this._users[sub.user];
+            cached = sub;
           }
         }
 
         if (this.onMetaSub) {
-          this.onMetaSub(subs[idx]);
+          this.onMetaSub(cached);
         }
       }
 
@@ -2394,22 +2412,27 @@
       value: function(subs) {
         var updateCount  = 0;
         for (var idx in subs) {
+          var sub = subs[idx];
+          var topic = sub.topic;
           // Don't show 'fnd' topic in the list of contacts
-          if (subs[idx].topic == TOPIC_FND) {
+          if (topic === TOPIC_FND) {
             continue;
           }
-          var cont = this._contacts[subs[idx].topic];
-          subs[idx].updated = new Date(subs[idx].updated);
-          subs[idx].acs = new AccessMode(subs[idx].acs);
-          if (subs[idx].seen && subs[idx].seen.when) {
-            subs[idx].seen.when = new Date(subs[idx].seen.when);
-          }
-          if (cont) {
-            mergeObj(cont, subs[idx]);
+          sub.updated = new Date(sub.updated);
+          sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
+
+          var cont = null;
+          if (!sub.deleted) {
+            sub.acs = new AccessMode(sub.acs);
+            if (sub.seen && sub.seen.when) {
+              sub.seen.when = new Date(sub.seen.when);
+            }
+            cont = mergeToCache(this._contacts, topic, sub);
           } else {
-            cont = subs[idx];
+            cont = sub;
+            delete this._contacts[topic];
           }
-          this._contacts[cont.topic] = cont;
+
           updateCount ++;
 
           if (this.onMetaSub) {
