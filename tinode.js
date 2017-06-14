@@ -7,7 +7,7 @@
  * @copyright 2015-2017 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.11
+ * @version 0.13
  *
  * @example
  * <head>
@@ -669,7 +669,7 @@
       }
 
       function cacheDel(type, name) {
-        delete _cache[type + ":" + name]
+        delete _cache[type + ":" + name];
       }
       // Enumerate all items in cache, call func for each item.
       // Enumeration stops if func returns true.
@@ -1422,6 +1422,7 @@
 
           pkt.del.what = "msg";
           pkt.del.before = params.before;
+          pkt.del.list = params.list;
           pkt.del.hard = params.hard;
 
           return sendWithPromise(pkt, pkt.del.id);
@@ -1442,6 +1443,22 @@
             cacheDel("topic", topic);
             return ctrl;
           });
+        },
+
+        /**
+         * Delete subscription. Requires Share permission.
+         * @memberof Tinode#
+         *
+         * @param {string} topic - Name of the topic to delete
+         * @param {string} user - User ID to remove.
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         */
+        delSubscription: function(topic, user) {
+          var pkt = initPacket("del", topic);
+          pkt.del.what = "sub";
+          pkt.del.user = user;
+
+          return sendWithPromise(pkt, pkt.del.id);
         },
 
         /**
@@ -2092,6 +2109,24 @@
         if (topic.onDeleteTopic) {
           topic.onDeleteTopic();
         }
+      });
+    },
+
+    /**
+     * Delete subscription. Requires Share permission. Wrapper for {@link Tinode#delSubscription}.
+     * @memberof Tinode.Topic#
+     *
+     * @param {String} user - ID of the user to remove subscription for.
+     */
+    delSubscription: function(user) {
+      if (!this._subscribed) {
+        throw new Error("Cannot delete subscription in inactive topic");
+      }
+      var topic = this;
+      // Send {del} message, return promise
+      return Tinode.getInstance().delSubscription(this.name, user).then(function(obj) {
+        // Remove the object from the subscription cache;
+        delete topic._users[user];
       });
     },
 
