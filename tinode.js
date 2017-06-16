@@ -1107,11 +1107,13 @@
         },
 
         /**
-         * Create user with 'basic' authentication scheme
+         * Create user with 'basic' authentication scheme and immediately
+         * use it for authentication.
+         *  
          * @memberof Tinode#
          */
         createUserBasic: function(username, password, params) {
-          return instance.createUser("basic", btoa(username + ":" + password), false, params);
+          return instance.createUser("basic", btoa(username + ":" + password), true, params);
         },
 
         /**
