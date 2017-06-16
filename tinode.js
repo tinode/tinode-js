@@ -1109,7 +1109,7 @@
         /**
          * Create user with 'basic' authentication scheme and immediately
          * use it for authentication.
-         *  
+         *
          * @memberof Tinode#
          */
         createUserBasic: function(username, password, params) {
@@ -2033,8 +2033,9 @@
       }
       // Send a 'leave' message, handle async response
       var topic = this;
-      return Tinode.getInstance().leave(this.name, unsub).then(function(obj) {
+      return Tinode.getInstance().leave(this.name, unsub).then(function(ctrl) {
         topic._resetSub();
+        return ctrl;
       });
     },
 
@@ -2061,11 +2062,19 @@
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     setMeta: function(params) {
+      var topic = this;
       if (!this._subscribed) {
         throw new Error("Cannot update inactive topic");
       }
-      // Send Set message, handle async response
-      return Tinode.getInstance().setMeta(this.name, params);
+
+      // Send Set message, handle async response.
+      return Tinode.getInstance().setMeta(this.name, params)
+        .then(function(ctrl) {
+          if (ctrl.params && ctrl.params.acs) {
+            topic.acs = new AccessMode(ctrl.params.acs);
+          }
+          return ctrl;
+        });
     },
 
     /**
@@ -2086,6 +2095,57 @@
       }
       // Send {del} message, return promise
       return Tinode.getInstance().delMessages(this.name, params);
+    },
+
+    /**
+     * Delete all messages. Hard-deleting messages requires Owner permission.
+     *
+     * @memberof Tinode.Topic#
+     *
+     * @param {boolean} hardDel - true if messages should be hard-deleted.
+     */
+    delMessagesAll: function(hardDel) {
+      var topic = this;
+      // Send {del} message, return promise
+      return this.delMessages({before: this._seq, hard: hardDel})
+        .then(function(ctrl) {
+          topic._messages.reset();
+          if (topic.onData) {
+            // Calling with no parameters to indicate the messages were deleted.
+            topic.onData();
+          }
+          return ctrl;
+        });
+    },
+
+    /**
+     * Delete all messages. Hard-deleting messages requires Owner permission.
+     *
+     * @memberof Tinode.Topic#
+     *
+     * @param {array} listToDelete - list of seq IDs to delete
+     * @param {boolean} hardDel - true if messages should be hard-deleted.
+     */
+    delMessagesList: function(listToDelete, hardDel) {
+      var topic = this;
+      // Send {del} message, return promise
+      return this.delMessages({list: listToDelete, "hard": hardDel})
+        .then(function(ctrl) {
+          // Remove from the buffer messages with matching ids:
+          // create an empty buffer and copy messages we want to to keep.
+          var messages = new CBuffer(100);
+          topic.messages(function(msg) {
+            if (listToDelete.indexOf(msg.seq) == -1) {
+              messages.put(msg);
+            }
+          });
+          topic._messages = messages;
+          if (topic.onData) {
+            // Calling with no parameters to indicate that messages were deleted.
+            topic.onData();
+          }
+          return ctrl;
+        });
     },
 
     /**
@@ -2216,7 +2276,7 @@
      * Iterate over cached messages. If callback is undefined, use this.onData.
      * @memberof Tinode.Topic#
      *
-     * @param {function} callback - Callback which will receive messages one by one.
+     * @param {function} callback - Callback which will receive messages one by one. See {@link Tinode.CBuffer#forEach}
      * @param {Object} context - Value of `this` inside the `callback`.
      */
     messages: function(callback, context) {
@@ -2363,6 +2423,7 @@
       if (typeof this.updated === "string") {
         this.updated = new Date(this.updated);
       }
+      // Ensure that the acs is properly parsed.
       this.acs = new AccessMode(this.acs);
 
       // Update relevant contact in the me topic, if available:
