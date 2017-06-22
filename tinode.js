@@ -2350,15 +2350,9 @@
     _routeData: function(data) {
       this._lastUpdate = data.ts;
 
-      // Generate a topic-unique index for the sender. It can be used to
-      // differentiate messages by sender, such as different message background
-      // for different senders.
-      var idx = Object.keys(this._users).indexOf(data.from);
-      if (idx < 0) {
-        idx = Object.keys(this._users).length;
+      if (Object.keys(this._users).indexOf(data.from) < 0) {
         this._users[data.from] = {user: data.from};
       }
-      data.$userIndex = idx;
 
       this._messages.put(data);
 
