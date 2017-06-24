@@ -117,7 +117,7 @@
   // JSON stringify helper - pre-processor for JSON.stringify
   var jsonBuildHelper = function(key, val) {
     // strip out empty elements while serializing objects to JSON
-    if (val === undefined || val === null || val.length === 0 ||
+    if (val === undefined || val === null || val === false || val.length === 0 ||
       ((typeof val === "object") && (Object.keys(val).length === 0))) {
       return undefined;
       // Convert javascript Date objects to rfc3339 strings
@@ -629,6 +629,8 @@
       var _connection = null;
       // UID of the currently authenticated user
       var _myUID = null;
+      // Login used in the last successful basic authentication
+      var _login = null;
       // Token which can be used for login instead of login/password.
       var _loginToken = null;
       // Counter of received packets
@@ -1001,6 +1003,23 @@
         }
       }
 
+      function loginSuccessful(ctrl) {
+        // This is a response to a successful login,
+        // extract UID and security token, save it in Tinode module
+        _myUID = ctrl.params.user;
+        if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
+          _loginToken = {
+            token: ctrl.params.token,
+            expires: new Date(ctrl.params.expires)
+          };
+        } else {
+          _loginToken = null;
+        }
+
+        if (instance.onLogin) {
+          instance.onLogin(ctrl.code, ctrl.text);
+        }
+      }
       // Returning an initialized instance with public methods;
       return {
 
@@ -1080,30 +1099,50 @@
          * @property {string=} anon - Access mode for <tt>me</tt>  anonymous users.
          */
 
+         /**
+          * Create or update an account.
+          * @memberof Tinode#
+          *
+          * @param {string} uid - User id to update
+          * @param {string} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
+          * @param {string} secret - Authentication secret, assumed to be already base64 encoded.
+          * @param {boolean} login - Use new account to authenticate current session
+          * @param {Tinode.AccountCreationParams} params - User data to pass to the server.
+          */
+         account: function(uid, scheme, secret, login, params) {
+           var pkt = initPacket("acc");
+           pkt.acc.user = uid;
+           pkt.acc.scheme = scheme;
+           pkt.acc.secret = secret;
+           // Log in to the new account using selected scheme
+           pkt.acc.login = login;
+
+           if (params) {
+             pkt.acc.desc.defacs = params.defacs;
+             pkt.acc.desc.public = params.public;
+             pkt.acc.desc.private = params.private;
+           }
+
+           return sendWithPromise(pkt, pkt.acc.id);
+         },
+
         /**
          * Create a new user.
          * @memberof Tinode#
          *
          * @param {string} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
-         * @param {string} secret - Authentication secret, assumed to be already base64 encoded.
+         * @param {string} secret - Authentication.
          * @param {boolean} login - Use new account to authenticate current session
          * @param {Tinode.AccountCreationParams} params - User data to pass to the server.
          */
-        createUser: function(scheme, secret, login, params) {
-          var pkt = initPacket("acc");
-          pkt.acc.user = USER_NEW;
-          pkt.acc.scheme = scheme;
-          pkt.acc.secret = secret;
-          // Log in to the new account using selected scheme
-          pkt.acc.login = login;
-
-          if (params) {
-            pkt.acc.desc.defacs = params.defacs;
-            pkt.acc.desc.public = params.public;
-            pkt.acc.desc.private = params.private;
+        createAccount: function(scheme, secret, login, params) {
+          var promise = instance.account(USER_NEW, scheme, secret, login, params);
+          if (login) {
+            promise = promise.then(function(ctrl) {
+              loginSuccessful(ctrl);
+            });
           }
-
-          return sendWithPromise(pkt, pkt.acc.id);
+          return promise;
         },
 
         /**
@@ -1112,8 +1151,17 @@
          *
          * @memberof Tinode#
          */
-        createUserBasic: function(username, password, params) {
-          return instance.createUser("basic", btoa(username + ":" + password), true, params);
+        createAccountBasic: function(username, password, params) {
+          return instance.createAccount("basic", btoa(username + ":" + password), true, params);
+        },
+
+        /**
+         * Update user's credentials for 'basic' authentication scheme.
+         *
+         * @memberof Tinode#
+         */
+        updateAccountBasic: function(uid, username, password) {
+          return instance.account(uid, "basic", btoa(username + ":" + password), false, null);
         },
 
         /**
@@ -1124,42 +1172,23 @@
          */
         hello: function() {
           var pkt = initPacket("hi");
-          // Setup promise
-          var promise = null;
-          if (pkt.hi.id) {
-            var promise = new Promise(function(resolve, reject) {
-              // Stored callbacks will be called when the response packet with this Id arrives
-              _pendingPromises[pkt.hi.id] = {
-                "resolve": function(ctrl) {
-                  // Server response contains server protocol version, build, and session ID for long polling.
-                  // Save them.
-                  if (ctrl.params) {
-                    _serverInfo = ctrl.params;
-                  }
-                  if (resolve) {
-                    resolve(ctrl);
-                  }
 
-                  if (instance.onConnect) {
-                    instance.onConnect();
-                  }
-                },
-                "reject": function(err) {
-                  if (reject) {
-                    reject(err);
-                  }
+          return sendWithPromise(pkt, pkt.hi.id)
+            .then(function(ctrl) {
+              // Server response contains server protocol version, build,
+              // and session ID for long polling. Save them.
+              if (ctrl.params) {
+                _serverInfo = ctrl.params;
+              }
 
-                  if (instance.onDisconnect) {
-                    instance.onDisconnect(err);
-                  }
-                }
+              if (instance.onConnect) {
+                instance.onConnect();
+              }
+            }).catch(function(err) {
+              if (instance.onDisconnect) {
+                instance.onDisconnect(err);
               }
             });
-          }
-
-          sendBasic(pkt);
-          return promise;
-
         },
 
         /**
@@ -1175,39 +1204,10 @@
           pkt.login.scheme = scheme;
           pkt.login.secret = secret;
 
-          // Setup promise
-          var promise = null;
-          if (pkt.login.id) {
-            var promise = new Promise(function(resolve, reject) {
-              // Stored callbacks will be called when the response packet with this Id arrives
-              _pendingPromises[pkt.login.id] = {
-                "resolve": function(ctrl) {
-                  // This is a response to a successful login, extract UID and security token, save it in Tinode module
-                  _myUID = ctrl.params.user;
-                  if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
-                    _loginToken = {
-                      token: ctrl.params.token,
-                      expires: new Date(ctrl.params.expires)
-                    };
-                  } else {
-                    _loginToken = null;
-                  }
-
-                  if (instance.onLogin) {
-                    instance.onLogin(ctrl.code, ctrl.text);
-                  }
-
-                  if (resolve) {
-                    resolve(ctrl);
-                  }
-                },
-                "reject": reject
-              }
+          return sendWithPromise(pkt, pkt.login.id)
+            .then(function(ctrl) {
+              loginSuccessful(ctrl);
             });
-          }
-
-          sendBasic(pkt);
-          return promise;
         },
 
         /**
@@ -1219,7 +1219,11 @@
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         loginBasic: function(uname, password) {
-          return instance.login("basic", btoa(uname + ":" + password));
+          return instance.login("basic", btoa(uname + ":" + password))
+            .then(function(ctrl) {
+              _login = uname;
+              return ctrl;
+            });
         },
 
         /**
@@ -1569,16 +1573,25 @@
         /**
          * Get the UID of the the current authenticated user.
          * @memberof Tinode#
-         * @returns {string} UID of the current user or <tt>undefined</uu> if the session is not yet authenticated or if there is no session.
+         * @returns {string} UID of the current user or <tt>undefined</tt> if the session is not yet authenticated or if there is no session.
          */
         getCurrentUserID: function() {
           return _myUID;
         },
 
         /**
+         * Get login used for last successful authentication.
+         * @memberof Tinode#
+         * @returns {string} login last used successfully or <tt>undefined</tt>.
+         */
+        getCurrentLogin: function() {
+          return _login;
+        },
+
+        /**
          * Return information about the server: protocol version and build timestamp.
          * @memberof Tinode#
-         * @returns {Object} build and version of the server or <tt>null</uu> if there is no connection or if the first server response has not been received yet.
+         * @returns {Object} build and version of the server or <tt>null</tt> if there is no connection or if the first server response has not been received yet.
          */
         getServerInfo: function() {
           return _serverInfo;
@@ -2475,6 +2488,16 @@
     // TODO(gene): should it also clear the message cache?
     _resetSub: function() {
       this._subscribed = false;
+    },
+
+    /**
+     * Get topic's default access mode.
+     * @memberof Tinode.Topic#
+     *
+     * @returns {Object} - access mode, such as {auth: `RWP`, anon: `N`}.
+     */
+    getDefaultAccess: function() {
+        return this.defacs;
     }
   };
 
@@ -2699,7 +2722,6 @@
       configurable: true,
       writable: true
     }
-
   });
   TopicMe.prototype.constructor = TopicMe;
 
