@@ -1880,6 +1880,7 @@
 
     isOwner:    function() { return ((this.mode & AccessMode._MODE_OWNER) != 0); },
     isMuted:    function() { return ((this.mode & AccessMode._MODE_PRES) == 0); },
+    isPresencer:function() { return ((this.mode & AccessMode._MODE_PRES) != 0); },
     isJoiner:   function() { return ((this.mode & AccessMode._MODE_JOIN) != 0); },
     isReader:   function() { return ((this.mode & AccessMode._MODE_READ) != 0); },
     isWriter:   function() { return ((this.mode & AccessMode._MODE_WRITE) != 0); },
