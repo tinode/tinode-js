@@ -73,6 +73,17 @@
       'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) + 'Z';
   }
 
+  // btoa replacement. Stock btoa fails on on non-Latin1 strings.
+  function b64EncodeUnicode(str) {
+      // The encodeURIComponent percent-encodes UTF-8 string,
+      // then the percent encoding is converted into raw bytes which
+      // can be fed into btoa.
+      return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
+          function toSolidBytes(match, p1) {
+              return String.fromCharCode('0x' + p1);
+      }));
+  }
+
   // Copy src's own properties to dst.
   var mergeObj = function(dst, src) {
     for (var prop in src) {
@@ -1152,7 +1163,8 @@
          * @memberof Tinode#
          */
         createAccountBasic: function(username, password, params) {
-          return instance.createAccount("basic", btoa(username + ":" + password), true, params);
+          return instance.createAccount("basic",
+            b64EncodeUnicode(username + ":" + password), true, params);
         },
 
         /**
@@ -1161,7 +1173,8 @@
          * @memberof Tinode#
          */
         updateAccountBasic: function(uid, username, password) {
-          return instance.account(uid, "basic", btoa(username + ":" + password), false, null);
+          return instance.account(uid, "basic",
+            b64EncodeUnicode(username + ":" + password), false, null);
         },
 
         /**
@@ -1219,7 +1232,7 @@
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         loginBasic: function(uname, password) {
-          return instance.login("basic", btoa(uname + ":" + password))
+          return instance.login("basic", b64EncodeUnicode(uname + ":" + password))
             .then(function(ctrl) {
               _login = uname;
               return ctrl;
@@ -1885,6 +1898,7 @@
     isReader:   function() { return ((this.mode & AccessMode._MODE_READ) != 0); },
     isWriter:   function() { return ((this.mode & AccessMode._MODE_WRITE) != 0); },
     isApprover: function() { return ((this.mode & AccessMode._MODE_APPROVE) != 0); },
+    isAdmin:    function() { return this.isOwner() || this.isApprover() },
     isSharer:   function() { return ((this.mode & AccessMode._MODE_SHARE) != 0); },
     isDeleter:  function() { return ((this.mode & AccessMode._MODE_DELETE) != 0); }
   };
@@ -2076,16 +2090,22 @@
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     setMeta: function(params) {
-      var topic = this;
       if (!this._subscribed) {
         throw new Error("Cannot update inactive topic");
       }
-
+      
+      var topic = this;
       // Send Set message, handle async response.
       return Tinode.getInstance().setMeta(this.name, params)
         .then(function(ctrl) {
           if (ctrl.params && ctrl.params.acs) {
             topic.acs = new AccessMode(ctrl.params.acs);
+          }
+          if (params.desc) {
+            topic._processMetaDesc(params.desc);
+          }
+          if (params.sub && params.sub.length > 0) {
+            topic._processMetaSub(params.sub);
           }
           return ctrl;
         });
