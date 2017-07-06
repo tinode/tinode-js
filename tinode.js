@@ -2086,14 +2086,14 @@
      * Update topic metadata.
      * @memberof Tinode.Topic#
      *
-     * @param {Object} parameters to update
+     * @param {Object} params parameters to update
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     setMeta: function(params) {
       if (!this._subscribed) {
         throw new Error("Cannot update inactive topic");
       }
-      
+
       var topic = this;
       // Send Set message, handle async response.
       return Tinode.getInstance().setMeta(this.name, params)
@@ -2104,11 +2104,25 @@
           if (params.desc) {
             topic._processMetaDesc(params.desc);
           }
-          if (params.sub && params.sub.length > 0) {
-            topic._processMetaSub(params.sub);
+          if (params.sub) {
+            topic._processMetaSub([params.sub]);
           }
           return ctrl;
         });
+    },
+
+    /**
+     * Create new topic subscription.
+     * @memberof Tinode.Topic#
+     *
+     * @param {string} uid - id of the user to invite
+     * @param {string} mode - access mode (could be null - default)
+     * @param {string} inviteMessage - message to be sent to the invited user
+     *
+     * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+     */
+    invite: function(uid, mode, inviteMessage) {
+      return this.setMeta({sub: {user: uid, mode: mode, info: inviteMessage}});
     },
 
     /**
@@ -2122,6 +2136,7 @@
      * @memberof Tinode.Topic#
      *
      * @param {Tinode.Topic.DelMessages} params - What messages to delete.
+     * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     delMessages: function(params) {
       if (!this._subscribed) {
@@ -2137,6 +2152,7 @@
      * @memberof Tinode.Topic#
      *
      * @param {boolean} hardDel - true if messages should be hard-deleted.
+     * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     delMessagesAll: function(hardDel) {
       var topic = this;
@@ -2159,6 +2175,7 @@
      *
      * @param {array} listToDelete - list of seq IDs to delete
      * @param {boolean} hardDel - true if messages should be hard-deleted.
+     * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     delMessagesList: function(listToDelete, hardDel) {
       var topic = this;
@@ -2213,6 +2230,7 @@
      * @memberof Tinode.Topic#
      *
      * @param {String} user - ID of the user to remove subscription for.
+     * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     delSubscription: function(user) {
       if (!this._subscribed) {
@@ -2223,6 +2241,10 @@
       return Tinode.getInstance().delSubscription(this.name, user).then(function(obj) {
         // Remove the object from the subscription cache;
         delete topic._users[user];
+        // Notify listeners
+        if (topic.onSubsUpdated) {
+          topic.onSubsUpdated(Object.keys(topic._users));
+        }
       });
     },
 
