@@ -99,8 +99,9 @@
     if (oldval) {
       mergeObj(oldval, newval);
     } else {
-      cache[key] = newval;
-      oldval = newval;
+      oldval = {};
+      mergeObj(oldval, newval);
+      cache[key] = oldval;
     }
 
     return oldval;
@@ -2099,8 +2100,13 @@
       return Tinode.getInstance().setMeta(this.name, params)
         .then(function(ctrl) {
           if (ctrl.params && ctrl.params.acs) {
-            topic.acs = new AccessMode(ctrl.params.acs);
+            if (!ctrl.params.user) {
+              topic.acs = new AccessMode(ctrl.params.acs);
+            } else if (topic._users[ctrl.params.user]) {
+              topic._users[ctrl.params.user].acs = new AccessMode(ctrl.params.acs);
+            }
           }
+
           if (params.desc) {
             topic._processMetaDesc(params.desc);
           }
@@ -2407,6 +2413,7 @@
       this._lastUpdate = data.ts;
 
       if (Object.keys(this._users).indexOf(data.from) < 0) {
+        // FIXME(gene): get user description, call userDesc
         this._users[data.from] = {user: data.from};
       }
 
@@ -2507,9 +2514,12 @@
 
           var cached = null;
           if (!sub.deleted) {
+            var user = this._cacheGetUser(sub.user) || {};
+            // FIXME(gene): if user is missing, fetch it using userDesc
+            mergeObj(user, sub);
+
             // Cache user in the topic
-            cached = mergeToCache(this._users, sub.user, sub);
-            this._cachePutUser(sub.user, cached);
+            cached = mergeToCache(this._users, sub.user, user);
           } else {
             // Subscription is deleted, remove it from topic (but leave in Users cache)
             delete this._users[sub.user];
