@@ -85,22 +85,27 @@
   }
 
   // Copy src's own properties to dst.
-  var mergeObj = function(dst, src) {
+  // Ignore properties where ignore[property] is true.
+  var mergeObj = function(dst, src, ignore) {
+    // Handle the 3 simple types, and null or undefined
+    if (src == null || typeof src != "object") return dst;
+
     for (var prop in src) {
-      if (src.hasOwnProperty(prop) && src[prop]) {
+      if (src.hasOwnProperty(prop) && src[prop] && (!ignore || !ignore[prop])) {
         dst[prop] = src[prop];
       }
     }
+    return dst;
   }
 
   // Update object stored in a cache. Returns updated value.
-  var mergeToCache = function(cache, key, newval) {
+  var mergeToCache = function(cache, key, newval, ignore) {
     var oldval = cache[key];
     if (oldval) {
-      mergeObj(oldval, newval);
+      mergeObj(oldval, newval, ignore);
     } else {
       oldval = {};
-      mergeObj(oldval, newval);
+      mergeObj(oldval, newval, ignore);
       cache[key] = oldval;
     }
 
@@ -698,10 +703,12 @@
       // Make limited cache management available to topic.
       function attachCacheToTopic(topic) {
         topic._cacheGetUser = function(uid) {
-          return cacheGet("user", uid);
+          return mergeObj({}, cacheGet("user", uid));
         };
         topic._cachePutUser = function(uid, user) {
-          return cachePut("user", uid, user);
+          var _u = {};
+          mergeObj(_u, user, {private: true, acs: true});
+          return cachePut("user", uid, _u);
         };
         topic._cacheDelUser = function(uid) {
           return cacheDel("user", uid);
@@ -2514,12 +2521,7 @@
 
           var cached = null;
           if (!sub.deleted) {
-            var user = this._cacheGetUser(sub.user) || {};
-            // FIXME(gene): if user is missing, fetch it using userDesc
-            mergeObj(user, sub);
-
-            // Cache user in the topic
-            cached = mergeToCache(this._users, sub.user, user);
+            cached = this._updateCachedUser(sub.user, sub);
           } else {
             // Subscription is deleted, remove it from topic (but leave in Users cache)
             delete this._users[sub.user];
@@ -2541,6 +2543,22 @@
     // TODO(gene): should it also clear the message cache?
     _resetSub: function() {
       this._subscribed = false;
+    },
+
+    // Update global user cache and local subscribers cache
+    _updateCachedUser: function(uid, obj) {
+      // Fetch user object from the global cache.
+      // This is a clone of the stored object
+      var cached = this._cacheGetUser(uid);
+      if (cached) {
+        mergeObj(cached, obj);
+      } else {
+        // FIXME(gene): if user is missing, fetch it from
+        // the server using userDesc()
+        cached = mergeObj({}, obj);
+      }
+      this._cachePutUser(uid, cached);
+      return mergeToCache(this._users, uid, cached);
     },
 
     /**
@@ -2596,6 +2614,9 @@
               sub.seen.when = new Date(sub.seen.when);
             }
             cont = mergeToCache(this._contacts, topic, sub);
+            if (Tinode.getInstance().getTopicType(topic) === 'p2p') {
+              this._cachePutUser(topic, cont);
+            }
           } else {
             cont = sub;
             delete this._contacts[topic];
