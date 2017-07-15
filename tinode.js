@@ -84,15 +84,38 @@
       }));
   }
 
-  // Copy src's own properties to dst.
+  // Recursively merge src's own properties to dst.
   // Ignore properties where ignore[property] is true.
+  // Array and Date objects are shallow-copied.
   var mergeObj = function(dst, src, ignore) {
     // Handle the 3 simple types, and null or undefined
-    if (src == null || typeof src != "object") return dst;
+    if (src === null || src === undefined) {
+      return dst;
+    }
+
+    if (typeof src !== "object") {
+      return src ? src : dst;
+    }
+
+    // Handle Date
+    if (src instanceof Date) {
+      return src;
+    }
+
+    // Handle Array
+    if (src instanceof Array) {
+      return src.length > 0 ? src : dst;
+    }
+
+    if (!dst) {
+      dst = {};
+    }
 
     for (var prop in src) {
-      if (src.hasOwnProperty(prop) && src[prop] && (!ignore || !ignore[prop])) {
-        dst[prop] = src[prop];
+      if (src.hasOwnProperty(prop) &&
+          (src[prop] || src[prop] === false) &&
+          (!ignore || !ignore[prop])) {
+        dst[prop] = mergeObj(dst[prop], src[prop]);
       }
     }
     return dst;
@@ -100,16 +123,8 @@
 
   // Update object stored in a cache. Returns updated value.
   var mergeToCache = function(cache, key, newval, ignore) {
-    var oldval = cache[key];
-    if (oldval) {
-      mergeObj(oldval, newval, ignore);
-    } else {
-      oldval = {};
-      mergeObj(oldval, newval, ignore);
-      cache[key] = oldval;
-    }
-
-    return oldval;
+    cache[key] = mergeObj(cache[key], newval, ignore);
+    return cache[key];
   }
 
   // Basic cross-domain requester. Supports normal browsers and IE8+
@@ -706,9 +721,7 @@
           return mergeObj({}, cacheGet("user", uid));
         };
         topic._cachePutUser = function(uid, user) {
-          var _u = {};
-          mergeObj(_u, user, {private: true, acs: true});
-          return cachePut("user", uid, _u);
+          return cachePut("user", uid, mergeObj({}, user, {private: true, acs: true}));
         };
         topic._cacheDelUser = function(uid) {
           return cacheDel("user", uid);
@@ -1402,7 +1415,7 @@
         getMeta: function(topic, params) {
           var pkt = initPacket("get", topic);
 
-          mergeObj(pkt.get, parseGetParams(params));
+          pkt.get = mergeObj(pkt.get, parseGetParams(params));
 
           return sendWithPromise(pkt, pkt.get.id);
         },
@@ -1849,7 +1862,9 @@
   };
   /**
   * Update numeric representation of access mode with the new value. The value
-  * is a string starting with '+' or '-' then the bits to add or remove, e.g. '+R' or '-ps'.
+  * is one of the following:
+  *  - a string starting with '+' or '-' then the bits to add or remove, e.g. '+R' or '-ps'.
+  *  - a new value of access mode
   *
   * @memberof Tinode.AccessMode
   * @static
@@ -1864,7 +1879,12 @@
     }
 
     var action = upd.charAt(0);
-    var m0 = AccessMode.decode(upd.substring(1));
+    var m0;
+    if (action === '+' || action === '-') {
+      m0 = AccessMode.decode(upd.substring(1));
+    } else {
+      m0 = AccessMode.decode(upd);
+    }
 
     if (!m0 || m0 === AccessMode._MODE_INVALID) {
       return val;
@@ -1874,6 +1894,8 @@
       val |= m0;
     } else if (action === '-') {
       val &= ~m0;
+    } else {
+      val = m0;
     }
 
     return val;
@@ -2511,6 +2533,7 @@
 
     // Called by Tinode when meta.sub is recived.
     _processMetaSub: function(subs) {
+      var updatedDesc = undefined;
       for (var idx in subs) {
         var sub = subs[idx];
         sub.acs = new AccessMode(sub.acs);
@@ -2527,11 +2550,17 @@
             delete this._users[sub.user];
             cached = sub;
           }
-        }
 
-        if (this.onMetaSub) {
-          this.onMetaSub(cached);
+          if (this.onMetaSub) {
+            this.onMetaSub(cached);
+          }
+        } else {
+          updatedDesc = sub;
         }
+      }
+
+      if (updatedDesc && this.onMetaDesc) {
+        this.onMetaDesc(updatedDesc);
       }
 
       if (this.onSubsUpdated) {
@@ -2551,7 +2580,7 @@
       // This is a clone of the stored object
       var cached = this._cacheGetUser(uid);
       if (cached) {
-        mergeObj(cached, obj);
+        cached = mergeObj(cached, obj);
       } else {
         // FIXME(gene): if user is missing, fetch it from
         // the server using userDesc()
