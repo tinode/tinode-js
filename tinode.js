@@ -102,13 +102,18 @@
       return src;
     }
 
+    // Access mode
+    if (src instanceof AccessMode) {
+      return new AccessMode(src);
+    }
+
     // Handle Array
     if (src instanceof Array) {
       return src.length > 0 ? src : dst;
     }
 
     if (!dst) {
-      dst = {};
+      dst = src.constructor();
     }
 
     for (var prop in src) {
