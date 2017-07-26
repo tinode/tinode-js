@@ -304,7 +304,7 @@
       url += "v" + PROTOVERSION + "/channels";
       if (protocol === "http" || protocol === "https") {
         // Long polling endpoint end with "lp", i.e.
-        // '/v0/channels/lp' vs just '/v0/channels'
+        // '/v0/channels/lp' vs just '/v0/channels' for ws
         url += "/lp";
       }
       url += "?apikey=" + apiKey;
@@ -469,6 +469,11 @@
 
     // Initialization for long polling.
     function init_lp() {
+      var XDR_UNSENT = 0;   //	Client has been created. open() not called yet.
+      var XDR_OPENED = 1;   //	open() has been called.
+      var XDR_HEADERS_RECEIVED = 2;	// send() has been called, and headers and status are available.
+      var XDR_LOADING = 3;  //	Downloading; responseText holds partial data.
+      var XDR_DONE = 4;	    // The operation is complete.
       // Fully composed endpoint URL, with API key & SID
       var _lpURL = null;
 
@@ -477,25 +482,23 @@
 
       function lp_sender(url_) {
         var sender = xdreq();
-        sender.open('POST', url_, true);
-
         sender.onreadystatechange = function(evt) {
-          if (sender.readyState == 4 && sender.status >= 400) {
+          if (sender.readyState == XDR_DONE && sender.status >= 400) {
             // Some sort of error response
             throw new Error("LP sender failed, " + sender.status);
           }
         }
 
+        sender.open('POST', url_, true);
         return sender;
       }
 
       function lp_poller(url_, resolve, reject) {
         var poller = xdreq();
-        poller.open('GET', url_, true);
 
         poller.onreadystatechange = function(evt) {
-          if (poller.readyState == 4) { // 4 == DONE
-            console.log("got response: " + poller.responseText);
+
+          if (poller.readyState == XDR_DONE) {
             if (poller.status == 201) { // 201 == HTTP.Created, get SID
               var pkt = JSON.parse(poller.responseText);
               var text = poller.responseText;
@@ -503,11 +506,12 @@
               _lpURL = url_ + "&sid=" + pkt.ctrl.params.sid
               poller = lp_poller(_lpURL);
               poller.send(null)
+              if (instance.onOpen) {
+                instance.onOpen();
+              }
+
               if (resolve) {
                 resolve();
-              }
-              if (instance.onMessage) {
-                onMessage(text);
               }
             } else if (poller.status == 200) { // 200 = HTTP.OK
               if (instance.onMessage) {
@@ -529,7 +533,7 @@
             }
           }
         }
-
+        poller.open('GET', url_, true);
         return poller;
       }
 
@@ -545,7 +549,7 @@
             _poller = lp_poller(url, resolve, reject);
             _poller.send(null)
           }).catch(function() {
-
+            // Do nothing
           });
         },
         disconnect: function() {
