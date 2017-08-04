@@ -1162,6 +1162,7 @@
              pkt.acc.desc.defacs = params.defacs;
              pkt.acc.desc.public = params.public;
              pkt.acc.desc.private = params.private;
+             pkt.acc.tags = params.tags;
            }
 
            return sendWithPromise(pkt, pkt.acc.id);
