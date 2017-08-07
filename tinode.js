@@ -1558,6 +1558,7 @@
             } else {
               topic = new Topic(name);
             }
+            topic._new = false;
             cachePut("topic", name, topic);
           }
           if (topic) {
@@ -1989,6 +1990,8 @@
     this._subscribed = false;
     // Timestap of the last update that the topic has recived.
     this._lastUpdate = null;
+    // Used only during initialization
+    this._new = true;
 
     // Callbacks
     if (callbacks) {
@@ -2039,7 +2042,9 @@
       // use "new".
       return tinode.subscribe(name || TOPIC_NEW, params).then(function(ctrl) {
         // Set topic name for new topics and add it to cache.
-        if (!name) {
+        if (topic._new) {
+          topic._new = false;
+
           topic.name = ctrl.topic;
           topic.created = ctrl.ts;
           topic.updated = ctrl.ts;
@@ -2053,7 +2058,7 @@
               topic: topic.name,
               created: ctrl.ts,
               updated: ctrl.ts,
-              acs: new AccessMode(ctrl.params.acs),
+              acs: new AccessMode(ctrl.params ? ctrl.params.acs : undefined),
             }]);
           }
 
@@ -2062,7 +2067,7 @@
           }
         }
 
-        topic.acs = new AccessMode(ctrl.params.acs);
+        topic.acs = new AccessMode(ctrl.params ? ctrl.params.acs : undefined);
 
         topic._subscribed = true;
         return topic;
