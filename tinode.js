@@ -1127,10 +1127,10 @@
          * @typedef AccountCreationParams
          * @memberof Tinode
          * @type Object
-         * @property {string} login - Name of the scheme to use to authenticate the session with the newly created account.
          * @property {Tinode.DefAcs=} defacs - Default access parameters for user's <tt>me</tt> topic.
          * @property {Object=} public - Public application-defined data exposed on <tt>me</tt> topic.
          * @property {Object=} private - Private application-defined data accessible on <tt>me</tt> topic.
+         * @property {Array} tags - array of string tags for user discovery.
          */
         /**
          * @typedef DefAcs
