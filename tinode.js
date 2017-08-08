@@ -2143,18 +2143,19 @@
       // Send Set message, handle async response.
       return Tinode.getInstance().setMeta(this.name, params)
         .then(function(ctrl) {
-          if (ctrl.params && ctrl.params.acs) {
-            if (!ctrl.params.user) {
-              topic.acs = new AccessMode(ctrl.params.acs);
-            } else if (topic._users[ctrl.params.user]) {
-              topic._users[ctrl.params.user].acs = new AccessMode(ctrl.params.acs);
-            }
-          }
-
           if (params.desc) {
+            if (ctrl.params && ctrl.params.acs) {
+              params.desc.acs = ctrl.params.acs;
+              params.desc.updated = ctrl.ts;
+            }
             topic._processMetaDesc(params.desc);
           }
+          
           if (params.sub) {
+            if (ctrl.params && ctrl.params.acs) {
+              params.sub.acs = ctrl.params.acs;
+              params.sub.updated = ctrl.ts;
+            }
             topic._processMetaSub([params.sub]);
           }
           return ctrl;
@@ -2378,6 +2379,17 @@
         }
       }
     },
+
+    /**
+     * Get subscription for the given user ID
+     * @memberof Tinode.Topic#
+     *
+     * @param {string} uid - id of the user to query for
+     */
+    subscriber: function(uid) {
+      return this._users[uid];
+    },
+
     /**
      * Iterate over cached messages. If callback is undefined, use this.onData.
      * @memberof Tinode.Topic#
