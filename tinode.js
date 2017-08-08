@@ -2143,20 +2143,25 @@
       // Send Set message, handle async response.
       return Tinode.getInstance().setMeta(this.name, params)
         .then(function(ctrl) {
+          if (params.sub) {
+            if (ctrl.params && ctrl.params.acs) {
+              params.sub.acs = ctrl.params.acs;
+              params.sub.updated = ctrl.ts;
+            }
+            if (!params.sub.user && !params.desc) {
+              // This is a subscription update of the current user.
+              // Force update to topic's asc.
+              params.desc = {};
+            }
+            topic._processMetaSub([params.sub]);
+          }
+
           if (params.desc) {
             if (ctrl.params && ctrl.params.acs) {
               params.desc.acs = ctrl.params.acs;
               params.desc.updated = ctrl.ts;
             }
             topic._processMetaDesc(params.desc);
-          }
-          
-          if (params.sub) {
-            if (ctrl.params && ctrl.params.acs) {
-              params.sub.acs = ctrl.params.acs;
-              params.sub.updated = ctrl.ts;
-            }
-            topic._processMetaSub([params.sub]);
           }
           return ctrl;
         });
