@@ -1378,13 +1378,16 @@
          * @param {string} topic - Name of the topic to publish to.
          * @param {Object} data - Payload to publish.
          * @param {boolean} noEcho - If <tt>true</tt>, do not echo the message to the original session.
+         * @param {string} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
-        publish: function(topic, data, noEcho) {
+        publish: function(topic, data, noEcho, mimeType) {
           var pkt = initPacket("pub", topic);
           pkt.pub.noecho = noEcho;
           pkt.pub.content = data;
-
+          if (mimeType) {
+            pkt.pub.head = { mime: mimeType };
+          }
           return sendWithPromise(pkt, pkt.pub.id);
         },
 
@@ -2080,14 +2083,15 @@
      *
      * @param {Object} data - Data to publish.
      * @param {boolean} noEcho - If <tt>true</tt> server will not echo message back to originating session.
+     * @param {string} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
      * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
      */
-    publish: function(data, noEcho) {
+    publish: function(data, noEcho, mimeType) {
       if (!this._subscribed) {
         throw new Error("Cannot publish on inactive topic");
       }
       // Send data
-      return Tinode.getInstance().publish(this.name, data, noEcho);
+      return Tinode.getInstance().publish(this.name, data, noEcho, mimeType);
     },
 
     /**
@@ -2757,7 +2761,7 @@
      * @throws {Error} Always throws an error.
      */
     publish: {
-      value: function(data, noEcho) {
+      value: function() {
         throw new Error("Publishing to 'me' is not supported");
       },
       enumerable: true,
