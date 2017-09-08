@@ -1923,16 +1923,16 @@
    * @param {string} mode - String representation of the access mode.
    */
   AccessMode.prototype = {
-    setMode: function(m) { this.mode = AccessMode.decode(m); },
-    updateMode: function(u) { this.mode = AccessMode.update(this.mode, u); },
+    setMode: function(m) { this.mode = AccessMode.decode(m); return this; },
+    updateMode: function(u) { this.mode = AccessMode.update(this.mode, u); return this; },
     getMode: function() { return AccessMode.encode(this.mode); },
 
-    setGiven: function(g) { this.given = AccessMode.decode(g); },
-    updateGiven: function(u) { this.given = AccessMode.update(this.given, u); },
-    getGiven: function() { return AccessMode.encode(this.given); },
+    setGiven: function(g) { this.given = AccessMode.decode(g); return this; },
+    updateGiven: function(u) { this.given = AccessMode.update(this.given, u); return this; },
+    getGiven: function() { return AccessMode.encode(this.given);},
 
-    setWant: function(w) { this.want = AccessMode.decode(w); },
-    updateWant: function(u) { this.want = AccessMode.update(this.want, u); },
+    setWant: function(w) { this.want = AccessMode.decode(w); return this; },
+    updateWant: function(u) { this.want = AccessMode.update(this.want, u); return this; },
     getWant: function() { return AccessMode.encode(this.want); },
 
     isOwner:    function() { return ((this.mode & AccessMode._MODE_OWNER) != 0); },
@@ -1991,8 +1991,12 @@
     this._messages = CBuffer(100);
     // Boolean, true if the topic is currently live
     this._subscribed = false;
-    // Timestap of the last update that the topic has recived.
-    this._lastUpdate = null;
+    // Timestap when topic meta-desc update was recived.
+    this._lastDescUpdate = null;
+    // Timestap when topic meta-subs update was recived.
+    this._lastSubsUpdate = null;
+    // Timestap of the last message.
+    this._lastDataUpdate = null;
     // Used only during initialization
     this._new = true;
 
@@ -2177,12 +2181,11 @@
      *
      * @param {string} uid - id of the user to invite
      * @param {string} mode - access mode (could be null - default)
-     * @param {string} inviteMessage - message to be sent to the invited user
      *
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
-    invite: function(uid, mode, inviteMessage) {
-      return this.setMeta({sub: {user: uid, mode: mode, info: inviteMessage}});
+    invite: function(uid, mode) {
+      return this.setMeta({sub: {user: uid, mode: mode}});
     },
 
     /**
@@ -2475,7 +2478,7 @@
 
     // Process data message
     _routeData: function(data) {
-      this._lastUpdate = data.ts;
+      this._lastDataUpdate = data.ts;
 
       if (Object.keys(this._users).indexOf(data.from) < 0) {
         // FIXME(gene): get user description, call userDesc
@@ -2501,12 +2504,12 @@
 
     // Process metadata message
     _routeMeta: function(meta) {
-      this._lastUpdate = meta.ts;
-
       if (meta.desc) {
+        this._lastDescUpdate = meta.ts;
         this._processMetaDesc(meta.desc);
       }
       if (meta.sub && meta.sub.length > 0) {
+        this._lastSubsUpdate = meta.ts;
         this._processMetaSub(meta.sub);
       }
       if (this.onMeta) {
@@ -2724,7 +2727,11 @@
               cont.seq = pres.seq;
               break;
             case "upd": // desc updated
-              // TODO(gene): request updated description
+              // Request updated description
+              this.getMeta({sub: {ims: this._lastSubsUpdate}});
+              break;
+            case "acs": // access mode changed
+              console.log(pres.acs);
               break;
             case "ua": // user agent changed
               cont.seen = {when: new Date(), ua: pres.ua};
@@ -2742,9 +2749,15 @@
               // Handle message deletion
               break;
           }
+
           if (this.onContactUpdate) {
             this.onContactUpdate(pres.what, cont);
           }
+        } else if (pres.what === "acs") {
+          // New subscription. Send request for the full description.
+          this.getMeta({sub: {ims: this._lastSubsUpdate}});
+          // Create a dummy entry to catch online status update.
+          this._contacts[pres.src] = {topic: pres.src, online: false};
         }
         if (this.onPres) {
           this.onPres(pres);
