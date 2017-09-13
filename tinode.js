@@ -1018,30 +1018,6 @@
         }
       }
 
-      // Helper function to construct {get} and {sub.get} packet.
-      function parseGetParams(params) {
-        var what = [];
-        var result;
-
-        if (params) {
-          result = {};
-          ["data", "sub", "desc"].map(function(key) {
-            if (params.hasOwnProperty(key)) {
-              what.push(key);
-              result[key] = params[key];
-            }
-          });
-        }
-
-        if (what.length > 0) {
-          result.what = what.join(" ");
-        } else {
-          result = undefined;
-        }
-
-        return result;
-      }
-
       function handleReadyToSend() {
         instance.hello();
       }
@@ -1340,33 +1316,27 @@
          * @memberof Tinode#
          *
          * @param {string} topic - Name of the topic to subscribe to.
-         * @param {Tinode.SubscriptionParams=} params - Optional subscription parameters:
+         * @param {Tinode.GetQuery=} getParams - Optional subscription metadata query
+         * @param {Tinode.SetParams=} setParams - Optional initialization parameters
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
-        subscribe: function(topicName, params) {
+        subscribe: function(topicName, getParams, setParams) {
           var pkt = initPacket("sub", topicName)
           if (!topicName) {
             topicName = TOPIC_NEW;
           }
 
-          if (params) {
-            pkt.sub.get = parseGetParams(params.get);
+          pkt.sub.get = getParams;
 
-            if (params.set) {
-              if (params.set.sub) {
-                pkt.sub.set.sub = params.set.sub;
-              }
+          if (setParams) {
+            if (setParams.sub) {
+              pkt.sub.set.sub = setParams.sub;
+            }
 
-              if (topicName === TOPIC_NEW) {
-                // set.desc params are used for new topics only
-                if (params.set.desc) {
-                  pkt.sub.set.desc = params.set.desc
-                }
-              } else {
-                // browse makes sense only in context of an existing topic
-                if (params.set.data) {
-                  pkt.sub.set.data = params.set.data;
-                }
+            if (topicName === TOPIC_NEW) {
+              // set.desc params are used for new topics only
+              if (setParams.desc) {
+                pkt.sub.set.desc = setParams.desc
               }
             }
           }
@@ -1440,24 +1410,23 @@
          * @memberof Tinode#
          *
          * @param {string} topic - Name of the topic to query.
-         * @param {Tinode.GetQuery} params - Parameters of the query.
+         * @param {Tinode.GetQuery} params - Parameters of the query. Use {Tinode.MetaGetBuilder} to generate.
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         getMeta: function(topic, params) {
           var pkt = initPacket("get", topic);
 
-          pkt.get = mergeObj(pkt.get, parseGetParams(params));
+          pkt.get = mergeObj(pkt.get, params);
 
           return sendWithPromise(pkt, pkt.get.id);
         },
 
         /**
-         * Update topic's metadata: description (desc), subscribtions (sub).
+         * Update topic's metadata: description, subscribtions.
          * @memberof Tinode#
          *
          * @param {string} topic - Topic to update.
-         * @param {Object} desc - Update to topic description.
-         * @param {Object} sub - Update to a subscription.
+         * @param {Tinode.SetParams=} params - topic metadata to update.
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         setMeta: function(topic, params) {
@@ -1806,6 +1775,79 @@
       }
     };
   })();
+
+  var MetaGetBuilder = function(parent) {
+    this.topic = parent;
+    this.what = {};
+  }
+
+  MetaGetBuilder.prototype = {
+    /**
+     * Add query parameters to fetch messages within explicit limits. Any/all parameters can be null.
+     *
+     * @param {integer} since messages newer than this;
+     * @param {integer} before older than this
+     * @param {integer} limit number of messages to fetch
+     */
+    withData: function(since, before, limit) {
+      this.what["data"] = {since: since, before: before, limit: limit};
+      return this;
+    },
+
+    /**
+     * Add query parameters to fetch messages newer than the latest saved message.
+     *
+     * @param {integer} limit number of messages to fetch
+     */
+    withLaterData: function(limit) {
+      return this.withData(this.topic._maxSeq > 0 ? this.topic._maxSeq + 1 : undefined, undefined, limit);
+    },
+
+    /**
+     * Add query parameters to fetch messages older than the earliest saved message.
+     *
+     * @param {integer} limit number of messages to fetch
+     */
+    withEarlierData: function(limit) {
+      return this.withData(undefined, this.topic._minSeq > 0 ? this.topic._minSeq : undefined, limit);
+    },
+
+    withDesc: function(ims) {
+      this.what["desc"] = {ims: ims};
+      return this;
+    },
+
+    withLaterDesc: function() {
+      return this.withDesc(this.topic._lastDescUpdate);
+    },
+
+    withSub: function(ims, limit) {
+      this.what["sub"] = {ims: ims, limit: limit};
+      return this;
+    },
+
+    withLaterSub: function(limit) {
+      return this.withSub(this.topic._lastSubsUpdate, limit);
+    },
+
+    build: function() {
+      var params = {};
+      var what = [];
+      var instance = this;
+      ["data", "sub", "desc"].map(function(key) {
+        if (instance.what.hasOwnProperty(key)) {
+          what.push(key);
+          params[key] = instance.what[key];
+        }
+      });
+      if (what.length > 0) {
+        params.what = what.join(" ");
+      } else {
+        params = undefined;
+      }
+      return params;
+    }
+  };
 
   var AccessMode = function(acs) {
     if (acs != null) {
@@ -2163,13 +2205,13 @@
      * @param {boolean} forward if true, request newer messages.
      */
     getMessagesPage: function(limit, forward) {
-      var params = {data: {limit: limit}};
+      var query = this.startMetaQuery();
       if (forward) {
-        params.data.since = this.seq;
+        query.withLaterData(limit);
       } else {
-        params.data.before = this._minSeq;
+        query.withEarlierData(limit);
       }
-      return this.getMeta(params);
+      return this.getMeta(query.build());
     },
 
     /**
@@ -2695,6 +2737,17 @@
      */
     getDefaultAccess: function() {
         return this.defacs;
+    },
+
+
+    /**
+     * Initialize new meta Get query. The query is attched to the current topic.
+     * It will not work correctly if used with a different topic.
+     *
+     * @returns {MetaGetBuilder} query attached to the current topic.
+     */
+    startMetaQuery: function() {
+      return new MetaGetBuilder(this);
     }
   };
 
