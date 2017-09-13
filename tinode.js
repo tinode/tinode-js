@@ -187,19 +187,47 @@
   };
 
   /**
-   * Circular buffer: holds at most 'size' objects. Once the limit is reached,
-   * the new object overwrites the oldest one.
+   * In-memory sorted cache of objects.
    *
    * @class CBuffer
    * @memberof Tinode
    * @protected
    *
-   * @param {number} size - Maximum number of elements to hold in the buffer.
+   * @param {function} compare custom comparator of objects. Returns -1 if a < b, 0 if a == b, 1 otherwise.
    */
-  var CBuffer = function(size) {
-    var base = 0,
-      buffer = [],
-      contains = 0;
+  var CBuffer = function(compare) {
+    var buffer = [];
+
+    compare = compare || function(a, b) {
+      return a === b ? 0 : a < b ? -1 : 1;
+    };
+
+    // Insert element into a sorted array.
+    function insertSorted(elem, arr) {
+      var start = 0;
+      var end = arr.length - 1;
+      var pivot = 0;
+      var diff = 0;
+      var found = false;
+
+      while (start <= end) {
+        pivot = (start + end) / 2 | 0;
+        diff = compare(arr[pivot], elem);
+        if (diff < 0) {
+          start = pivot + 1;
+        } else if (diff > 0) {
+          end = pivot - 1;
+        } else {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        pivot = diff < 0 ? pivot + 1 : pivot;
+      }
+      arr.splice(pivot, 0, elem);
+      return arr;
+    }
 
     return {
       /**
@@ -209,8 +237,7 @@
        * @returns {Object} Element at the given position or <tt>undefined</tt>
        */
       getAt: function(at) {
-        if (at >= contains || at < 0) return undefined;
-        return buffer[(at + base) % size];
+        return buffer[at];
       },
 
       /** Add new element(s) to the buffer. Variadic: takes one or more arguments. If an array is passed as a single
@@ -221,19 +248,14 @@
        */
       put: function() {
         var insert;
-        // inspect arguments: if array, insert its elements, if one or more arguments, insert them one by one
-        if (arguments.length === 1 && Array.isArray(arguments[0])) {
+        // inspect arguments: if array, insert its elements, if one or more non-array arguments, insert them one by one
+        if (arguments.length == 1 && Array.isArray(arguments[0])) {
           insert = arguments[0];
         } else {
           insert = arguments;
         }
         for (var idx in insert) {
-          buffer[(base + contains) % size] = insert[idx];
-          contains += 1;
-          if (contains > size) {
-            contains = size;
-            base = (base + 1) % size;
-          }
+          insertSorted(insert[idx], buffer);
         }
       },
 
@@ -243,7 +265,7 @@
      * @return {number} The size of the buffer.
      */
       size: function() {
-        return size;
+        return buffer.length;
       },
 
       /**
@@ -252,7 +274,7 @@
       * @returns {number} Number of elements in the buffer.
       */
       contains: function() {
-        return contains;
+        return buffer.length;
       },
 
       /**
@@ -261,11 +283,7 @@
        * @param {number} newSize - New size of the buffer.
        */
       reset: function(newSize) {
-        if (newSize) {
-          size = newSize;
-        }
-        base = 0;
-        contains = 0;
+        buffer = [];
       },
 
       /**
@@ -284,8 +302,8 @@
        * @param {Object} context - calling context (i.e. value of 'this' in callback)
        */
       forEach: function(callback, context) {
-        for (var i = 0; i < contains; i++) {
-          callback.call(context, buffer[(i + base) % size], i);
+        for (var i = 0; i < buffer.length; i++) {
+          callback.call(context, buffer[i], i);
         }
       }
     }
@@ -1986,9 +2004,11 @@
     // Subscribed users, for tracking read/recv/msg notifications.
     this._users = {};
     // The maximum known {data.seq} value.
-    this._seq = 0;
-    // Message cache, sorted by message timestamp, from old to new, keep up to 100 messages
-    this._messages = CBuffer(100);
+    this._maxSeq = 0;
+    // The minimum known {data.seq} value.
+    this._minSeq = 0;
+    // Message cache, sorted by message seq values, from old to new.
+    this._messages = CBuffer(function(a,b) { return a.seq - b.seq; });
     // Boolean, true if the topic is currently live
     this._subscribed = false;
     // Timestap when topic meta-desc update was recived.
@@ -2136,6 +2156,23 @@
     },
 
     /**
+     * Request more messages from the server
+     * @memberof Tinode.Topic#
+     *
+     * @param {integer} limit number of messages to get.
+     * @param {boolean} forward if true, request newer messages.
+     */
+    getMessagesPage: function(limit, forward) {
+      var params = {data: {limit: limit}};
+      if (forward) {
+        params.data.since = this.seq;
+      } else {
+        params.data.before = this._minSeq;
+      }
+      return this.getMeta(params);
+    },
+
+    /**
      * Update topic metadata.
      * @memberof Tinode.Topic#
      *
@@ -2220,7 +2257,7 @@
     delMessagesAll: function(hardDel) {
       var topic = this;
       // Send {del} message, return promise
-      return this.delMessages({before: this._seq, hard: hardDel})
+      return this.delMessages({before: this._maxSeq, hard: hardDel})
         .then(function(ctrl) {
           topic._messages.reset();
           if (topic.onData) {
@@ -2247,13 +2284,14 @@
         .then(function(ctrl) {
           // Remove from the buffer messages with matching ids:
           // create an empty buffer and copy messages we want to to keep.
-          var messages = new CBuffer(100);
+          var messages = [];
           topic.messages(function(msg) {
             if (listToDelete.indexOf(msg.seq) == -1) {
               messages.put(msg);
             }
           });
-          topic._messages = messages;
+          topic._messages.reset();
+          topic._messages.put(messages);
           if (topic.onData) {
             // Calling with no parameters to indicate that messages were deleted.
             topic.onData();
@@ -2416,8 +2454,9 @@
       }
     },
 
-    // Get the number of topic subscribers who marked this message as either recv or read
-    // Current user is excluded from the count.
+    /** Get the number of topic subscribers who marked this message as either recv or read
+     * Current user is excluded from the count.
+     */
     msgReceiptCount: function(what, seq) {
       var count = 0;
       var me = Tinode.getInstance().getCurrentUserID();
@@ -2457,6 +2496,22 @@
     },
 
     /**
+     * Get message position in stack counting from most recent one. The most
+     * recent message has position 0, next has position 1 etc.
+     */
+    msgPosition: function(seq) {
+      return this._maxSeq - seq;
+    },
+
+    /**
+     * Check if more messages are available at the server
+     * @param {boolean} newer check for newer messages
+     */
+    msgHasMore: function(newer) {
+      return newer ? this.seq > this._maxSeq : this._minSeq > 1;
+    },
+
+    /**
      * Get type of the topic: me, p2p, grp, fnd...
      * @memberof Tinode.Topic#
      *
@@ -2487,8 +2542,11 @@
 
       this._messages.put(data);
 
-      if (data.seq > this._seq) {
-        this._seq = data.seq;
+      if (data.seq > this._maxSeq) {
+        this._maxSeq = data.seq;
+      }
+      if (data.seq < this._minSeq || this._minSeq == 0) {
+        this._minSeq = data.seq;
       }
 
       if (this.onData) {
