@@ -2638,7 +2638,8 @@
     },
 
     // Called by Tinode when meta.desc packet is received.
-    _processMetaDesc: function(desc) {
+    // Called by 'me' topic on contact update (fromMe is true).
+    _processMetaDesc: function(desc, fromMe) {
       // Copy parameters from desc object to this topic.
       mergeObj(this, desc);
 
@@ -2652,7 +2653,7 @@
       this.acs = new AccessMode(this.acs);
 
       // Update relevant contact in the me topic, if available:
-      if (this.name !== 'me') {
+      if (this.name !== 'me' && !fromMe) {
         var me = Tinode.getInstance().getMeTopic();
         if (me) {
           me._processMetaSub([{
@@ -2775,12 +2776,13 @@
     // Override the original Topic._processMetaSub
     _processMetaSub: {
       value: function(subs) {
+        var tinode = Tinode.getInstance();
         var updateCount  = 0;
         for (var idx in subs) {
           var sub = subs[idx];
-          var topic = sub.topic;
+          var topicName = sub.topic;
           // Don't show 'fnd' topic in the list of contacts
-          if (topic === TOPIC_FND) {
+          if (topicName === TOPIC_FND) {
             continue;
           }
           sub.updated = new Date(sub.updated);
@@ -2792,13 +2794,19 @@
             if (sub.seen && sub.seen.when) {
               sub.seen.when = new Date(sub.seen.when);
             }
-            cont = mergeToCache(this._contacts, topic, sub);
-            if (Tinode.getInstance().getTopicType(topic) === 'p2p') {
-              this._cachePutUser(topic, cont);
+            cont = mergeToCache(this._contacts, topicName, sub);
+            if (tinode.getTopicType(topicName) === 'p2p') {
+              this._cachePutUser(topicName, cont);
+            }
+
+            // Notify topic of the update.
+            var topic = tinode.getTopic(topicName);
+            if (topic) {
+              topic._processMetaDesc(sub, true);
             }
           } else {
             cont = sub;
-            delete this._contacts[topic];
+            delete this._contacts[topicName];
           }
 
           updateCount ++;
@@ -2814,7 +2822,7 @@
       },
       enumerable: true,
       configurable: true,
-      writable: true
+      writable: false
     },
 
     // Process presence change message
@@ -2839,7 +2847,7 @@
               break;
             case "upd": // desc updated
               // Request updated description
-              this.getMeta({sub: {ims: this._lastSubsUpdate}});
+              this.getMeta(this.startMetaQuery().withLaterSub().build());
               break;
             case "acs": // access mode changed
               console.log(pres.acs);
@@ -2866,7 +2874,7 @@
           }
         } else if (pres.what === "acs") {
           // New subscription. Send request for the full description.
-          this.getMeta({sub: {ims: this._lastSubsUpdate}});
+          this.getMeta(this.startMetaQuery().withLaterSub().build());
           // Create a dummy entry to catch online status update.
           this._contacts[pres.src] = {topic: pres.src, online: false};
         }
@@ -2876,7 +2884,7 @@
       },
       enumerable: true,
       configurable: true,
-      writable: true
+      writable: false
     },
 
     /**
@@ -2890,7 +2898,7 @@
       },
       enumerable: true,
       configurable: true,
-      writable: true
+      writable: false
     },
 
     /**
