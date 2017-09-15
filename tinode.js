@@ -1100,7 +1100,7 @@
           _connection.onMessage = dispatchMessage;
           _connection.onDisconnect = handleDisconnect;
           _connection.onOpen = handleReadyToSend;
-          _connection.setup(host_, false, apiKey_);
+          _connection.setup(host_, (location.protocol == 'https:'), apiKey_);
         },
 
         /**
