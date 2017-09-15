@@ -149,7 +149,7 @@
     }
 
     return xdreq;
-  }
+  };
 
   // JSON stringify helper - pre-processor for JSON.stringify
   var jsonBuildHelper = function(key, val) {
@@ -162,7 +162,22 @@
       val = rfc3339DateString(val);
     }
     return val;
-  }
+  };
+
+  // Strips all values from an object of they evaluate to false.
+  var simplify = function(obj) {
+  	Object.keys(obj).forEach(function(key) {
+    	if (obj[key] && typeof obj[key] === 'object') {
+      	simplify(obj[key]);
+        if (Object.getOwnPropertyNames(obj[key]).length == 0) {
+        	delete obj[key];
+        }
+      } else if (!obj[key]) {
+      	delete obj[key];
+      }
+  	});
+  	return obj;
+	};
 
   // Attempt to convert date strings to objects.
   var jsonParseHelper = function(key, val) {
@@ -912,7 +927,8 @@
 
       // Send a packet.
       function sendBasic(pkt) {
-        var msg = JSON.stringify(pkt, jsonBuildHelper);
+        pkt = simplify(pkt);
+        var msg = JSON.stringify(pkt);
         log("out: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
         _connection.sendText(msg);
       }
@@ -920,7 +936,8 @@
       // Send a packet returning a promise.
       function sendWithPromise(pkt, id) {
         var promise = makePromise(id);
-        var msg = JSON.stringify(pkt, jsonBuildHelper);
+        pkt = simplify(pkt);
+        var msg = JSON.stringify(pkt);
         log("out: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
         _connection.sendText(msg);
         return promise;
@@ -1024,7 +1041,6 @@
 
       function handleDisconnect(err) {
         _inPacketCount = 0;
-        _myUID = null;
         _serverInfo = null;
 
         cacheMap(function(obj, key) {
@@ -1837,7 +1853,9 @@
       ["data", "sub", "desc"].map(function(key) {
         if (instance.what.hasOwnProperty(key)) {
           what.push(key);
-          params[key] = instance.what[key];
+          if (Object.getOwnPropertyNames(instance.what[key]).length > 0) {
+            params[key] = instance.what[key];
+          }
         }
       });
       if (what.length > 0) {
