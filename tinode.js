@@ -787,7 +787,7 @@
               callbacks.resolve(onOK);
             }
           } else if (callbacks.reject) {
-            callbacks.reject(new Error("" + code + " " + errorText));
+            callbacks.reject(new Error("Error: " + errorText + " (" + code + ")"));
           }
         }
       }
@@ -1459,7 +1459,7 @@
           }
 
           if (what.length == 0) {
-            throw new Error("Invalid {set} parameters.");
+            return Promise.reject(new Error("Invalid {set} parameters"));
           }
 
           return sendWithPromise(pkt, pkt.set.id);
@@ -1527,7 +1527,8 @@
          */
         note: function(topic, what, seq) {
           if (seq <= 0) {
-            throw new Error("Invalid message id");
+            console.log("Invalid message id " + seq);
+            return;
           }
           var pkt = initPacket("note", topic);
           pkt.note.what = what;
@@ -2172,7 +2173,7 @@
      */
     publish: function(data, noEcho, mimeType) {
       if (!this._subscribed) {
-        throw new Error("Cannot publish on inactive topic");
+        return Promise.reject(new Error("Cannot publish on inactive topic"));
       }
       // Send data
       return Tinode.getInstance().publish(this.name, data, noEcho, mimeType);
@@ -2190,7 +2191,7 @@
     leave: function(unsub) {
       // FIXME(gene): It's possible to unsubscribe (unsub==true) from inactive topic.
       if (!this._subscribed && !unsub) {
-        throw new Error("Cannot leave inactive topic");
+        return Promise.reject(new Error("Cannot leave inactive topic"));
       }
       // Send a 'leave' message, handle async response
       var topic = this;
@@ -2209,7 +2210,7 @@
      */
     getMeta: function(params) {
       if (!this._subscribed) {
-        throw new Error("Cannot query inactive topic");
+        return Promise.reject(new Error("Cannot query inactive topic"));
       }
       // Send {get} message, return promise.
       return Tinode.getInstance().getMeta(this.name, params);
@@ -2241,7 +2242,7 @@
      */
     setMeta: function(params) {
       if (!this._subscribed) {
-        throw new Error("Cannot update inactive topic");
+        return Promise.reject(new Error("Cannot update inactive topic"));
       }
 
       var topic = this;
@@ -2300,7 +2301,7 @@
      */
     delMessages: function(params) {
       if (!this._subscribed) {
-        throw new Error("Cannot delete messages in inactive topic");
+        return Promise.reject(new Error("Cannot delete messages in inactive topic"));
       }
       // Send {del} message, return promise
       return Tinode.getInstance().delMessages(this.name, params);
@@ -2395,7 +2396,7 @@
      */
     delSubscription: function(user) {
       if (!this._subscribed) {
-        throw new Error("Cannot delete subscription in inactive topic");
+        return Promise.reject(new Error("Cannot delete subscription in inactive topic"));
       }
       var topic = this;
       // Send {del} message, return promise
@@ -2415,10 +2416,11 @@
       var user = this._users[tinode.getCurrentUserID()];
       if (user) {
         if (!user[what] || user[what] < seq) {
-          if (!this._subscribed) {
-            throw new Error("Cannot send notification in inactive topic");
+          if (this._subscribed) {
+            tinode.note(this.name, what, seq);
+          } else {
+            console.log("NOt sending {note} on inactive topic");
           }
-          tinode.note(this.name, what, seq);
         }
         user[what] = seq;
       } else {
@@ -2457,10 +2459,11 @@
      * @memberof Tinode.Topic#
      */
     noteKeyPress: function() {
-      if (!this._subscribed) {
-        throw new Error("Cannot send notification in inactive topic");
+      if (this._subscribed) {
+        Tinode.getInstance().noteKeyPress(this.name);
+      } else {
+        console.log("Cannot send notification in inactive topic");
       }
-      Tinode.getInstance().noteKeyPress(this.name);
     },
 
     // Get user description
@@ -2912,7 +2915,7 @@
      */
     publish: {
       value: function() {
-        throw new Error("Publishing to 'me' is not supported");
+        return Promise.reject(new Error("Publishing to 'me' is not supported"));
       },
       enumerable: true,
       configurable: true,
