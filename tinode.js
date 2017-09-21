@@ -2419,7 +2419,7 @@
           if (this._subscribed) {
             tinode.note(this.name, what, seq);
           } else {
-            console.log("NOt sending {note} on inactive topic");
+            console.log("Not sending {note} on inactive topic");
           }
         }
         user[what] = seq;
@@ -2688,7 +2688,7 @@
       }
 
       if (this.onMetaDesc) {
-          this.onMetaDesc(desc);
+          this.onMetaDesc(this);
       }
     },
 
@@ -2871,7 +2871,7 @@
               this.getMeta(this.startMetaQuery().withLaterSub().build());
               break;
             case "acs": // access mode changed
-              console.log(pres.acs);
+              // console.log(pres.acs);
               break;
             case "ua": // user agent changed
               cont.seen = {when: new Date(), ua: pres.ua};
