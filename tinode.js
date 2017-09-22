@@ -1349,11 +1349,9 @@
               pkt.sub.set.sub = setParams.sub;
             }
 
-            if (topicName === TOPIC_NEW) {
+            if (topicName === TOPIC_NEW && setParams.desc) {
               // set.desc params are used for new topics only
-              if (setParams.desc) {
-                pkt.sub.set.desc = setParams.desc
-              }
+              pkt.sub.set.desc = setParams.desc
             }
           }
 
@@ -2112,10 +2110,10 @@
      * Request topic to subscribe. Wrapper for {@link Tinode#subscribe}.
      * @memberof Tinode.Topic#
      *
-     * @param {Tinode.Topic.Subscription} params - Subscription parameters.
+     * @param {Tinode.Topic.Subscription} getParams - Subscription parameters.
      * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
      */
-    subscribe: function(params) {
+    subscribe: function(getParams, setParams) {
       // If the topic is already subscribed, return resolved promise
       if (this._subscribed) {
         return Promise.resolve(this);
@@ -2128,7 +2126,7 @@
       // Send subscribe message, handle async response.
       // If topic name is explicitly provided, use it. If no name, then it's a new group topic,
       // use "new".
-      return tinode.subscribe(name || TOPIC_NEW, params).then(function(ctrl) {
+      return tinode.subscribe(name || TOPIC_NEW, getParams, setParams).then(function(ctrl) {
         // Set topic name for new topics and add it to cache.
         if (topic._new) {
           topic._new = false;
@@ -2150,8 +2148,8 @@
             }]);
           }
 
-          if (params && params.set) {
-            topic._processMetaDesc(params.set.desc);
+          if (setParams) {
+            topic._processMetaDesc(setParams.desc);
           }
         }
 
