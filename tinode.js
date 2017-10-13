@@ -2346,7 +2346,7 @@
           var messages = [];
           topic.messages(function(msg) {
             if (listToDelete.indexOf(msg.seq) == -1) {
-              messages.put(msg);
+              messages.push(msg);
             }
           });
           topic._messages.reset();
