@@ -1468,16 +1468,16 @@
          * @memberof Tinode#
          *
          * @param {string} topic - Topic name to delete messages from.
-         * @param {Object} params - What messages to delete.
+         * @param {Array} list - Ranges of message IDs to delete.
+         * @param {boolean} hard - Hard or soft delete
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
-        delMessages: function(topic, params) {
+        delMessages: function(topic, ranges, hard) {
           var pkt = initPacket("del", topic);
 
           pkt.del.what = "msg";
-          pkt.del.before = params.before;
-          pkt.del.list = params.list;
-          pkt.del.hard = params.hard;
+          pkt.del.delseq = ranges;
+          pkt.del.hard = hard;
 
           return sendWithPromise(pkt, pkt.del.id);
         },
@@ -2285,24 +2285,19 @@
     },
 
     /**
-     * @typedef Tinode.Topic.DelMessages
-     * @type Object
-     * @property {number} before - Delete messages with id less or equal to <tt>before</tt>.
-     * @property {boolean} hard - Hard-delete messages, i.e. delete from storage. Otherwise just hide them. Requires Owner permission.
-     */
-    /**
      * Delete messages. Hard-deleting messages requires Owner permission. Wrapper for {@link Tinode#delMessages}.
      * @memberof Tinode.Topic#
      *
-     * @param {Tinode.Topic.DelMessages} params - What messages to delete.
+     * @param {Array} ranges - Ranges of message IDs to delete.
+     * @param {boolean} hard - Hard or soft delete
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
-    delMessages: function(params) {
+    delMessages: function(ranges, hard) {
       if (!this._subscribed) {
         return Promise.reject(new Error("Cannot delete messages in inactive topic"));
       }
       // Send {del} message, return promise
-      return Tinode.getInstance().delMessages(this.name, params);
+      return Tinode.getInstance().delMessages(this.name, ranges, hard);
     },
 
     /**
@@ -2316,7 +2311,7 @@
     delMessagesAll: function(hardDel) {
       var topic = this;
       // Send {del} message, return promise
-      return this.delMessages({before: this._maxSeq, hard: hardDel})
+      return this.delMessages([{low: 1, hi: this._maxSeq}], hardDel)
         .then(function(ctrl) {
           topic._messages.reset();
           if (topic.onData) {
@@ -2338,8 +2333,11 @@
      */
     delMessagesList: function(listToDelete, hardDel) {
       var topic = this;
+      var ranges = listToDelete.map(function(id) {
+        return {seq: id};
+      });
       // Send {del} message, return promise
-      return this.delMessages({list: listToDelete, "hard": hardDel})
+      return this.delMessages(ranges, hardDel)
         .then(function(ctrl) {
           // Remove from the buffer messages with matching ids:
           // create an empty buffer and copy messages we want to to keep.
