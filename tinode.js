@@ -7,7 +7,7 @@
  * @copyright 2015-2017 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.13
+ * @version 0.14
  *
  * @example
  * <head>
@@ -53,8 +53,8 @@
   'use strict';
 
   // Global constants
-  var PROTOVERSION = "0";
-  var VERSION = "0.13";
+  var PROTOCOL_VERSION = "0";
+  var VERSION = "0.14";
   var LIBRARY = "tinodejs/" + VERSION;
 
   var TOPIC_NEW = "new";
@@ -334,7 +334,7 @@
       if (url.charAt(url.length - 1) !== '/') {
         url += '/';
       }
-      url += "v" + PROTOVERSION + "/channels";
+      url += "v" + PROTOCOL_VERSION + "/channels";
       if (protocol === "http" || protocol === "https") {
         // Long polling endpoint end with "lp", i.e.
         // '/v0/channels/lp' vs just '/v0/channels' for ws
@@ -1800,8 +1800,8 @@
     /**
      * Add query parameters to fetch messages within explicit limits. Any/all parameters can be null.
      *
-     * @param {integer} since messages newer than this;
-     * @param {integer} before older than this
+     * @param {integer} since messages newer than this (inclusive);
+     * @param {integer} before older than this (exclusive)
      * @param {integer} limit number of messages to fetch
      */
     withData: function(since, before, limit) {
@@ -1845,11 +1845,34 @@
       return this.withSub(this.topic._lastSubsUpdate, limit);
     },
 
+    /**
+     * Add query parameters to fetch deleted messages within explicit limits. Any/all parameters can be null.
+     *
+     * @param {integer} since ids of messages deleted since this 'del' id (inclusive)
+     * @param {integer} before ids of messages deleted before this delId
+     * @param {integer} limit number of deleted message ids to fetch
+     */
+    withDel: function(since, before, limit) {
+      if (since || before || limit) {
+        this.what["del"] = {since: since, before: before, limit: limit};
+      }
+      return this;
+    },
+
+    /**
+     * Add query parameters to fetch messages deleted after the saved 'del' id.
+     *
+     * @param {integer} limit number of deleted message ids to fetch
+     */
+    withLaterDel: function(limit) {
+      return this.withDel(this.topic._maxDel > 0 ? this.topic._maxDel + 1 : undefined, undefined, limit);
+    },
+
     build: function() {
       var params = {};
       var what = [];
       var instance = this;
-      ["data", "sub", "desc"].map(function(key) {
+      ["data", "sub", "desc", "del"].map(function(key) {
         if (instance.what.hasOwnProperty(key)) {
           what.push(key);
           if (Object.getOwnPropertyNames(instance.what[key]).length > 0) {
@@ -2066,6 +2089,8 @@
     this._maxSeq = 0;
     // The minimum known {data.seq} value.
     this._minSeq = 0;
+    // The maximum known deletion ID.
+    this._maxDel = 0;
     // Message cache, sorted by message seq values, from old to new.
     this._messages = CBuffer(function(a,b) { return a.seq - b.seq; });
     // Boolean, true if the topic is currently live
@@ -2208,6 +2233,7 @@
      */
     getMeta: function(params) {
       if (!this._subscribed) {
+        console.log("Attempt to query inactive topic", this.name);
         return Promise.reject(new Error("Cannot query inactive topic"));
       }
       // Send {get} message, return promise.
@@ -2313,6 +2339,9 @@
       // Send {del} message, return promise
       return this.delMessages([{low: 1, hi: this._maxSeq}], hardDel)
         .then(function(ctrl) {
+          if (ctrl.params.del > topic._maxDel) {
+            topic._maxDel = ctrl.params.del;
+          }
           topic._messages.reset();
           if (topic.onData) {
             // Calling with no parameters to indicate the messages were deleted.
@@ -2339,6 +2368,10 @@
       // Send {del} message, return promise
       return this.delMessages(ranges, hardDel)
         .then(function(ctrl) {
+          // Update del ID
+          if (ctrl.params.del > topic._maxDel) {
+            topic._maxDel = ctrl.params.del;
+          }
           // Remove from the buffer messages with matching ids:
           // create an empty buffer and copy messages we want to to keep.
           var messages = [];
@@ -2555,19 +2588,19 @@
     },
 
     /**
-     * Get message position in stack counting from most recent one. The most
-     * recent message has position 0, next has position 1 etc.
-     */
-    msgPosition: function(seq) {
-      return this._maxSeq - seq;
-    },
-
-    /**
      * Check if more messages are available at the server
      * @param {boolean} newer check for newer messages
      */
     msgHasMore: function(newer) {
       return newer ? this.seq > this._maxSeq : this._minSeq > 1;
+    },
+
+    /**
+     * Check if the given seq Id is id of the most recent message.
+     * @param {integer} seqId id of the message to check
+     */
+    isNewMessage: function(seqId) {
+      return this._maxSeq <= seqId;
     },
 
     /**
@@ -2628,6 +2661,9 @@
       if (meta.sub && meta.sub.length > 0) {
         this._lastSubsUpdate = meta.ts;
         this._processMetaSub(meta.sub);
+      }
+      if (meta.del) {
+        console.log("process deleted message ids");
       }
       if (this.onMeta) {
         this.onMeta(meta);
