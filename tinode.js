@@ -1849,12 +1849,11 @@
      * Add query parameters to fetch deleted messages within explicit limits. Any/all parameters can be null.
      *
      * @param {integer} since ids of messages deleted since this 'del' id (inclusive)
-     * @param {integer} before ids of messages deleted before this delId
      * @param {integer} limit number of deleted message ids to fetch
      */
-    withDel: function(since, before, limit) {
-      if (since || before || limit) {
-        this.what["del"] = {since: since, before: before, limit: limit};
+    withDel: function(since, limit) {
+      if (since || limit) {
+        this.what["del"] = {since: since, limit: limit};
       }
       return this;
     },
@@ -1865,7 +1864,9 @@
      * @param {integer} limit number of deleted message ids to fetch
      */
     withLaterDel: function(limit) {
-      return this.withDel(this.topic._maxDel > 0 ? this.topic._maxDel + 1 : undefined, undefined, limit);
+      // Specify 'since' only if we have already received some messages. If
+      // we have no locally cached messages then we don't care if any messages were deleted.
+      return this.withDel(this.topic._maxSeq > 0 ? this.topic._maxDel + 1 : undefined, limit);
     },
 
     build: function() {
