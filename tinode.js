@@ -2643,7 +2643,6 @@
      */
     flushMessage: function(seqId) {
       var idx = this._messages.find({seq: seqId});
-      console.log("flushMessage", seqId, idx);
       return idx >=0 ? this._messages.delAt(idx) : undefined;
     },
 
@@ -2816,7 +2815,6 @@
       this.clear = Math.max(clear, this.clear);
       var topic = this;
       var count = 0;
-      console.log("del request", clear, delseq);
       if (Array.isArray(delseq)) {
         delseq.map(function(range) {
           if (!range.hi) {
