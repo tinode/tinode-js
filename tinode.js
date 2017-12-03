@@ -2338,7 +2338,7 @@
     delMessagesAll: function(hardDel) {
       var topic = this;
       // Send {del} message, return promise
-      return this.delMessages([{low: 1, hi: this._maxSeq}], hardDel)
+      return this.delMessages([{low: 1, hi: this._maxSeq+1}], hardDel)
         .then(function(ctrl) {
           if (ctrl.params.del > topic._maxDel) {
             topic._maxDel = ctrl.params.del;
@@ -2357,14 +2357,18 @@
      *
      * @memberof Tinode.Topic#
      *
-     * @param {array} listToDelete - list of seq IDs to delete
+     * @param {array} list - list of seq IDs to delete
      * @param {boolean} hardDel - true if messages should be hard-deleted.
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
-    delMessagesList: function(listToDelete, hardDel) {
+    delMessagesList: function(list, hardDel) {
       var topic = this;
-      var ranges = listToDelete.map(function(id) {
-        return {seq: id};
+      // Sort the list of ids in ascending order
+      list.sort(function(a, b) {
+        return a - b;
+      });
+      var ranges = list.map(function(id) {
+        return {low: id};
       });
       // Send {del} message, return promise
       return this.delMessages(ranges, hardDel)
@@ -2377,7 +2381,7 @@
           // create an empty buffer and copy messages we want to to keep.
           var messages = [];
           topic.messages(function(msg) {
-            if (listToDelete.indexOf(msg.seq) == -1) {
+            if (list.indexOf(msg.seq) == -1) {
               messages.push(msg);
             }
           });
@@ -2664,7 +2668,11 @@
         this._processMetaSub(meta.sub);
       }
       if (meta.del) {
-        console.log("process deleted message ids");
+        this._maxDel = Math.max(meta.del.clear, this._maxDel);
+        this.clear = Math.max(meta.del.clear, this.clear);
+        if (Array.isArray(meta.del.delseq)) {
+          console.log("process deleted message ids", meta.del.delseq);
+        }
       }
       if (this.onMeta) {
         this.onMeta(meta);
@@ -2673,6 +2681,7 @@
 
     // Process presence change message
     _routePres: function(pres) {
+      // TODO: Handle pres.del here - delete cached messages.
       if (this.onPres) {
         this.onPres(pres);
       }
@@ -2919,7 +2928,7 @@
               delete this._contacts[pres.src];
               break;
             case "del":
-              // Handle message deletion
+              // Update topic.del value.
               break;
           }
 
