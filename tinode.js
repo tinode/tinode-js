@@ -217,8 +217,7 @@
       return a === b ? 0 : a < b ? -1 : 1;
     };
 
-    // Insert element into a sorted array.
-    function insertSorted(elem, arr) {
+    function findNearest(elem, arr, exact) {
       var start = 0;
       var end = arr.length - 1;
       var pivot = 0;
@@ -237,10 +236,20 @@
           break;
         }
       }
-      if (!found) {
-        pivot = diff < 0 ? pivot + 1 : pivot;
+      if (found) {
+        return pivot;
       }
-      arr.splice(pivot, 0, elem);
+      if (exact) {
+        return -1;
+      }
+      // Not exact - insertion point
+      return diff < 0 ? pivot + 1 : pivot;
+    }
+
+    // Insert element into a sorted array.
+    function insertSorted(elem, arr) {
+      var idx = findNearest(elem, arr, false);
+      arr.splice(idx, 0, elem);
       return arr;
     }
 
@@ -248,7 +257,7 @@
       /**
        * Get an element at the given position.
        * @memberof Tinode.CBuffer#
-       * @param {number} position - Position to fetch from.
+       * @param {number} at - Position to fetch from.
        * @returns {Object} Element at the given position or <tt>undefined</tt>
        */
       getAt: function(at) {
@@ -274,20 +283,34 @@
         }
       },
 
-    /**
-     * Return the maximum number of element the buffer can hold
-     * @memberof Tinode.CBuffer#
-     * @return {number} The size of the buffer.
-     */
+      /**
+       * Remove element at the given position.
+       * @memberof Tinode.CBuffer#
+       * @param {number} at - Position to fetch from.
+       * @returns {Object} Element at the given position or <tt>undefined</tt>
+       */
+      delAt: function(at) {
+        var r = buffer.splice(at, 1);
+        if (r && r.length > 0) {
+          return r[0];
+        }
+        return undefined;
+      },
+
+      /**
+       * Return the maximum number of element the buffer can hold
+       * @memberof Tinode.CBuffer#
+       * @return {number} The size of the buffer.
+       */
       size: function() {
         return buffer.length;
       },
 
       /**
-      * Return the number of elements the buffer holds
-      * @memberof Tinode.CBuffer#
-      * @returns {number} Number of elements in the buffer.
-      */
+       * Return the number of elements the buffer holds
+       * @memberof Tinode.CBuffer#
+       * @returns {number} Number of elements in the buffer.
+       */
       contains: function() {
         return buffer.length;
       },
@@ -320,7 +343,19 @@
         for (var i = 0; i < buffer.length; i++) {
           callback.call(context, buffer[i], i);
         }
+      },
+
+      /**
+       * Find element in buffer using buffer's comparison function.
+       *
+       * @memberof Tinode.CBuffer#
+       * @param {Object} elem element to find.
+       * @returns {number} index of the element in the buffer or -1
+       */
+      find: function(elem) {
+        return findNearest(elem, buffer, true);
       }
+
     }
   }
 
@@ -2378,15 +2413,9 @@
             topic._maxDel = ctrl.params.del;
           }
           // Remove from the buffer messages with matching ids:
-          // create an empty buffer and copy messages we want to to keep.
-          var messages = [];
-          topic.messages(function(msg) {
-            if (list.indexOf(msg.seq) == -1) {
-              messages.push(msg);
-            }
+          list.map(function(id) {
+            topic.flushMessage(id);
           });
-          topic._messages.reset();
-          topic._messages.put(messages);
           if (topic.onData) {
             // Calling with no parameters to indicate that messages were deleted.
             topic.onData();
@@ -2609,6 +2638,16 @@
     },
 
     /**
+     * Remove message from local cache
+     * @param {integer} seqId id of the message to remove from cache.
+     */
+    flushMessage: function(seqId) {
+      var idx = this._messages.find({seq: seqId});
+      console.log("flushMessage", seqId, idx);
+      return idx >=0 ? this._messages.delAt(idx) : undefined;
+    },
+
+    /**
      * Get type of the topic: me, p2p, grp, fnd...
      * @memberof Tinode.Topic#
      *
@@ -2668,11 +2707,7 @@
         this._processMetaSub(meta.sub);
       }
       if (meta.del) {
-        this._maxDel = Math.max(meta.del.clear, this._maxDel);
-        this.clear = Math.max(meta.del.clear, this.clear);
-        if (Array.isArray(meta.del.delseq)) {
-          console.log("process deleted message ids", meta.del.delseq);
-        }
+        this._processDelMessages(meta.del.clear, meta.del.delseq);
       }
       if (this.onMeta) {
         this.onMeta(meta);
@@ -2681,7 +2716,11 @@
 
     // Process presence change message
     _routePres: function(pres) {
-      // TODO: Handle pres.del here - delete cached messages.
+      if (pres.what == "del") {
+        // Delete cached messages.
+        this._processDelMessages(pres.clear, pres.delseq);
+      }
+
       if (this.onPres) {
         this.onPres(pres);
       }
@@ -2768,6 +2807,31 @@
 
       if (this.onSubsUpdated) {
         this.onSubsUpdated(Object.keys(this._users));
+      }
+    },
+
+    // Delete cached messages and update cached transaction IDs
+    _processDelMessages: function(clear, delseq) {
+      this._maxDel = Math.max(clear, this._maxDel);
+      this.clear = Math.max(clear, this.clear);
+      var topic = this;
+      var count = 0;
+      console.log("del request", clear, delseq);
+      if (Array.isArray(delseq)) {
+        delseq.map(function(range) {
+          if (!range.hi) {
+            count++;
+            topic.flushMessage(range.low);
+          } else {
+            for (var i = range.low; i < range.hi; i++) {
+              count++;
+              topic.flushMessage(i);
+            }
+          }
+        });
+      }
+      if (count > 0 && this.onData) {
+        this.onData();
       }
     },
 
