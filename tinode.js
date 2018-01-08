@@ -2188,6 +2188,11 @@
       // If topic name is explicitly provided, use it. If no name, then it's a new group topic,
       // use "new".
       return tinode.subscribe(name || TOPIC_NEW, getParams, setParams).then(function(ctrl) {
+        if (ctrl.code >= 300) {
+          // If the topic already exists, do nothing.
+          return topic;
+        }
+
         // Set topic name for new topics and add it to cache.
         if (topic._new) {
           topic._new = false;
