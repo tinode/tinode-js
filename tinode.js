@@ -2965,11 +2965,13 @@
               cont.online = true;
               break;
             case "off": // topic went offline
-              cont.online = false;
-              if (cont.seen) {
-                cont.seen.when = new Date();
-              } else {
-                cont.seen = {when: new Date()};
+              if (cont.online) {
+                cont.online = false;
+                if (cont.seen) {
+                  cont.seen.when = new Date();
+                } else {
+                  cont.seen = {when: new Date()};
+                }
               }
               break;
             case "msg": // new message received
