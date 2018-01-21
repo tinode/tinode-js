@@ -2723,6 +2723,12 @@
       if (pres.what == "del") {
         // Delete cached messages.
         this._processDelMessages(pres.clear, pres.delseq);
+      } else if (pres.what == "on" || pres.what == "off") {
+        // Update online status of a subscription.
+        var user = this._users[pres.src];
+        if (user) {
+          user.online = pres.what == "on";
+        }
       }
 
       if (this.onPres) {
