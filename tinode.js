@@ -1595,6 +1595,8 @@
           if (!topic && name) {
             if (name === TOPIC_ME) {
               topic = new TopicMe();
+            } else if (name === TOPIC_FND) {
+              topic = new TopicFnd();
             } else {
               topic = new Topic(name);
             }
@@ -3133,6 +3135,91 @@
     }
   });
   TopicMe.prototype.constructor = TopicMe;
+
+  /**
+   * @class TopicFnd - special case of {@link Tinode.Topic} for searching for
+   * contacts and group topics.
+   * @extends Tinode.Topic
+   * @memberof Tinode
+   *
+   * @param {TopicFnd.Callbacks} callbacks - Callbacks to receive various events.
+   */
+  var TopicFnd = function(callbacks) {
+    Topic.call(this, TOPIC_FND, callbacks);
+    // List of users and topics uid or topic_name -> Contact object)
+    this._contacts = {};
+  };
+
+  // Inherit everyting from the generic Topic
+  TopicFnd.prototype = Object.create(Topic.prototype, {
+    // Override the original Topic._processMetaSub
+    _processMetaSub: {
+      value: function(subs) {
+        var tinode = Tinode.getInstance();
+        var updateCount  = 0;
+        for (var idx in subs) {
+          var sub = subs[idx];
+          var indexBy = sub.topic ? sub.topic : sub.user;
+
+          sub.updated = new Date(sub.updated);
+          sub.acs = new AccessMode(sub.acs);
+          if (sub.seen && sub.seen.when) {
+            sub.seen.when = new Date(sub.seen.when);
+          }
+
+          sub = mergeToCache(this._contacts, indexBy, sub);
+          updateCount ++;
+
+          if (this.onMetaSub) {
+            this.onMetaSub(sub);
+          }
+        }
+
+        if (updateCount > 0 && this.onSubsUpdated) {
+          this.onSubsUpdated(Object.keys(this._contacts));
+        }
+      },
+      enumerable: true,
+      configurable: true,
+      writable: false
+    },
+
+    /**
+     * Publishing to TopicFnd is not supported. {@link Topic#publish} is overriden and thows an {Error} if called.
+     * @memberof Tinode.TopicFnd#
+     * @throws {Error} Always throws an error.
+     */
+    publish: {
+      value: function() {
+        return Promise.reject(new Error("Publishing to 'fnd' is not supported"));
+      },
+      enumerable: true,
+      configurable: true,
+      writable: false
+    },
+
+    /**
+     * Iterate over found contacts. If callback is undefined, use {@link this.onMetaSub}.
+     * @function
+     * @memberof Tinode.TopicMe#
+     * @param {TopicFnd.ContactCallback} callback - Callback to call for each contact.
+     * @param {Object} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
+     */
+    contacts: {
+      value: function(callback, context) {
+        var cb = (callback || this.onMetaSub);
+        if (cb) {
+          for (var idx in this._contacts) {
+            cb.call(context, this._contacts[idx], idx, this._contacts);
+          }
+        }
+      },
+      enumerable: true,
+      configurable: true,
+      writable: true
+    }
+  });
+  TopicFnd.prototype.constructor = TopicFnd;
 
   // Export for the window object or node; Check that is not already defined.
   if (typeof(environment.Tinode) === 'undefined') {
