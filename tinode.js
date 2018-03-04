@@ -1414,7 +1414,7 @@
          *
          * @param {string} topic - Name of the topic to publish to.
          * @param {Object} data - Payload to publish.
-         * @param {boolean} noEcho - If <tt>true</tt>, do not echo the message to the original session.
+         * @param {boolean} noEcho - If <tt>true</tt>, tell the server not to echo the message to the original session.
          * @param {string} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
@@ -1882,6 +1882,11 @@
       return this.withSub(this.topic._lastSubsUpdate, limit);
     },
 
+    withTags: function() {
+      this.what["tags"] = true;
+      return this;
+    },
+
     /**
      * Add query parameters to fetch deleted messages within explicit limits. Any/all parameters can be null.
      *
@@ -1910,7 +1915,7 @@
       var params = {};
       var what = [];
       var instance = this;
-      ["data", "sub", "desc", "del"].map(function(key) {
+      ["data", "sub", "desc", "tags", "del"].map(function(key) {
         if (instance.what.hasOwnProperty(key)) {
           what.push(key);
           if (Object.getOwnPropertyNames(instance.what[key]).length > 0) {
@@ -2129,6 +2134,8 @@
     this._minSeq = 0;
     // The maximum known deletion ID.
     this._maxDel = 0;
+    // User discovery tags
+    this._tags = [];
     // Message cache, sorted by message seq values, from old to new.
     this._messages = CBuffer(function(a,b) { return a.seq - b.seq; });
     // Boolean, true if the topic is currently live
@@ -2563,6 +2570,11 @@
       }
     },
 
+    tags: function() {
+      // Return a copy.
+      return this._tags.slice(0);
+    },
+
     /**
      * Get subscription for the given user ID
      * @memberof Tinode.Topic#
@@ -2714,6 +2726,9 @@
       }
       if (meta.del) {
         this._processDelMessages(meta.del.clear, meta.del.delseq);
+      }
+      if (meta.tags) {
+        this._tags = meta.tags;
       }
       if (this.onMeta) {
         this.onMeta(meta);
