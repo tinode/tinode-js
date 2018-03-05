@@ -1483,7 +1483,7 @@
           var what = [];
 
           if (params) {
-            ["desc", "sub"].map(function(key){
+            ["desc", "sub", "tags"].map(function(key){
               if (params.hasOwnProperty(key)) {
                 what.push(key);
                 pkt.set[key] = params[key];
@@ -2161,6 +2161,7 @@
       this.onMetaSub = callbacks.onMetaSub;
       // All subscription records received;
       this.onSubsUpdated = callbacks.onSubsUpdated;
+      this.onTagsUpdated = callbacks.onTagsUpdated;
       this.onDeleteTopic = callbacks.onDeleteTopic;
     }
   };
@@ -2269,7 +2270,7 @@
       // Send a 'leave' message, handle async response
       var topic = this;
       return Tinode.getInstance().leave(this.name, unsub).then(function(ctrl) {
-        topic._resetSub();
+        topic._gone();
         return ctrl;
       });
     },
@@ -2342,6 +2343,10 @@
               params.desc.updated = ctrl.ts;
             }
             topic._processMetaDesc(params.desc);
+          }
+
+          if (params.tags) {
+            topic._processMetaTags(params.tags);
           }
           return ctrl;
         });
@@ -2446,21 +2451,8 @@
      */
     delTopic: function() {
       var topic = this;
-      var tinode = Tinode.getInstance();
-      return tinode.delTopic(this.name).then(function(obj) {
-        topic._resetSub();
-
-        var me = tinode.getMeTopic();
-        if (me) {
-          me._routePres({
-            what: "gone",
-            topic: "me",
-            src: topic.name
-          });
-        }
-        if (topic.onDeleteTopic) {
-          topic.onDeleteTopic();
-        }
+      return Tinode.getInstance().delTopic(this.name).then(function(obj) {
+        topic._gone();
       });
     },
 
@@ -2728,7 +2720,7 @@
         this._processDelMessages(meta.del.clear, meta.del.delseq);
       }
       if (meta.tags) {
-        this._tags = meta.tags;
+        this._processMetaTags(meta.tags);
       }
       if (this.onMeta) {
         this.onMeta(meta);
@@ -2837,6 +2829,15 @@
       }
     },
 
+    // Called by Tinode when meta.sub is recived.
+    _processMetaTags: function(tags) {
+      this._tags = tags;
+
+      if (this.onTagsUpdated) {
+        this.onTagsUpdated(tags);
+      }
+    },
+
     // Delete cached messages and update cached transaction IDs
     _processDelMessages: function(clear, delseq) {
       this._maxDel = Math.max(clear, this._maxDel);
@@ -2865,6 +2866,23 @@
     // TODO(gene): should it also clear the message cache?
     _resetSub: function() {
       this._subscribed = false;
+    },
+
+    // This topic is either deleted or unsubscribed from.
+    _gone: function() {
+      this._resetSub();
+
+      var me = Tinode.getInstance().getMeTopic();
+      if (me) {
+        me._routePres({
+          what: "gone",
+          topic: "me",
+          src: this.name
+        });
+      }
+      if (this.onDeleteTopic) {
+        this.onDeleteTopic();
+      }
     },
 
     // Update global user cache and local subscribers cache
