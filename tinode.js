@@ -179,6 +179,33 @@
   	return obj;
 	};
 
+  // Trim whitespace, strip empty and duplicate elements elements.
+  // If the result is an empty array, add a single element "\u2421" (Unicode Del character).
+  var normalizeArray = function(arr) {
+    var out = [];
+    if (Array.isArray(arr)) {
+      // Trim, throw away very short and empty tags.
+      for (var i =0, l=arr.length; i<l; i++) {
+        var t = arr[i];
+        if (t) {
+          t = t.trim().toLowerCase();
+          if (t.length > 1) {
+            out.push(t);
+          }
+        }
+      }
+      out.sort().filter(function(item, pos, ary) {
+        return !pos || item != ary[pos - 1];
+      });
+    }
+    if (out.length == 0) {
+      // Add single tag with a Unicode Del character, otherwise an ampty array
+      // is ambiguos. The Del tag will be stripped by the server.
+      out.push("\u2421");
+    }
+    return out;
+  }
+
   // Attempt to convert date strings to objects.
   var jsonParseHelper = function(key, val) {
     // Convert string timestamps with optional milliseconds to Date
@@ -1483,12 +1510,6 @@
           var what = [];
 
           if (params) {
-            if (Array.isArray(params["tags"]) && params["tags"].length == 0) {
-                // Add single tag with a Unicode Del character, otherwise an ampty array
-                // is ambiguos. The Del tag will be stripped by the server.
-                params["tags"].push("\u2421");
-              }
-            }
             ["desc", "sub", "tags"].map(function(key){
               if (params.hasOwnProperty(key)) {
                 what.push(key);
@@ -2327,6 +2348,9 @@
       }
 
       var topic = this;
+      if (params.tags) {
+        params.tags = normalizeArray(params.tags);
+      }
       // Send Set message, handle async response.
       return Tinode.getInstance().setMeta(this.name, params)
         .then(function(ctrl) {
@@ -2837,6 +2861,9 @@
 
     // Called by Tinode when meta.sub is recived.
     _processMetaTags: function(tags) {
+      if (tags.length == 1 && tags[0] == "\u2421") {
+        tags = [];
+      }
       this._tags = tags;
       if (this.onTagsUpdated) {
         this.onTagsUpdated(tags);
