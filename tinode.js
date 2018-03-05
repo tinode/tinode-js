@@ -1483,6 +1483,12 @@
           var what = [];
 
           if (params) {
+            if (Array.isArray(params["tags"]) && params["tags"].length == 0) {
+                // Add single tag with a Unicode Del character, otherwise an ampty array
+                // is ambiguos. The Del tag will be stripped by the server.
+                params["tags"].push("\u2421");
+              }
+            }
             ["desc", "sub", "tags"].map(function(key){
               if (params.hasOwnProperty(key)) {
                 what.push(key);
@@ -2832,7 +2838,6 @@
     // Called by Tinode when meta.sub is recived.
     _processMetaTags: function(tags) {
       this._tags = tags;
-
       if (this.onTagsUpdated) {
         this.onTagsUpdated(tags);
       }
