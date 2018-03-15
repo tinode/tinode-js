@@ -900,7 +900,9 @@
                 "scheme": null,
                 "secret": null,
                 "login": false,
-                "desc": {}
+                "tags": null,
+                "desc": {},
+                "cred": {}
               }
             };
 
@@ -1234,7 +1236,9 @@
              pkt.acc.desc.defacs = params.defacs;
              pkt.acc.desc.public = params.public;
              pkt.acc.desc.private = params.private;
+
              pkt.acc.tags = params.tags;
+             pkt.acc.cred = params.cred;
            }
 
            return sendWithPromise(pkt, pkt.acc.id);
@@ -1254,6 +1258,7 @@
           if (login) {
             promise = promise.then(function(ctrl) {
               loginSuccessful(ctrl);
+              return ctrl;
             });
           }
           return promise;
@@ -1281,6 +1286,24 @@
         },
 
         /**
+         * Add account credential to the object.
+         */
+         addAccountCredential: function(obj, type, value, params, response) {
+           if (!obj) {
+             obj = {};
+           }
+           if (!obj.cred) {
+             obj.cred = [];
+           }
+           obj.cred.push({
+             "type": type,
+             "val": value,
+             "resp": response,
+             "params": params
+           });
+           return obj;
+         },
+        /**
          * Send handshake to the server.
          * @memberof Tinode#
          *
@@ -1300,6 +1323,8 @@
               if (instance.onConnect) {
                 instance.onConnect();
               }
+
+              return ctrl;
             }).catch(function(err) {
               if (instance.onDisconnect) {
                 instance.onDisconnect(err);
@@ -1323,6 +1348,7 @@
           return sendWithPromise(pkt, pkt.login.id)
             .then(function(ctrl) {
               loginSuccessful(ctrl);
+              return ctrl;
             });
         },
 
@@ -2227,7 +2253,7 @@
       return tinode.subscribe(name || TOPIC_NEW, getParams, setParams).then(function(ctrl) {
         if (ctrl.code >= 300) {
           // If the topic already exists, do nothing.
-          return topic;
+          return ctrl;
         }
 
         // Set topic name for new topics and add it to cache.
@@ -2259,7 +2285,8 @@
         topic.acs = new AccessMode(ctrl.params ? ctrl.params.acs : undefined);
 
         topic._subscribed = true;
-        return topic;
+
+        return ctrl;
       });
     },
 
@@ -2378,6 +2405,7 @@
           if (params.tags) {
             topic._processMetaTags(params.tags);
           }
+
           return ctrl;
         });
     },
@@ -2481,8 +2509,9 @@
      */
     delTopic: function() {
       var topic = this;
-      return Tinode.getInstance().delTopic(this.name).then(function(obj) {
+      return Tinode.getInstance().delTopic(this.name).then(function(ctrl) {
         topic._gone();
+        return ctrl;
       });
     },
 
@@ -2499,13 +2528,14 @@
       }
       var topic = this;
       // Send {del} message, return promise
-      return Tinode.getInstance().delSubscription(this.name, user).then(function(obj) {
+      return Tinode.getInstance().delSubscription(this.name, user).then(function(ctrl) {
         // Remove the object from the subscription cache;
         delete topic._users[user];
         // Notify listeners
         if (topic.onSubsUpdated) {
           topic.onSubsUpdated(Object.keys(topic._users));
         }
+        return ctrl;
       });
     },
 
