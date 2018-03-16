@@ -1288,7 +1288,7 @@
         /**
          * Add account credential to the object.
          */
-         addAccountCredential: function(obj, type, value, params, response) {
+         addCredential: function(obj, type, value, params, response) {
            if (!obj) {
              obj = {};
            }
@@ -1340,10 +1340,11 @@
          * @param {string} secret - Authentication secret, assumed to be already base64 encoded.
          * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
          */
-        login: function(scheme, secret) {
+        login: function(scheme, secret, cred) {
           var pkt = initPacket("login");
           pkt.login.scheme = scheme;
           pkt.login.secret = secret;
+          pkt.login.cred = cred;
 
           return sendWithPromise(pkt, pkt.login.id)
             .then(function(ctrl) {
@@ -1360,8 +1361,8 @@
          * @param {string} password  - Password.
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
-        loginBasic: function(uname, password) {
-          return instance.login("basic", b64EncodeUnicode(uname + ":" + password))
+        loginBasic: function(uname, password, cred) {
+          return instance.login("basic", b64EncodeUnicode(uname + ":" + password), cred)
             .then(function(ctrl) {
               _login = uname;
               return ctrl;
@@ -1375,8 +1376,8 @@
          * @param {string} token - Token received in response to earlier login.
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
-        loginToken: function(token) {
-          return instance.login("token", token);
+        loginToken: function(token, cred) {
+          return instance.login("token", token, cred);
         },
 
         getLoginToken: function() {
