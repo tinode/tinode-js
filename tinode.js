@@ -1288,7 +1288,7 @@
         /**
          * Add account credential to the object.
          */
-         addCredential: function(obj, type, value, params, response) {
+         addCredential: function(obj, method, value, params, response) {
            if (!obj) {
              obj = {};
            }
@@ -1296,7 +1296,7 @@
              obj.cred = [];
            }
            obj.cred.push({
-             "type": type,
+             "meth": method,
              "val": value,
              "resp": response,
              "params": params
