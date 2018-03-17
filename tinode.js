@@ -1937,7 +1937,10 @@
     },
 
     withTags: function() {
-      this.what["tags"] = true;
+      var tp = this.topic.getType();
+      if (tp === 'grp' || tp === 'me') {
+        this.what["tags"] = true;
+      }
       return this;
     },
 
@@ -2325,7 +2328,10 @@
       // Send a 'leave' message, handle async response
       var topic = this;
       return Tinode.getInstance().leave(this.name, unsub).then(function(ctrl) {
-        topic._gone();
+        topic._resetSub();
+        if (unsub) {
+          topic._gone();
+        }
         return ctrl;
       });
     },
@@ -2511,6 +2517,7 @@
     delTopic: function() {
       var topic = this;
       return Tinode.getInstance().delTopic(this.name).then(function(ctrl) {
+        topic._resetSub();
         topic._gone();
         return ctrl;
       });
@@ -2933,8 +2940,6 @@
 
     // This topic is either deleted or unsubscribed from.
     _gone: function() {
-      this._resetSub();
-
       var me = Tinode.getInstance().getMeTopic();
       if (me) {
         me._routePres({
