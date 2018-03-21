@@ -1288,21 +1288,29 @@
         /**
          * Add account credential to the object.
          */
-         addCredential: function(obj, method, value, params, response) {
-           if (!obj) {
-             obj = {};
-           }
-           if (!obj.cred) {
-             obj.cred = [];
-           }
-           obj.cred.push({
-             "meth": method,
-             "val": value,
-             "resp": response,
-             "params": params
-           });
-           return obj;
-         },
+        addCredential: function(obj, method, value, params, response) {
+          if (typeof method === 'object') {
+            value     = method.val;
+            params    = method.params;
+            response  = method.resp;
+            method    = method.meth;
+          }
+          if (method && (value || response)) {
+            if (!obj) {
+              obj = {};
+            }
+            if (!obj.cred) {
+              obj.cred = [];
+            }
+            obj.cred.push({
+              "meth": method,
+              "val": value,
+              "resp": response,
+              "params": params
+            });
+          }
+          return obj;
+        },
         /**
          * Send handshake to the server.
          * @memberof Tinode#
