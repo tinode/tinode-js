@@ -820,12 +820,13 @@
       }
 
       // Make limited cache management available to topic.
+      // Caching user.public only. Everything else is per-topic.
       function attachCacheToTopic(topic) {
         topic._cacheGetUser = function(uid) {
-          return mergeObj({}, cacheGet("user", uid));
+          return {public: mergeObj({}, cacheGet("user", uid))};
         };
         topic._cachePutUser = function(uid, user) {
-          return cachePut("user", uid, mergeObj({}, user, {private: true, acs: true}));
+          return cachePut("user", uid, mergeObj({}, user.public));
         };
         topic._cacheDelUser = function(uid) {
           return cacheDel("user", uid);
@@ -2560,6 +2561,7 @@
       var tinode = Tinode.getInstance();
       var user = this._users[tinode.getCurrentUserID()];
       if (user) {
+
         if (!user[what] || user[what] < seq) {
           if (this._subscribed) {
             tinode.note(this.name, what, seq);
