@@ -66,6 +66,10 @@
 
   // RFC3339 formater of Date
   var rfc3339DateString = function(d) {
+    if (!d || d.getTime() == 0) {
+      return undefined;
+    }
+
     function pad(n) {
       return n < 10 ? '0' + n : n;
     }
@@ -153,21 +157,23 @@
 
   // JSON stringify helper - pre-processor for JSON.stringify
   var jsonBuildHelper = function(key, val) {
-    // strip out empty elements while serializing objects to JSON
-    if (val === undefined || val === null || val === false || val.length === 0 ||
-      ((typeof val === "object") && (Object.keys(val).length === 0))) {
-      return undefined;
+    if (val instanceof Date) {
       // Convert javascript Date objects to rfc3339 strings
-    } else if (val instanceof Date) {
       val = rfc3339DateString(val);
+    } else if (val === undefined || val === null || val === false ||
+        (Array.isArray(val) && val.length == 0) ||
+        ((typeof val === "object") && (Object.keys(val).length === 0))) {
+        // strip out empty elements while serializing objects to JSON
+      return undefined;
     }
+
     return val;
   };
 
   // Strips all values from an object of they evaluate to false.
   var simplify = function(obj) {
   	Object.keys(obj).forEach(function(key) {
-    	if (obj[key] && typeof obj[key] === 'object') {
+    	if (obj[key] && typeof obj[key] === 'object' && !(obj[key] instanceof Date)) {
       	simplify(obj[key]);
         if (Object.getOwnPropertyNames(obj[key]).length == 0) {
         	delete obj[key];
@@ -1451,6 +1457,10 @@
               // set.desc params are used for new topics only
               pkt.sub.set.desc = setParams.desc
             }
+
+            if (setParams.tags) {
+              pkt.sub.set.tags = setParams.tags;
+            }
           }
 
           return sendWithPromise(pkt, pkt.sub.id);
@@ -1936,9 +1946,13 @@
       return this.withDesc(this.topic._lastDescUpdate);
     },
 
-    withSub: function(ims, limit) {
-      this.what["sub"] = {ims: ims, limit: limit};
+    withSub: function(ims, limit, user) {
+      this.what["sub"] = {ims: ims, limit: limit, user: user};
       return this;
+    },
+
+    withOneSub: function(user) {
+      return this.withSub(this.topic._lastSubsUpdate, undefined, user);
     },
 
     withLaterSub: function(limit) {
@@ -3125,7 +3139,7 @@
           }
         } else if (pres.what === "acs") {
           // New subscription. Send request for the full description.
-          this.getMeta(this.startMetaQuery().withLaterSub().build());
+          this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
           // Create a dummy entry to catch online status update.
           this._contacts[pres.src] = {topic: pres.src, online: false};
         }
