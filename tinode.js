@@ -2111,19 +2111,22 @@
   * @returns {number} - updated access mode.
   */
   AccessMode.update = function(val, upd) {
-    if (!upd || upd.length < 2) {
+    if (!upd) {
       return val;
     }
 
     var action = upd.charAt(0);
     var m0;
     if (action === '+' || action === '-') {
+      if (upd.length < 2) {
+        return val;
+      }
       m0 = AccessMode.decode(upd.substring(1));
     } else {
       m0 = AccessMode.decode(upd);
     }
 
-    if (!m0 || m0 === AccessMode._MODE_INVALID) {
+    if (m0 === AccessMode._MODE_INVALID) {
       return val;
     }
 
