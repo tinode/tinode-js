@@ -2013,7 +2013,7 @@
   };
 
   var AccessMode = function(acs) {
-    if (acs != null) {
+    if (acs) {
       this.given = typeof acs.given === 'number' ? acs.given : AccessMode.decode(acs.given);
       this.want = typeof acs.want === 'number' ? acs.want : AccessMode.decode(acs.want);
       this.mode = typeof acs.mode === 'number' ? acs.mode : AccessMode.decode(acs.mode);
@@ -2097,6 +2097,7 @@
     }
     return res;
   };
+
   /**
   * Update numeric representation of access mode with the new value. The value
   * is one of the following:
@@ -2145,8 +2146,6 @@
    * AccessMode is a class representing topic access mode.
    * @class Topic
    * @memberof Tinode
-   *
-   * @param {string} mode - String representation of the access mode.
    */
   AccessMode.prototype = {
     setMode: function(m) { this.mode = AccessMode.decode(m); return this; },
@@ -2160,6 +2159,15 @@
     setWant: function(w) { this.want = AccessMode.decode(w); return this; },
     updateWant: function(u) { this.want = AccessMode.update(this.want, u); return this; },
     getWant: function() { return AccessMode.encode(this.want); },
+
+    updateAll: function(val) {
+      if (val) {
+        this.updateGiven(val.given);
+        this.updateWant(val.want);
+        this.mode = this.given & this.want;
+      }
+      return this;
+    },
 
     isOwner:    function() { return ((this.mode & AccessMode._MODE_OWNER) != 0); },
     isMuted:    function() { return ((this.mode & AccessMode._MODE_PRES) == 0); },
@@ -3115,10 +3123,14 @@
               break;
             case "upd": // desc updated
               // Request updated description
-              this.getMeta(this.startMetaQuery().withLaterSub().build());
+              this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
               break;
             case "acs": // access mode changed
-              // console.log(pres.acs);
+              if (cont.acs) {
+                cont.acs.updateAll(pres.acs);
+              } else {
+                cont.acs = new AccessMode(pres.acs);
+              }
               break;
             case "ua": // user agent changed
               cont.seen = {when: new Date(), ua: pres.ua};
