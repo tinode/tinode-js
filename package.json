@@ -1,0 +1,24 @@
+{
+  "name": "tinode-sdk",
+  "description": "Javascript bindings for Tinode",
+  "version": "0.14.0",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tinode/tinode-js.git"
+  },
+  "keywords": [
+    "instant messenger",
+    "messenger",
+    "chat"
+  ],
+  "author": " <gene@tinode.co>",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/tinode/tinode-js/issues"
+  },
+  "homepage": "https://github.com/tinode/chat",
+  "main": "tinode.js"
+}

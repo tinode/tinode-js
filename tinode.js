@@ -3153,10 +3153,14 @@
             this.onContactUpdate(pres.what, cont);
           }
         } else if (pres.what === "acs") {
-          // New subscription. Send request for the full description.
-          this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
-          // Create a dummy entry to catch online status update.
-          this._contacts[pres.src] = {topic: pres.src, online: false};
+          // FIXME: identify new subscription and treat it differently from
+          // changes to a banned/deleted subscription.
+          if (pres.acs && pres.acs[0] !== '-') {
+            // New subscription. Send request for the full description.
+            this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
+            // Create a dummy entry to catch online status update.
+            this._contacts[pres.src] = {topic: pres.src, online: false};
+          }
         }
         if (this.onPres) {
           this.onPres(pres);
