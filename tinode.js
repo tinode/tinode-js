@@ -222,6 +222,8 @@
       if (date) {
         return date;
       }
+    } else if (key === 'acs' && typeof val === 'object') {
+      return new AccessMode(val);
     }
     return val;
   };
@@ -829,7 +831,11 @@
       // Caching user.public only. Everything else is per-topic.
       function attachCacheToTopic(topic) {
         topic._cacheGetUser = function(uid) {
-          return {public: mergeObj({}, cacheGet("user", uid))};
+          var pub = cacheGet("user", uid);
+          if (pub) {
+            return {user: uid, public: mergeObj({}, pub)};
+          }
+          return undefined;
         };
         topic._cachePutUser = function(uid, user) {
           return cachePut("user", uid, mergeObj({}, user.public));
@@ -2014,9 +2020,11 @@
 
   var AccessMode = function(acs) {
     if (acs) {
-      this.given = typeof acs.given === 'number' ? acs.given : AccessMode.decode(acs.given);
-      this.want = typeof acs.want === 'number' ? acs.want : AccessMode.decode(acs.want);
-      this.mode = typeof acs.mode === 'number' ? acs.mode : AccessMode.decode(acs.mode);
+      this.given = typeof acs.given == 'number' ? acs.given : AccessMode.update(AccessMode._MODE_NONE, acs.given);
+      this.want = typeof acs.want == 'number' ? acs.want : AccessMode.update(AccessMode._MODE_NONE, acs.want);
+      this.mode = acs.mode ? (typeof acs.mode == 'number' ?
+          acs.mode : AccessMode.update(AccessMode._MODE_NONE, acs.mode)) :
+        (this.given & this.want);
     }
   };
 
@@ -2311,7 +2319,7 @@
               topic: topic.name,
               created: ctrl.ts,
               updated: ctrl.ts,
-              acs: new AccessMode(ctrl.params ? ctrl.params.acs : undefined),
+              acs: ctrl.params ? ctrl.params.acs : undefined,
             }]);
           }
 
@@ -2320,7 +2328,7 @@
           }
         }
 
-        topic.acs = new AccessMode(ctrl.params ? ctrl.params.acs : undefined);
+        topic.acs = ctrl.params ? ctrl.params.acs : undefined;
 
         topic._subscribed = true;
 
@@ -2832,15 +2840,36 @@
 
     // Process presence change message
     _routePres: function(pres) {
-      if (pres.what == "del") {
-        // Delete cached messages.
-        this._processDelMessages(pres.clear, pres.delseq);
-      } else if (pres.what == "on" || pres.what == "off") {
-        // Update online status of a subscription.
-        var user = this._users[pres.src];
-        if (user) {
-          user.online = pres.what == "on";
-        }
+      var user;
+      switch (pres.what) {
+        case "del":
+          // Delete cached messages.
+          this._processDelMessages(pres.clear, pres.delseq);
+          break;
+        case "on":
+        case "off":
+          // Update online status of a subscription.
+          user = this._users[pres.src];
+          if (user) {
+            user.online = pres.what == "on";
+          } else {
+            console.log("Presence update for an unknown user", this.name, pres.src);
+          }
+          break;
+        case "acs":
+          user = this._users[pres.src];
+          if (!user) {
+            user = this._cacheGetUser(pres.src);
+            if (!user) {
+              this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
+              user = {user: pres.src};
+            }
+            this._users[pres.src] = user;
+          }
+          user.acs = pres.acs;
+          break;
+        default:
+          console.log("Ignored presence update ", pres.what);
       }
 
       if (this.onPres) {
@@ -2873,8 +2902,6 @@
       if (typeof this.updated === "string") {
         this.updated = new Date(this.updated);
       }
-      // Ensure that the acs is properly parsed.
-      this.acs = new AccessMode(this.acs);
 
       // Update relevant contact in the me topic, if available:
       if (this.name !== 'me' && !fromMe) {
@@ -2900,7 +2927,6 @@
       var updatedDesc = undefined;
       for (var idx in subs) {
         var sub = subs[idx];
-        sub.acs = new AccessMode(sub.acs);
         if (sub.user) { // Response to get.sub on 'me' topic does not have .user set
           // Save the object to global cache.
           sub.updated = new Date(sub.updated);
@@ -3064,7 +3090,6 @@
 
           var cont = null;
           if (!sub.deleted) {
-            sub.acs = new AccessMode(sub.acs);
             if (sub.seen && sub.seen.when) {
               sub.seen.when = new Date(sub.seen.when);
             }
@@ -3129,7 +3154,7 @@
               if (cont.acs) {
                 cont.acs.updateAll(pres.acs);
               } else {
-                cont.acs = new AccessMode(pres.acs);
+                cont.acs = pres.acs;
               }
               break;
             case "ua": // user agent changed
@@ -3306,7 +3331,6 @@
           var indexBy = sub.topic ? sub.topic : sub.user;
 
           sub.updated = new Date(sub.updated);
-          sub.acs = new AccessMode(sub.acs);
           if (sub.seen && sub.seen.when) {
             sub.seen.when = new Date(sub.seen.when);
           }
