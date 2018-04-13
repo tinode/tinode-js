@@ -2020,24 +2020,26 @@
 
   var AccessMode = function(acs) {
     if (acs) {
-      this.given = typeof acs.given == 'number' ? acs.given : AccessMode.update(AccessMode._MODE_NONE, acs.given);
-      this.want = typeof acs.want == 'number' ? acs.want : AccessMode.update(AccessMode._MODE_NONE, acs.want);
-      this.mode = acs.mode ? (typeof acs.mode == 'number' ?
-          acs.mode : AccessMode.update(AccessMode._MODE_NONE, acs.mode)) :
+      this.given = typeof acs.given == 'number' ? acs.given : AccessMode.decode(acs.given);
+      this.want = typeof acs.want == 'number' ? acs.want : AccessMode.decode(acs.want);
+      this.mode = acs.mode ? (typeof acs.mode == 'number' ? acs.mode : AccessMode.decode(acs.mode)) :
         (this.given & this.want);
     }
   };
 
-  AccessMode._MODE_NONE     = 0x00;
-  AccessMode._MODE_JOIN     = 0x01;
-  AccessMode._MODE_READ     = 0x02;
-  AccessMode._MODE_WRITE    = 0x04;
-  AccessMode._MODE_PRES     = 0x08;
-  AccessMode._MODE_APPROVE  = 0x10;
-  AccessMode._MODE_SHARE    = 0x20;
-  AccessMode._MODE_DELETE   = 0x40;
-  AccessMode._MODE_OWNER    = 0x80;
-  AccessMode._MODE_INVALID  = 0x100000;
+  AccessMode._NONE    = 0x00;
+  AccessMode._JOIN    = 0x01;
+  AccessMode._READ    = 0x02;
+  AccessMode._WRITE   = 0x04;
+  AccessMode._PRES    = 0x08;
+  AccessMode._APPROVE = 0x10;
+  AccessMode._SHARE   = 0x20;
+  AccessMode._DELETE  = 0x40;
+  AccessMode._OWNER   = 0x80;
+
+  AccessMode._BITMASK = AccessMode._JOIN | AccessMode._READ | AccessMode._WRITE | AccessMode._PRES |
+    AccessMode._APPROVE | AccessMode._SHARE | AccessMode._DELETE | AccessMode._OWNER;
+  AccessMode._INVALID  = 0x100000;
 
   /**
   * Parse string into an access mode value.
@@ -2051,22 +2053,24 @@
   AccessMode.decode = function(str) {
     if (!str) {
       return null;
+    } else if (typeof str == 'number') {
+      return str & AccessMode._BITMASK;
     } else if (str === 'N' || str === 'n') {
-      return AccessMode._MODE_NONE;
+      return AccessMode._NONE;
     }
 
     var bitmask = {
-      'J': AccessMode._MODE_JOIN,
-      'R': AccessMode._MODE_READ,
-      'W': AccessMode._MODE_WRITE,
-      'P': AccessMode._MODE_PRES,
-      'A': AccessMode._MODE_APPROVE,
-      'S': AccessMode._MODE_SHARE,
-      'D': AccessMode._MODE_DELETE,
-      'O': AccessMode._MODE_OWNER
+      'J': AccessMode._JOIN,
+      'R': AccessMode._READ,
+      'W': AccessMode._WRITE,
+      'P': AccessMode._PRES,
+      'A': AccessMode._APPROVE,
+      'S': AccessMode._SHARE,
+      'D': AccessMode._DELETE,
+      'O': AccessMode._OWNER
     };
 
-    var m0 = AccessMode._MODE_NONE;
+    var m0 = AccessMode._NONE;
 
     for (var i=0; i<str.length; i++) {
       var c = str.charAt(i).toUpperCase();
@@ -2090,9 +2094,9 @@
   * @returns {string} - Access mode as a string.
   */
   AccessMode.encode = function(val) {
-    if (val === null || val === AccessMode._MODE_INVALID) {
+    if (val === null || val === AccessMode._INVALID) {
       return null;
-    } else if (val === AccessMode._MODE_NONE) {
+    } else if (val === AccessMode._NONE) {
       return 'N';
     }
 
@@ -2109,7 +2113,7 @@
   /**
   * Update numeric representation of access mode with the new value. The value
   * is one of the following:
-  *  - a string starting with '+' or '-' then the bits to add or remove, e.g. '+R' or '-ps'.
+  *  - a string starting with '+' or '-' then the bits to add or remove, e.g. '+R-W' or '-PS'.
   *  - a new value of access mode
   *
   * @memberof Tinode.AccessMode
@@ -2120,31 +2124,38 @@
   * @returns {number} - updated access mode.
   */
   AccessMode.update = function(val, upd) {
-    if (!upd) {
+    if (!upd || typeof upd != 'string') {
       return val;
     }
 
-    var action = upd.charAt(0);
     var m0;
-    if (action === '+' || action === '-') {
-      if (upd.length < 2) {
+    var action = upd.charAt(0);
+    if (action == '+' || action == '-') {
+      var val0 = val;
+      // Split delta-string like '+ABC-DEF+Z' into an array of parts including + and -.
+      var parts = upd.split(/([-+])/);
+      // Starting iteration from 1 because String.split() creates an array with the first empty element.
+      // Iterating by 2 because we parse pairs +/- then data.
+      for (var i = 1; i < parts.length-1; i += 2) {
+        action = parts[i];
+        m0 = AccessMode.decode(parts[i+1]);
+        if (m0 == AccessMode._INVALID || m0 == null) {
+          return val;
+        }
+        if (action === '+') {
+          val0 |= m0;
+        } else if (action === '-') {
+          val0 &= ~m0;
+        }
+      }
+      val = val0;
+    } else {
+      // The string is an explicit new value 'ABC' rather than delta.
+      val0 = AccessMode.decode(upd);
+      if (val0 == AccessMode._INVALID) {
         return val;
       }
-      m0 = AccessMode.decode(upd.substring(1));
-    } else {
-      m0 = AccessMode.decode(upd);
-    }
-
-    if (m0 === AccessMode._MODE_INVALID) {
-      return val;
-    }
-
-    if (action === '+') {
-      val |= m0;
-    } else if (action === '-') {
-      val &= ~m0;
-    } else {
-      val = m0;
+      val = val0;
     }
 
     return val;
@@ -2177,16 +2188,16 @@
       return this;
     },
 
-    isOwner:    function() { return ((this.mode & AccessMode._MODE_OWNER) != 0); },
-    isMuted:    function() { return ((this.mode & AccessMode._MODE_PRES) == 0); },
-    isPresencer:function() { return ((this.mode & AccessMode._MODE_PRES) != 0); },
-    isJoiner:   function() { return ((this.mode & AccessMode._MODE_JOIN) != 0); },
-    isReader:   function() { return ((this.mode & AccessMode._MODE_READ) != 0); },
-    isWriter:   function() { return ((this.mode & AccessMode._MODE_WRITE) != 0); },
-    isApprover: function() { return ((this.mode & AccessMode._MODE_APPROVE) != 0); },
+    isOwner:    function() { return ((this.mode & AccessMode._OWNER) != 0); },
+    isMuted:    function() { return ((this.mode & AccessMode._PRES) == 0); },
+    isPresencer:function() { return ((this.mode & AccessMode._PRES) != 0); },
+    isJoiner:   function() { return ((this.mode & AccessMode._JOIN) != 0); },
+    isReader:   function() { return ((this.mode & AccessMode._READ) != 0); },
+    isWriter:   function() { return ((this.mode & AccessMode._WRITE) != 0); },
+    isApprover: function() { return ((this.mode & AccessMode._APPROVE) != 0); },
     isAdmin:    function() { return this.isOwner() || this.isApprover() },
-    isSharer:   function() { return ((this.mode & AccessMode._MODE_SHARE) != 0); },
-    isDeleter:  function() { return ((this.mode & AccessMode._MODE_DELETE) != 0); }
+    isSharer:   function() { return ((this.mode & AccessMode._SHARE) != 0); },
+    isDeleter:  function() { return ((this.mode & AccessMode._DELETE) != 0); }
   };
 
   /**
@@ -2859,17 +2870,27 @@
         case "acs":
           user = this._users[pres.src];
           if (!user) {
-            user = this._cacheGetUser(pres.src);
-            if (!user) {
-              this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
-              user = {user: pres.src};
+            // Update for an unknown user
+            var acs = new AccessMode().updateAll(pres.dacs);
+            if (acs && acs.mode != AccessMode._NONE) {
+              user = this._cacheGetUser(pres.src);
+              if (!user) {
+                this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
+                user = {user: pres.src, acs: acs};
+              }
+              this._users[pres.src] = user;
             }
-            this._users[pres.src] = user;
+          } else {
+            // Known user
+            user.acs.updateAll(pres.dacs);
+            if (!user.acs || user.acs.mode == AccessMode._NONE) {
+              // User left topic.
+              delete this._users[pres.src];
+            }
           }
-          user.acs = pres.acs;
           break;
         default:
-          console.log("Ignored presence update ", pres.what);
+          console.log("Ignored presence update", pres.what);
       }
 
       if (this.onPres) {
@@ -3152,9 +3173,9 @@
               break;
             case "acs": // access mode changed
               if (cont.acs) {
-                cont.acs.updateAll(pres.acs);
+                cont.acs.updateAll(pres.dacs);
               } else {
-                cont.acs = pres.acs;
+                cont.acs = new AccessMode().updateAll(pres.dacs);
               }
               break;
             case "ua": // user agent changed
@@ -3178,13 +3199,21 @@
             this.onContactUpdate(pres.what, cont);
           }
         } else if (pres.what === "acs") {
-          // FIXME: identify new subscription and treat it differently from
-          // changes to a banned/deleted subscription.
-          if (pres.acs && pres.acs[0] !== '-') {
+          // New subscriptions and deleted/banned subscriptions have full
+          // access mode (no + or - in the dacs string). Changes to known subscriptions are sent as
+          // deltas, but they should not happen here.
+          var acs = new AccessMode(pres.dacs);
+          if (!acs || acs.mode == AccessMode._INVALID) {
+            console.log("Invalid access mode update", pres.src, pres.dacs);
+            return;
+          } else if (acs.mode == AccessMode._NONE) {
+            console.log("Removing non-existent subscription", pres.src, pres.dacs);
+            return;
+          } else {
             // New subscription. Send request for the full description.
             this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
             // Create a dummy entry to catch online status update.
-            this._contacts[pres.src] = {topic: pres.src, online: false};
+            this._contacts[pres.src] = {topic: pres.src, online: false, acs: acs};
           }
         }
         if (this.onPres) {
