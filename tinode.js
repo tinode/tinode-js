@@ -123,7 +123,8 @@
     for (var prop in src) {
       if (src.hasOwnProperty(prop) &&
           (src[prop] || src[prop] === false) &&
-          (!ignore || !ignore[prop])) {
+          (!ignore || !ignore[prop]) &&
+          (prop != '_generated')) {
         dst[prop] = mergeObj(dst[prop], src[prop]);
       }
     }
@@ -2438,19 +2439,25 @@
       if (params.tags) {
         params.tags = normalizeArray(params.tags);
       }
+      var tinode = Tinode.getInstance();
       // Send Set message, handle async response.
-      return Tinode.getInstance().setMeta(this.name, params)
+      return tinode.setMeta(this.name, params)
         .then(function(ctrl) {
           if (params.sub) {
             if (ctrl.params && ctrl.params.acs) {
               params.sub.acs = ctrl.params.acs;
               params.sub.updated = ctrl.ts;
             }
-            if (!params.sub.user && !params.desc) {
+            if (!params.sub.user) {
               // This is a subscription update of the current user.
-              // Force update to topic's asc.
-              params.desc = {};
+              // Assign user ID otherwise the update will be ignored by _processMetaSub.
+              params.sub.user = tinode.getCurrentUserID();
+              if (!params.desc) {
+                // Force update to topic's asc.
+                params.desc = {};
+              }
             }
+            params.sub._generated = true;
             topic._processMetaSub([params.sub]);
           }
 
@@ -2929,6 +2936,7 @@
         var me = Tinode.getInstance().getMeTopic();
         if (me) {
           me._processMetaSub([{
+            _generated: true,
             topic: this.name,
             updated: this.updated,
             acs: this.acs,
@@ -2943,7 +2951,8 @@
       }
     },
 
-    // Called by Tinode when meta.sub is recived.
+    // Called by Tinode when meta.sub is recived or in response to received
+    // {ctrl} after setMeta-sub.
     _processMetaSub: function(subs) {
       var updatedDesc = undefined;
       for (var idx in subs) {
@@ -2965,7 +2974,7 @@
           if (this.onMetaSub) {
             this.onMetaSub(cached);
           }
-        } else {
+        } else if (!sub._generated) {
           updatedDesc = sub;
         }
       }
@@ -3119,10 +3128,12 @@
               this._cachePutUser(topicName, cont);
             }
 
-            // Notify topic of the update.
-            var topic = tinode.getTopic(topicName);
-            if (topic) {
-              topic._processMetaDesc(sub, true);
+            // Notify topic of the update if it's a genuine event.
+            if (!sub._generated) {
+              var topic = tinode.getTopic(topicName);
+              if (topic) {
+                topic._processMetaDesc(sub, true);
+              }
             }
           } else {
             cont = sub;
