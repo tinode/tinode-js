@@ -2328,6 +2328,7 @@
           var me = tinode.getMeTopic();
           if (me) {
             me._processMetaSub([{
+              _generated: true,
               topic: topic.name,
               created: ctrl.ts,
               updated: ctrl.ts,
@@ -2810,11 +2811,6 @@
     _routeData: function(data) {
       this._lastDataUpdate = data.ts;
 
-      if (Object.keys(this._users).indexOf(data.from) < 0) {
-        // FIXME(gene): get user description, call userDesc
-        this._users[data.from] = {user: data.from};
-      }
-
       this._messages.put(data);
 
       if (data.seq > this._maxSeq) {
@@ -2881,18 +2877,25 @@
             var acs = new AccessMode().updateAll(pres.dacs);
             if (acs && acs.mode != AccessMode._NONE) {
               user = this._cacheGetUser(pres.src);
+              var requestUpdate = !user;
               if (!user) {
-                this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
                 user = {user: pres.src, acs: acs};
+              } else {
+                user.acs = acs;
               }
-              this._users[pres.src] = user;
+              user._generated = true;
+              user.updated = new Date();
+              this._processMetaSub([user]);
             }
           } else {
             // Known user
             user.acs.updateAll(pres.dacs);
             if (!user.acs || user.acs.mode == AccessMode._NONE) {
               // User left topic.
-              delete this._users[pres.src];
+              this._processMetaSub([{
+                user: pres.src,
+                deleted: new Date(),
+                _generated: true}]);
             }
           }
           break;
@@ -2962,17 +2965,21 @@
           sub.updated = new Date(sub.updated);
           sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
 
-          var cached = null;
+          var user = null;
           if (!sub.deleted) {
-            cached = this._updateCachedUser(sub.user, sub);
+            user = this._users[sub.user];
+            if (!user) {
+              user = this._cacheGetUser(sub.user);
+            }
+            user = this._updateCachedUser(sub.user, sub, sub._generated);
           } else {
             // Subscription is deleted, remove it from topic (but leave in Users cache)
             delete this._users[sub.user];
-            cached = sub;
+            user = sub;
           }
 
           if (this.onMetaSub) {
-            this.onMetaSub(cached);
+            this.onMetaSub(user);
           }
         } else if (!sub._generated) {
           updatedDesc = sub;
@@ -3044,19 +3051,24 @@
       }
     },
 
-    // Update global user cache and local subscribers cache
-    _updateCachedUser: function(uid, obj) {
+    // Update global user cache and local subscribers cache.
+    // Don't call this method for non-subscribers.
+    _updateCachedUser: function(uid, obj, requestUpdate) {
       // Fetch user object from the global cache.
       // This is a clone of the stored object
       var cached = this._cacheGetUser(uid);
       if (cached) {
         cached = mergeObj(cached, obj);
       } else {
-        // FIXME(gene): if user is missing, fetch it from
-        // the server using userDesc()
+        // Cached object is not found. Issue a request for public/private.
+        if (requestUpdate) {
+          this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
+        }
         cached = mergeObj({}, obj);
       }
+      // Save to global cache
       this._cachePutUser(uid, cached);
+      // Save to the list of topic subsribers.
       return mergeToCache(this._users, uid, cached);
     },
 
