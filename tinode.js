@@ -2129,7 +2129,6 @@
       return val;
     }
 
-    var m0;
     var action = upd.charAt(0);
     if (action == '+' || action == '-') {
       var val0 = val;
@@ -2139,9 +2138,12 @@
       // Iterating by 2 because we parse pairs +/- then data.
       for (var i = 1; i < parts.length-1; i += 2) {
         action = parts[i];
-        m0 = AccessMode.decode(parts[i+1]);
-        if (m0 == AccessMode._INVALID || m0 == null) {
+        var m0 = AccessMode.decode(parts[i+1]);
+        if (m0 == AccessMode._INVALID) {
           return val;
+        }
+        if (m0 == null) {
+          continue;
         }
         if (action === '+') {
           val0 |= m0;
@@ -2152,11 +2154,10 @@
       val = val0;
     } else {
       // The string is an explicit new value 'ABC' rather than delta.
-      val0 = AccessMode.decode(upd);
-      if (val0 == AccessMode._INVALID) {
-        return val;
+      var val0 = AccessMode.decode(upd);
+      if (val0 != AccessMode._INVALID) {
+        val = val0;
       }
-      val = val0;
     }
 
     return val;
