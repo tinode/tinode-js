@@ -2230,6 +2230,8 @@
     this.created = null;
     // timestamp when the topic was last updated
     this.updated = null;
+    // timestamp of the last messages
+    this.touched = null;
     // access mode, see AccessMode
     this.acs = new AccessMode(null);
     // per-topic private data
@@ -2256,8 +2258,6 @@
     this._lastDescUpdate = null;
     // Timestap when topic meta-subs update was recived.
     this._lastSubsUpdate = null;
-    // Timestap of the last message.
-    this._lastDataUpdate = null;
     // Used only during initialization
     this._new = true;
 
@@ -2322,6 +2322,7 @@
           topic.name = ctrl.topic;
           topic.created = ctrl.ts;
           topic.updated = ctrl.ts;
+          topic.touched = ctrl.ts;
 
           topic._cachePutSelf();
 
@@ -2333,6 +2334,7 @@
               topic: topic.name,
               created: ctrl.ts,
               updated: ctrl.ts,
+              touched: ctrl.ts,
               acs: ctrl.params ? ctrl.params.acs : undefined,
             }]);
           }
@@ -2810,7 +2812,7 @@
 
     // Process data message
     _routeData: function(data) {
-      this._lastDataUpdate = data.ts;
+      this.touched = data.ts;
 
       this._messages.put(data);
 
@@ -2828,7 +2830,7 @@
       // Update locally cached contact with the new message count
       var me = Tinode.getInstance().getMeTopic();
       if (me) {
-        me.setMsgReadRecv(this.name, "msg", data.seq);
+        me.setMsgReadRecv(this.name, "msg", data.seq, data.ts);
       }
     },
 
@@ -3129,6 +3131,7 @@
             continue;
           }
           sub.updated = new Date(sub.updated);
+          sub.touched = sub.touched ? new Date(sub.touched) : null;
           sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
 
           var cont = null;
@@ -3189,6 +3192,7 @@
               }
               break;
             case "msg": // new message received
+              cont.touched = new Date();
               cont.seq = pres.seq;
               break;
             case "upd": // desc updated
@@ -3294,26 +3298,27 @@
      * @param {number} seq - New value of the count.
      */
     setMsgReadRecv: {
-      value: function(contactName, what, seq) {
+      value: function(contactName, what, seq, ts) {
         var cont = this._contacts[contactName];
-        var oldVal, newVal;
+        var oldVal, doUpdate = false;
         var mode = null;
         if (cont) {
           if (what === "recv") {
             oldVal = cont.recv;
             cont.recv = cont.recv ? Math.max(cont.recv, seq) : seq;
-            newVal = cont.recv;
+            doUpdate = (oldVal != cont.recv);
           } else if (what === "read") {
             oldVal = cont.read;
             cont.read = cont.read ? Math.max(cont.read, seq) : seq;
-            newVal = cont.read;
+            doUpdate = (oldVal != cont.read);
           } else if (what === "msg") {
             oldVal = cont.seq;
             cont.seq = cont.seq ? Math.max(cont.seq, seq) : seq;
-            newVal = cont.seq;
+            cont.touched = ts;
+            doUpdate = (oldVal != cont.seq);
           }
 
-          if ((oldVal != newVal) && (!cont.acs || !cont.acs.isMuted()) && this.onContactUpdate) {
+          if (doUpdate && (!cont.acs || !cont.acs.isMuted()) && this.onContactUpdate) {
             this.onContactUpdate(what, cont);
           }
         }
