@@ -777,7 +777,7 @@
       // Login used in the last successful basic authentication
       var _login = null;
       // Token which can be used for login instead of login/password.
-      var _loginToken = null;
+      var _authToken = null;
       // Counter of received packets
       var _inPacketCount = 0;
       // Counter for generating unique message IDs
@@ -1137,12 +1137,12 @@
         // extract UID and security token, save it in Tinode module
         _myUID = ctrl.params.user;
         if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
-          _loginToken = {
+          _authToken = {
             token: ctrl.params.token,
             expires: new Date(ctrl.params.expires)
           };
         } else {
-          _loginToken = null;
+          _authToken = null;
         }
 
         if (instance.onLogin) {
@@ -1161,13 +1161,24 @@
          * @param {string} transport - See {@link Tinode.Connection#transport}.
          */
         setup: function(appname_, host_, apiKey_, transport_) {
-          // Initialize with a random id each time, to avoid confusing with a packet
+          // Initialize with a random id each time, to avoid confusing with packets
           // from a previous session.
           _messageId = Math.floor((Math.random() * 0xFFFF) + 0xFFFF);
 
           if (appname_) {
             _appName = appname_;
+          } else {
+            _appName = "Undefined";
           }
+
+          _myUID = null;
+          _login = null;
+          _authToken = null;
+          _inPacketCount = 0;
+          _serverInfo = null;
+
+          _cache = {};
+          _pendingPromises = {};
 
           if (_connection) {
             _connection.disconnect();
@@ -1402,14 +1413,20 @@
           return instance.login("token", token, cred);
         },
 
-        getLoginToken: function() {
-          if (_loginToken && (_loginToken.expires.getTime() > Date.now())) {
-            return _loginToken;
+        getAuthToken: function() {
+          if (_authToken && (_authToken.expires.getTime() > Date.now())) {
+            return _authToken;
           } else {
-            _loginToken = null;
+            _authToken = null;
           }
           return null;
         },
+
+        // Application may provide a saved authentication token.
+        setAuthToken: function(token) {
+          _authToken = token;
+        },
+
         /**
          * @typedef SetParams
          * @memberof Tinode
