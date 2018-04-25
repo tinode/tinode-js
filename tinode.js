@@ -774,6 +774,8 @@
       var _connection = null;
       // UID of the currently authenticated user
       var _myUID = null;
+      // Status of connection: authenticated or not;
+      var _authenticated = false;
       // Login used in the last successful basic authentication
       var _login = null;
       // Token which can be used for login instead of login/password.
@@ -1120,6 +1122,7 @@
       function handleDisconnect(err) {
         _inPacketCount = 0;
         _serverInfo = null;
+        _authenticated = false;
 
         cacheMap(function(obj, key) {
           if (key.lastIndexOf("topic:", 0) === 0) {
@@ -1136,6 +1139,7 @@
         // This is a response to a successful login,
         // extract UID and security token, save it in Tinode module
         _myUID = ctrl.params.user;
+        _authenticated = true;
         if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
           _authToken = {
             token: ctrl.params.token,
@@ -1172,6 +1176,7 @@
           }
 
           _myUID = null;
+          _authenticated = false;
           _login = null;
           _authToken = null;
           _inPacketCount = 0;
@@ -1220,6 +1225,14 @@
         */
         isConnected: function() {
           return _connection && _connection.isConnected();
+        },
+        /**
+        * Check if connection is authenticated (last login was successful).
+        * @memberof Tinode#
+        * @returns {boolean} true if authenticated, false otherwise.
+        */
+        isAuthenticated: function() {
+          return _authenticated;
         },
 
         /**
