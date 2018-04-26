@@ -1826,6 +1826,11 @@
           return (tp === "me" || tp === "fnd" || tp === "grp") ? tp : undefined;
         },
 
+        isTopicOnline: function(name) {
+          var me = instance.getTopic(TOPIC_ME);
+          var cont = me && me.getContact(name);
+          return cont && cont.online;
+        },
         /**
          * Request server to aknowledge messages. Required for promises to function. Default "on".
          * @memberof Tinode#
