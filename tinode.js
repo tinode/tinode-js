@@ -1309,6 +1309,9 @@
          * @memberof Tinode#
          */
         createAccountBasic: function(username, password, params) {
+          // Make sure we are not using 'null' or 'undefined';
+          username = username || '';
+          password = password || '';
           return instance.createAccount("basic",
             b64EncodeUnicode(username + ":" + password), true, params);
         },
@@ -1319,6 +1322,9 @@
          * @memberof Tinode#
          */
         updateAccountBasic: function(uid, username, password) {
+          // Make sure we are not using 'null' or 'undefined';
+          username = username || '';
+          password = password || '';
           return instance.account(uid, "basic",
             b64EncodeUnicode(username + ":" + password), false, null);
         },
@@ -1327,7 +1333,7 @@
          * Add account credential to the object.
          */
         addCredential: function(obj, method, value, params, response) {
-          if (typeof method === 'object') {
+          if (typeof method == 'object') {
             value     = method.val;
             params    = method.params;
             response  = method.resp;
