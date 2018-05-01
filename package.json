@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Javascript bindings for Tinode",
-  "version": "0.14.0",
+  "version": "0.14.6-fix2",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -20,5 +20,8 @@
     "url": "https://github.com/tinode/tinode-js/issues"
   },
   "homepage": "https://github.com/tinode/chat",
-  "main": "tinode.js"
+  "main": "tinode.js",
+  "devDependencies": {
+    "minami": "^1.2.3"
+  }
 }

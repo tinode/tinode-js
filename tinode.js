@@ -4,7 +4,7 @@
  * It will add a singleton Tinode object to the top level object, usually <tt>window</tt>.
  * See <a href="https://github.com/tinode/example-react-js">https://github.com/tinode/example-react-js</a> for real-life usage.
  *
- * @copyright 2015-2017 Tinode
+ * @copyright 2015-2018 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
  * @version 0.14
@@ -765,7 +765,10 @@
 
       // Client-provided application name, format <Name>/<version number>
       var _appName = "Undefined";
-      var _platform = navigator.platform;
+      var _platform = "undefined";
+      if (typeof navigator != 'undefined') {
+        _platform = navigator.platform
+      }
       // Logging to console enabled
       var _loggingEnabled = false;
       // When logging, trip long strings (base64-encoded images) for readability
@@ -1139,7 +1142,7 @@
         // This is a response to a successful login,
         // extract UID and security token, save it in Tinode module
         _myUID = ctrl.params.user;
-        _authenticated = true;
+        _authenticated = (ctrl && ctrl.code >= 200 && ctrl.code < 300);
         if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
           _authToken = {
             token: ctrl.params.token,
