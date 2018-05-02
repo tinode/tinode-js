@@ -2491,6 +2491,11 @@
       // Send Set message, handle async response.
       return tinode.setMeta(this.name, params)
         .then(function(ctrl) {
+          if (ctrl && ctrl.code >= 300) {
+            // Not modified
+            return ctrl;
+          }
+
           if (params.sub) {
             if (ctrl.params && ctrl.params.acs) {
               params.sub.acs = ctrl.params.acs;
