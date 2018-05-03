@@ -1830,9 +1830,13 @@
          * @returns {string} One of <tt>'me'</tt>, <tt>'grp'</tt>, <tt>'p2p'</tt> or <tt>undefined</tt>.
          */
         getTopicType: function(name) {
-          var tp = (typeof name === "string") ? name.substring(0, 3) : undefined;
-          if (tp === 'usr') return 'p2p';
-          return (tp === "me" || tp === "fnd" || tp === "grp") ? tp : undefined;
+          var types = {
+            'me': 'me', 'fnd': 'fnd',
+            'grp': 'grp', 'new': 'grp',
+            'usr': 'p2p'
+          };
+          var tp = (typeof name === "string") ? name.substring(0, 3) : 'xxx';
+          return types[tp];
         },
 
         isTopicOnline: function(name) {
@@ -2011,10 +2015,7 @@
     },
 
     withTags: function() {
-      var tp = this.topic.getType();
-      if (tp === 'grp' || tp === 'me') {
-        this.what["tags"] = true;
-      }
+      this.what["tags"] = true;
       return this;
     },
 
@@ -3093,6 +3094,7 @@
       var me = Tinode.getInstance().getMeTopic();
       if (me) {
         me._routePres({
+          _generated: true,
           what: "gone",
           topic: "me",
           src: this.name
