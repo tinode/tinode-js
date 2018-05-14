@@ -7,7 +7,7 @@
  * @copyright 2015-2018 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.14
+ * @version 0.15
  *
  * @example
  * <head>
@@ -54,7 +54,7 @@
 
   // Global constants
   var PROTOCOL_VERSION = "0";
-  var VERSION = "0.14";
+  var VERSION = "0.15";
   var LIBRARY = "tinodejs/" + VERSION;
 
   var TOPIC_NEW = "new";
