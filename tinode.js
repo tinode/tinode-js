@@ -2003,7 +2003,7 @@
 
     withSub: function(ims, limit, userOrTopic) {
       var opts = {ims: ims, limit: limit};
-      if (this.getType() == 'me') {
+      if (this.topic.getType() == 'me') {
         opts.topic = userOrTopic;
       } else {
         opts.user = userOrTopic;
