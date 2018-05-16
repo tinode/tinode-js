@@ -2001,13 +2001,19 @@
       return this.withDesc(this.topic._lastDescUpdate);
     },
 
-    withSub: function(ims, limit, user) {
-      this.what["sub"] = {ims: ims, limit: limit, user: user};
+    withSub: function(ims, limit, userOrTopic) {
+      var opts = {ims: ims, limit: limit};
+      if (this.getType() == 'me') {
+        opts.topic = userOrTopic;
+      } else {
+        opts.user = userOrTopic;
+      }
+      this.what["sub"] = opts;
       return this;
     },
 
-    withOneSub: function(user) {
-      return this.withSub(this.topic._lastSubsUpdate, undefined, user);
+    withOneSub: function(userOrTopic) {
+      return this.withSub(this.topic._lastSubsUpdate, undefined, userOrTopic);
     },
 
     withLaterSub: function(limit) {
@@ -2291,6 +2297,8 @@
     this._maxSeq = 0;
     // The minimum known {data.seq} value.
     this._minSeq = 0;
+    // Indicator that the last request for earlier messages returned 0.
+    this._noEarlierMsgs = false;
     // The maximum known deletion ID.
     this._maxDel = 0;
     // User discovery tags
@@ -2469,7 +2477,16 @@
       } else {
         query.withEarlierData(limit);
       }
-      return this.getMeta(query.build());
+      var promise = this.getMeta(query.build());
+      if (!forward) {
+        var instance = this;
+        promise = promise.then(function(ctrl) {
+          if (ctrl && ctrl.params && !ctrl.params.count) {
+            instance._noEarlierMsgs = true;
+          }
+        });
+      }
+      return promise;
     },
 
     /**
@@ -2819,8 +2836,10 @@
      * Check if more messages are available at the server
      * @param {boolean} newer check for newer messages
      */
-    msgHasMore: function(newer) {
-      return newer ? this.seq > this._maxSeq : this._minSeq > 1;
+    msgHasMoreMessages: function(newer) {
+      return newer ? this.seq > this._maxSeq :
+      // _minSeq cound be more than 1, but earlier messages could have been deleted.
+        (this._minSeq > 1 && !this._noEarlierMsgs);
     },
 
     /**
@@ -2943,6 +2962,9 @@
           } else {
             // Known user
             user.acs.updateAll(pres.dacs);
+            if (pres.src == Tinode.getInstance().getCurrentUserID()) {
+              this.acs.updateAll(pres.dacs);
+            }
             if (!user.acs || user.acs.mode == AccessMode._NONE) {
               // User left topic.
               this._processMetaSub([{
@@ -2986,8 +3008,10 @@
       if (typeof this.updated === "string") {
         this.updated = new Date(this.updated);
       }
-
-      // Update relevant contact in the me topic, if available:
+      if (typeof this.touched === "string") {
+        this.touched = new Date(this.touched);
+      }
+            // Update relevant contact in the me topic, if available:
       if (this.name !== 'me' && !fromMe) {
         var me = Tinode.getInstance().getMeTopic();
         if (me) {
@@ -2995,6 +3019,7 @@
             _generated: true,
             topic: this.name,
             updated: this.updated,
+            touched: this.touched,
             acs: this.acs,
             public: this.public,
             private: this.private
