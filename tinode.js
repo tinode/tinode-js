@@ -62,6 +62,8 @@
   var TOPIC_FND = "fnd";
   var USER_NEW = "new";
 
+  var DEL_CHAR = "\u2421";
+
   // Utility functions
 
   // RFC3339 formater of Date
@@ -208,7 +210,7 @@
     if (out.length == 0) {
       // Add single tag with a Unicode Del character, otherwise an ampty array
       // is ambiguos. The Del tag will be stripped by the server.
-      out.push("\u2421");
+      out.push(DEL_CHAR);
     }
     return out;
   }
@@ -3075,7 +3077,7 @@
 
     // Called by Tinode when meta.sub is recived.
     _processMetaTags: function(tags) {
-      if (tags.length == 1 && tags[0] == "\u2421") {
+      if (tags.length == 1 && tags[0] == DEL_CHAR) {
         tags = [];
       }
       this._tags = tags;
@@ -3459,7 +3461,9 @@
     _processMetaSub: {
       value: function(subs) {
         var tinode = Tinode.getInstance();
-        var updateCount  = 0;
+        var updateCount = Object.getOwnPropertyNames(this._contacts).length;
+        // Reset contact list.
+        this._contacts = {};
         for (var idx in subs) {
           var sub = subs[idx];
           var indexBy = sub.topic ? sub.topic : sub.user;
@@ -3494,6 +3498,27 @@
     publish: {
       value: function() {
         return Promise.reject(new Error("Publishing to 'fnd' is not supported"));
+      },
+      enumerable: true,
+      configurable: true,
+      writable: false
+    },
+
+    /**
+     * setMeta to TopicFnd resets contact list in addition to sending the message.
+     * @memberof Tinode.TopicFnd#
+     */
+    setMeta: {
+      value: function(params) {
+        var instance = this;
+        return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(function() {
+          if (Object.keys(instance._contacts).length > 0) {
+            instance._contacts = {};
+            if (instance.onSubsUpdated) {
+              instance.onSubsUpdated([]);
+            }
+          }
+        });
       },
       enumerable: true,
       configurable: true,
