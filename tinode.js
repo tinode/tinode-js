@@ -2014,8 +2014,12 @@
       return this;
     },
 
-    withOneSub: function(userOrTopic) {
-      return this.withSub(this.topic._lastSubsUpdate, undefined, userOrTopic);
+    withOneSub: function(ims, userOrTopic) {
+      return this.withSub(ims, undefined, userOrTopic);
+    },
+
+    withLaterOneSub: function(userOrTopic) {
+      return this.withOneSub(this.topic._lastSubsUpdate, userOrTopic);
     },
 
     withLaterSub: function(limit) {
@@ -3143,7 +3147,7 @@
       } else {
         // Cached object is not found. Issue a request for public/private.
         if (requestUpdate) {
-          this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
+          this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
         }
         cached = mergeObj({}, obj);
       }
@@ -3275,7 +3279,7 @@
               break;
             case "upd": // desc updated
               // Request updated description
-              this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
+              this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
               break;
             case "acs": // access mode changed
               if (cont.acs) {
@@ -3304,7 +3308,7 @@
           if (this.onContactUpdate) {
             this.onContactUpdate(pres.what, cont);
           }
-        } else if (pres.what === "acs") {
+        } else if (pres.what == "acs") {
           // New subscriptions and deleted/banned subscriptions have full
           // access mode (no + or - in the dacs string). Changes to known subscriptions are sent as
           // deltas, but they should not happen here.
@@ -3317,7 +3321,8 @@
             return;
           } else {
             // New subscription. Send request for the full description.
-            this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
+            // Using .withOneSub (not .withLaterOneSub) to make sure IfModifiedSince is not set.
+            this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
             // Create a dummy entry to catch online status update.
             this._contacts[pres.src] = {topic: pres.src, online: false, acs: acs};
           }
