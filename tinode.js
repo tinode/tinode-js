@@ -897,7 +897,7 @@
 
       // Get User Agent string
       function getUserAgent() {
-        return _appName + " (" + _platform + ") " + LIBRARY;
+        return _appName + " (" + _platform + "); " + LIBRARY;
       }
 
       // Generator of packets stubs
