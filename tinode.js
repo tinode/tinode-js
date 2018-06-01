@@ -72,11 +72,14 @@
       return undefined;
     }
 
-    function pad(n) {
-      return n < 10 ? '0' + n : n;
+    function pad(val, sp) {
+      sp = sp || 2;
+      return '0'.repeat(sp - ('' + val).length) + val;
     }
+    var millis = d.getUTCMilliseconds();
     return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
-      'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) + 'Z';
+      'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) +
+      (millis ? '.' + pad(millis, 3) : '') + 'Z';
   }
 
   // btoa replacement. Stock btoa fails on on non-Latin1 strings.
@@ -777,9 +780,11 @@
       var _trimLongStrings = false;
       // A connection object, see Connection above.
       var _connection = null;
-      // UID of the currently authenticated user
+      // API Key.
+      var _apiKey = null;
+      // UID of the currently authenticated user.
       var _myUID = null;
-      // Status of connection: authenticated or not;
+      // Status of connection: authenticated or not.
       var _authenticated = false;
       // Login used in the last successful basic authentication
       var _login = null;
@@ -1179,6 +1184,8 @@
           } else {
             _appName = "Undefined";
           }
+
+          _apiKey = apiKey_;
 
           _myUID = null;
           _authenticated = false;
@@ -1778,6 +1785,9 @@
           return instance.getTopic(TOPIC_FND);
         },
 
+        getFileUploader: function() {
+          return new FileUploader(_apiKey, getAuthToken());
+        },
         /**
          * Get the UID of the the current authenticated user.
          * @memberof Tinode#
@@ -2887,8 +2897,9 @@
 
     // Process data message
     _routeData: function(data) {
-      this.touched = data.ts;
-
+      if (!this.touched || this.touched < data.ts) {
+        this.touched = data.ts;
+      }
       this._messages.put(data);
 
       if (data.seq > this._maxSeq) {
@@ -3397,7 +3408,9 @@
           } else if (what === "msg") {
             oldVal = cont.seq;
             cont.seq = cont.seq ? Math.max(cont.seq, seq) : seq;
-            cont.touched = ts;
+            if (!cont.touched || cont.touched < ts) {
+              cont.touched = ts;
+            }
             doUpdate = (oldVal != cont.seq);
           }
 
@@ -3552,6 +3565,70 @@
     }
   });
   TopicFnd.prototype.constructor = TopicFnd;
+
+  var FileUploader = function(apikey_, authtoken_) {
+    var _apiKey = apikey_;
+    var _authToken = authtoken_;
+    var xhr = xdreq();
+    var toResolve = null;
+    var toReject = null;
+  }
+
+  FileUploader.prototype = {
+    /**
+     * Start uploading the file.
+     *
+     * @memberof Tinode.FileUploader#
+     * @returns {Promise} resilved/rejected when the upload is completed.
+     */
+    upload: function(file, onSuccess, onFailure, onProgress) {
+      var form = new FormData();
+      console.log(file);
+      form.append("name", file.name);
+      form.append("file", file);
+      xhr.open("POST", "/v0/file/upload", true);
+      xhr.setRequestHeader("X-Tinode-APIKey", _apiKey);
+      xhr.setRequestHeader("Authorization", "Token " + _authToken);
+      var result = new Promise(function(resolve, reject) {
+        toResolve = resove;
+        toReject = reject;
+      });
+      if (onProgress) {
+        xhr.upload.onprogress = function(e) {
+          if (e.lengthComputable) {
+            onProgress(e.loaded / e.total);
+          }
+        }
+      }
+      xhr.onload = function() {
+        if (this.status >= 200 && this.status < 300) {
+          if (toResolve) {
+            toResolve(this.response);
+          }
+          if (onSuccess) {
+            onSuccess(this.response);
+          }
+        } else if (this.status >= 400 && toReject) {
+          if (toReject) {
+            toReject(this.response);
+          }
+          if (onFailure) {
+            onFailure(this.response)
+          }
+        }
+      };
+      xhr.send(form);
+
+      return result;
+    },
+
+    cancel: function() {
+      if (xhr) {
+        xhr.abort();
+      }
+    }
+
+  };
 
   // Export for the window object or node; Check that is not already defined.
   if (typeof(environment.Tinode) === 'undefined') {
