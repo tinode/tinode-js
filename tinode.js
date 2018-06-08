@@ -609,7 +609,7 @@
 
           if (poller.readyState == XDR_DONE) {
             if (poller.status == 201) { // 201 == HTTP.Created, get SID
-              var pkt = JSON.parse(poller.responseText);
+              var pkt = JSON.parse(poller.responseText, jsonParseHelper);
               var text = poller.responseText;
 
               _lpURL = url_ + "&sid=" + pkt.ctrl.params.sid
@@ -1764,7 +1764,6 @@
           return topic;
         },
 
-
         /**
          * Instantiate 'me' topic or get it from cache.
          * @memberof Tinode#
@@ -1785,9 +1784,17 @@
           return instance.getTopic(TOPIC_FND);
         },
 
+        /**
+         * Create a new FileUploader instance
+         * @memberof Tinode#
+         *
+         * @returns {Tinode.FileUploader} instance of a FileUploader.
+         */
         getFileUploader: function() {
-          return new FileUploader(_apiKey, getAuthToken());
+          var token = instance.getAuthToken();
+          return token ? new FileUploader(_apiKey, token.token) : null;
         },
+
         /**
          * Get the UID of the the current authenticated user.
          * @memberof Tinode#
@@ -3567,11 +3574,11 @@
   TopicFnd.prototype.constructor = TopicFnd;
 
   var FileUploader = function(apikey_, authtoken_) {
-    var _apiKey = apikey_;
-    var _authToken = authtoken_;
-    var xhr = xdreq();
-    var toResolve = null;
-    var toReject = null;
+    this._apiKey = apikey_;
+    this._authToken = authtoken_;
+    this.xhr = xdreq();
+    this.toResolve = null;
+    this.toReject = null;
   }
 
   FileUploader.prototype = {
@@ -3581,43 +3588,51 @@
      * @memberof Tinode.FileUploader#
      * @returns {Promise} resilved/rejected when the upload is completed.
      */
-    upload: function(file, onSuccess, onFailure, onProgress) {
+    upload: function(file, onProgress, onSuccess, onFailure) {
       var form = new FormData();
-      console.log(file);
-      form.append("name", file.name);
+      var instance = this;
       form.append("file", file);
-      xhr.open("POST", "/v0/file/upload", true);
-      xhr.setRequestHeader("X-Tinode-APIKey", _apiKey);
-      xhr.setRequestHeader("Authorization", "Token " + _authToken);
+      this.xhr.open("POST", "/v" + PROTOCOL_VERSION + "/file/u", true);
+      this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
+      this.xhr.setRequestHeader("Authorization", "Token " + this._authToken);
       var result = new Promise(function(resolve, reject) {
-        toResolve = resove;
-        toReject = reject;
+        instance.toResolve = resolve;
+        instance.toReject = reject;
       });
       if (onProgress) {
-        xhr.upload.onprogress = function(e) {
+        this.xhr.upload.onprogress = function(e) {
           if (e.lengthComputable) {
             onProgress(e.loaded / e.total);
           }
         }
       }
-      xhr.onload = function() {
+      this.xhr.onload = function() {
+        var pkt;
+        try {
+          pkt = JSON.parse(this.response, jsonParseHelper);
+        } catch(err) {
+          console.log("Invalid server response in FileUploader", this.response);
+        }
+
         if (this.status >= 200 && this.status < 300) {
-          if (toResolve) {
-            toResolve(this.response);
+          if (instance.toResolve) {
+            instance.toResolve(pkt.ctrl);
           }
           if (onSuccess) {
-            onSuccess(this.response);
+            onSuccess(pkt.ctrl);
           }
-        } else if (this.status >= 400 && toReject) {
-          if (toReject) {
-            toReject(this.response);
+        } else if (this.status >= 400) {
+          if (instance.toReject) {
+            instance.toReject(new Error(pkt.ctrl.text + " (" + pkt.ctrl.code + ")"));
           }
           if (onFailure) {
-            onFailure(this.response)
+            onFailure(pkt.ctrl)
           }
+        } else {
+          console.log("Upload: unknown status", this.status, pkt.ctrl);
         }
       };
-      xhr.send(form);
+      this.xhr.send(form);
 
       return result;
     },
