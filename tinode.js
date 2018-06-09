@@ -3632,14 +3632,22 @@
           console.log("Upload: unknown status", this.status, this.response);
         }
       };
+      this.xhr.onabort = function() {
+        if (instance.toReject) {
+          instance.toReject(null);
+        }
+        if (onFailure) {
+          onFailure(null)
+        }
+      };
       this.xhr.send(form);
 
       return result;
     },
 
     cancel: function() {
-      if (xhr) {
-        xhr.abort();
+      if (this.xhr) {
+        this.xhr.abort();
       }
     }
 
