@@ -72,11 +72,14 @@
       return undefined;
     }
 
-    function pad(n) {
-      return n < 10 ? '0' + n : n;
+    function pad(val, sp) {
+      sp = sp || 2;
+      return '0'.repeat(sp - ('' + val).length) + val;
     }
+    var millis = d.getUTCMilliseconds();
     return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
-      'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) + 'Z';
+      'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) +
+      (millis ? '.' + pad(millis, 3) : '') + 'Z';
   }
 
   // btoa replacement. Stock btoa fails on on non-Latin1 strings.
@@ -606,7 +609,7 @@
 
           if (poller.readyState == XDR_DONE) {
             if (poller.status == 201) { // 201 == HTTP.Created, get SID
-              var pkt = JSON.parse(poller.responseText);
+              var pkt = JSON.parse(poller.responseText, jsonParseHelper);
               var text = poller.responseText;
 
               _lpURL = url_ + "&sid=" + pkt.ctrl.params.sid
@@ -777,9 +780,11 @@
       var _trimLongStrings = false;
       // A connection object, see Connection above.
       var _connection = null;
-      // UID of the currently authenticated user
+      // API Key.
+      var _apiKey = null;
+      // UID of the currently authenticated user.
       var _myUID = null;
-      // Status of connection: authenticated or not;
+      // Status of connection: authenticated or not.
       var _authenticated = false;
       // Login used in the last successful basic authentication
       var _login = null;
@@ -1179,6 +1184,8 @@
           } else {
             _appName = "Undefined";
           }
+
+          _apiKey = apiKey_;
 
           _myUID = null;
           _authenticated = false;
@@ -1757,7 +1764,6 @@
           return topic;
         },
 
-
         /**
          * Instantiate 'me' topic or get it from cache.
          * @memberof Tinode#
@@ -1776,6 +1782,17 @@
          */
         getFndTopic: function() {
           return instance.getTopic(TOPIC_FND);
+        },
+
+        /**
+         * Create a new FileUploader instance
+         * @memberof Tinode#
+         *
+         * @returns {Tinode.FileUploader} instance of a FileUploader.
+         */
+        getFileUploader: function() {
+          var token = instance.getAuthToken();
+          return token ? new FileUploader(_apiKey, token.token) : null;
         },
 
         /**
@@ -2887,8 +2904,9 @@
 
     // Process data message
     _routeData: function(data) {
-      this.touched = data.ts;
-
+      if (!this.touched || this.touched < data.ts) {
+        this.touched = data.ts;
+      }
       this._messages.put(data);
 
       if (data.seq > this._maxSeq) {
@@ -3397,7 +3415,9 @@
           } else if (what === "msg") {
             oldVal = cont.seq;
             cont.seq = cont.seq ? Math.max(cont.seq, seq) : seq;
-            cont.touched = ts;
+            if (!cont.touched || cont.touched < ts) {
+              cont.touched = ts;
+            }
             doUpdate = (oldVal != cont.seq);
           }
 
@@ -3552,6 +3572,78 @@
     }
   });
   TopicFnd.prototype.constructor = TopicFnd;
+
+  var FileUploader = function(apikey_, authtoken_) {
+    this._apiKey = apikey_;
+    this._authToken = authtoken_;
+    this.xhr = xdreq();
+    this.toResolve = null;
+    this.toReject = null;
+  }
+
+  FileUploader.prototype = {
+    /**
+     * Start uploading the file.
+     *
+     * @memberof Tinode.FileUploader#
+     * @returns {Promise} resilved/rejected when the upload is completed.
+     */
+    upload: function(file, onProgress, onSuccess, onFailure) {
+      var form = new FormData();
+      var instance = this;
+      form.append("file", file);
+      this.xhr.open("POST", "/v" + PROTOCOL_VERSION + "/file/u", true);
+      this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
+      this.xhr.setRequestHeader("Authorization", "Token " + this._authToken);
+      var result = new Promise(function(resolve, reject) {
+        instance.toResolve = resolve;
+        instance.toReject = reject;
+      });
+      if (onProgress) {
+        this.xhr.upload.onprogress = function(e) {
+          if (e.lengthComputable) {
+            onProgress(e.loaded / e.total);
+          }
+        }
+      }
+      this.xhr.onload = function() {
+        var pkt;
+        try {
+          pkt = JSON.parse(this.response, jsonParseHelper);
+        } catch(err) {
+          console.log("Invalid server response in FileUploader", this.response);
+        }
+
+        if (this.status >= 200 && this.status < 300) {
+          if (instance.toResolve) {
+            instance.toResolve(pkt.ctrl);
+          }
+          if (onSuccess) {
+            onSuccess(pkt.ctrl);
+          }
+        } else if (this.status >= 400) {
+          if (instance.toReject) {
+            instance.toReject(new Error(pkt.ctrl.text + " (" + pkt.ctrl.code + ")"));
+          }
+          if (onFailure) {
+            onFailure(pkt.ctrl)
+          }
+        } else {
+          console.log("Upload: unknown status", this.status, pkt.ctrl);
+        }
+      };
+      this.xhr.send(form);
+
+      return result;
+    },
+
+    cancel: function() {
+      if (xhr) {
+        xhr.abort();
+      }
+    }
+
+  };
 
   // Export for the window object or node; Check that is not already defined.
   if (typeof(environment.Tinode) === 'undefined') {
