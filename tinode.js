@@ -3629,7 +3629,7 @@
             onFailure(pkt.ctrl)
           }
         } else {
-          console.log("Upload: unknown status", this.status, pkt.ctrl);
+          console.log("Upload: unknown status", this.status, this.response);
         }
       };
       this.xhr.send(form);
