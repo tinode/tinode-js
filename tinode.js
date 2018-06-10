@@ -1785,14 +1785,14 @@
         },
 
         /**
-         * Create a new FileUploader instance
+         * Create a new LargeFileHelper instance
          * @memberof Tinode#
          *
-         * @returns {Tinode.FileUploader} instance of a FileUploader.
+         * @returns {Tinode.LargeFileHelper} instance of a LargeFileHelper.
          */
-        getFileUploader: function() {
+        getLargeFileHelper: function() {
           var token = instance.getAuthToken();
-          return token ? new FileUploader(_apiKey, token.token) : null;
+          return token ? new LargeFileHelper(_apiKey, token.token) : null;
         },
 
         /**
@@ -3573,7 +3573,7 @@
   });
   TopicFnd.prototype.constructor = TopicFnd;
 
-  var FileUploader = function(apikey_, authtoken_) {
+  var LargeFileHelper = function(apikey_, authtoken_) {
     this._apiKey = apikey_;
     this._authToken = authtoken_;
     this.xhr = xdreq();
@@ -3581,12 +3581,17 @@
     this.toReject = null;
   }
 
-  FileUploader.prototype = {
+  LargeFileHelper.prototype = {
+
     /**
      * Start uploading the file.
      *
-     * @memberof Tinode.FileUploader#
-     * @returns {Promise} resilved/rejected when the upload is completed.
+     * @memberof Tinode.LargeFileHelper#
+     * @param {File} file to upload
+     * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
+     * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
+     * @param {Callbacl} onFailure callback. Called in case of a failure.
+     * @returns {Promise} resolved/rejected when the upload is completed/failed.
      */
     upload: function(file, onProgress, onSuccess, onFailure) {
       var form = new FormData();
@@ -3611,7 +3616,7 @@
         try {
           pkt = JSON.parse(this.response, jsonParseHelper);
         } catch(err) {
-          console.log("Invalid server response in FileUploader", this.response);
+          console.log("Invalid server response in LargeFileHelper", this.response);
         }
 
         if (this.status >= 200 && this.status < 300) {
@@ -3641,6 +3646,76 @@
         }
       };
       this.xhr.send(form);
+
+      return result;
+    },
+
+    /**
+     * Download the file from a given URL using POST request.
+     * POST is used to mask authentication token and apikey to make
+     * it a bit harder for the user to accidentally disclose them.
+     *
+     * @memberof Tinode.LargeFileHelper#
+     * @param {String} relativeUrl to download the file from. Must be relative url, i.e. must not contain the host.
+     * @param {String} filename to use for the downloaded file.
+     * @returns {Promise} resolved/rejected when the download is completed/failed.
+     */
+    download: function(relativeUrl, filename, mimetype, onProgress) {
+      if ((/^(?:(?:[a-z]+:)?\/\/)/i.test(relativeUrl))) {
+        // As a security measure refuse to download from an absolute URL.
+        console.log("The URL '" + relativeUrl + "' must be relative, not absolute");
+        return;
+      }
+      var instance = this;
+      // Get data as blob (stored by the browser as a temporary file).
+      this.xhr.open("GET", relativeUrl, true);
+      this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
+      this.xhr.setRequestHeader("Authorization", "Token " + this._authToken);
+      this.xhr.responseType = "blob";
+      this.xhr.onprogress = onProgress;
+      var result = new Promise(function(resolve, reject) {
+        instance.toResolve = resolve;
+        instance.toReject = reject;
+      });
+      // The blob needs to be saved as file. There is no known way to
+      // save the blob as file other than to fake a click on an <a href... download=...>.
+      this.xhr.onload = function() {
+        if (this.status == 200) {
+          var link = document.createElement("a");
+          link.href = window.URL.createObjectURL(new Blob([this.response], { type: mimetype }));
+          link.style.display = "none";
+          link.setAttribute("download", filename);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(link.href);
+          if (instance.toResolve) {
+            instance.toResolve();
+          }
+        } else if (this.status >= 400 && instance.toReject) {
+          // The this.responseText is undefined, must use this.response which is a blob.
+          // Need to convert this.response to JSON. The blob can only be accessed by the
+          // FileReader.
+          var reader = new FileReader();
+          reader.onload = function() {
+            try {
+              var pkt = JSON.parse(this.result, jsonParseHelper);
+              instance.toReject(new Error(pkt.ctrl.text + " (" + pkt.ctrl.code + ")"));
+            } catch(err) {
+              console.log("Invalid server response in LargeFileHelper", this.result);
+              instance.toReject(err);
+            }
+          };
+          reader.readAsText(this.response);
+        }
+      };
+      this.xhr.onabort = function() {
+        if (instance.toReject) {
+          instance.toReject(null);
+        }
+      };
+
+      this.xhr.send();
 
       return result;
     },
