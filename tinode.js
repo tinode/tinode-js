@@ -1544,14 +1544,15 @@
          * @param {Object} data - Payload to publish.
          * @param {boolean} noEcho - If <tt>true</tt>, tell the server not to echo the message to the original session.
          * @param {string} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
+         * @param {Array} attachments - array of strings containing URLs of files attached to the message.
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
-        publish: function(topic, data, noEcho, mimeType) {
+        publish: function(topic, data, noEcho, mimeType, attachments) {
           var pkt = initPacket("pub", topic);
           pkt.pub.noecho = noEcho;
           pkt.pub.content = data;
-          if (mimeType) {
-            pkt.pub.head = { mime: mimeType };
+          if (mimeType || Array.isArray(attachments)) {
+            pkt.pub.head = { mime: mimeType, attachments: attachments };
           }
           return sendWithPromise(pkt, pkt.pub.id);
         },
