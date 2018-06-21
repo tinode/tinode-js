@@ -242,6 +242,82 @@
     return jsonBuildHelper(key, val);
   };
 
+  // Parse browser user agent to extract browser name and version.
+  var getBrowserInfo = function(ua) {
+    // First test for WebKit based browser.
+    ua = ua.replace(' (KHTML, like Gecko)', '');
+    var m = ua.match(/(AppleWebKit\/[.\d]+)/i);
+    var result;
+    if (m) {
+      // List of common strings, from more useful to less useful.
+      var priority = ['chrome', 'safari', 'mobile', 'version'];
+      var tmp = ua.substr(m.index + m[0].length).split(" ");
+      var tokens = [];
+      // Split Name/0.0.0 into Name and version 0.0.0
+      for (var i=0;i<tmp.length;i++) {
+        var m2 = /([\w.]+)[\/]([\.\d]+)/.exec(tmp[i]);
+        if (m2) {
+          tokens.push([m2[1], m2[2], priority.findIndex(function(e) {
+            return (e == m2[1].toLowerCase());
+          })]);
+        }
+      }
+      // Sort by priority: more interesting is earlier than less interesting.
+      tokens.sort(function(a, b) {
+        var diff = a[2] - b[2];
+        return diff != 0 ? diff : b[0].length - a[0].length;
+      });
+      if (tokens.length > 0) {
+        // Return the least common browser string and version.
+        result = tokens[0][0] + "/" + tokens[0][1];
+      } else {
+        // Failed to ID the browser. Return the webkit version.
+        result = m[1];
+      }
+    // Test for MSIE.
+    } else if (/trident/i.test(ua)) {
+      m = /(?:\brv[ :]+([.\d]+))|(?:\bMSIE ([.\d]+))/g.exec(ua);
+      if (m) {
+        result = "MSIE/" + (m[1] || m[2]);
+      } else {
+        result =  "MSIE/?";
+      }
+    // Test for Firefox.
+    } else if (/firefox/i.test(ua)) {
+      m = /Firefox\/([.\d]+)/g.exec(ua);
+      if (m) {
+        result = "Firefox/" + m[1];
+      } else {
+        result = "Firefox/?";
+      }
+    // Older Opera.
+    } else if (/presto/i.test(ua)) {
+      m = /Opera\/([.\d]+)/g.exec(ua);
+      if (m) {
+        result = "Opera/" + m[1];
+      } else {
+        result = "Opera/?";
+      }
+    } else {
+      // Failed to parse anything meaningfull. Try the last resort.
+      m = /([\w.]+)\/([.\d]+)/.exec(ua);
+      if (m) {
+        result = m[1] + "/" + m[2];
+      } else {
+        m = ua.split(" ");
+        result = m[0];
+      }
+    }
+
+    // Shorten the version to one dot 'a.bb.ccc.d -> a.bb' at most.
+    m = result.split("/");
+    if (m.length > 1) {
+      var v = m[1].split(".");
+      result = m[0] + "/" + v[0] + (v[1] ? "." + v[1] : '');
+    }
+    return result;
+  }
+
   /**
    * In-memory sorted cache of objects.
    *
@@ -771,8 +847,10 @@
       // Client-provided application name, format <Name>/<version number>
       var _appName = "Undefined";
       var _platform = "undefined";
+      var _browser = '';
       if (typeof navigator != 'undefined') {
-        _platform = navigator.platform
+        _browser = getBrowserInfo(navigator.userAgent);
+        _platform = navigator.platform;
       }
       // Logging to console enabled
       var _loggingEnabled = false;
@@ -902,7 +980,7 @@
 
       // Get User Agent string
       function getUserAgent() {
-        return _appName + " (" + _platform + "); " + LIBRARY;
+        return _appName + " (" + (_browser ? _browser + "; " : "") + _platform + "); " + LIBRARY;
       }
 
       // Generator of packets stubs
@@ -2436,14 +2514,15 @@
      * @param {Object} data - Data to publish.
      * @param {boolean} noEcho - If <tt>true</tt> server will not echo message back to originating session.
      * @param {string} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
+     * @param {Array} attachments - URLs of files attached to the message.
      * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
      */
-    publish: function(data, noEcho, mimeType) {
+    publish: function(data, noEcho, mimeType, attachments) {
       if (!this._subscribed) {
         return Promise.reject(new Error("Cannot publish on inactive topic"));
       }
       // Send data
-      return Tinode.getInstance().publish(this.name, data, noEcho, mimeType);
+      return Tinode.getInstance().publish(this.name, data, noEcho, mimeType, attachments);
     },
 
     /**
