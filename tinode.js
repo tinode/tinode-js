@@ -385,7 +385,7 @@
        * argument, its elements are inserted individually.
        * @memberof Tinode.CBuffer#
        *
-       * @param {(Array|...Object)} - One or more objects to insert.
+       * @param {...Object|Array} - One or more objects to insert.
        */
       put: function() {
         var insert;
@@ -453,7 +453,7 @@
        * Apply given function `callback` to all elements of the buffer.
        * @memberof Tinode.CBuffer#
        *
-       * @param {ForEachCallbackType} callback - Function to call for each element.
+       * @param {Tinode.ForEachCallbackType} callback - Function to call for each element.
        * @param {Object} context - calling context (i.e. value of 'this' in callback)
        */
       forEach: function(callback, context) {
@@ -615,7 +615,8 @@
           });
         },
 
-        /** Terminate the network connection
+        /**
+         * Terminate the network connection
          * @memberof Tinode.Connection#
          */
         disconnect: function() {
@@ -1291,6 +1292,8 @@
          * Connect to the server.
          * @memberof Tinode#
          *
+         * @param {String} host_ - name of the host to connect to.
+         *
          * @return {Promise} Promise resolved/rejected when the connection call completes:
          * <tt>resolve()</tt> is called without parameters, <tt>reject()</tt> receives the <tt>Error</tt> as a single parameter.
          */
@@ -1311,7 +1314,8 @@
         /**
         * Check for live connection to server
         * @memberof Tinode#
-        * @returns {boolean} true if there is a live connection, false otherwise.
+        *
+        * @returns {Boolean} true if there is a live connection, false otherwise.
         */
         isConnected: function() {
           return _connection && _connection.isConnected();
@@ -1346,11 +1350,11 @@
           * Create or update an account.
           * @memberof Tinode#
           *
-          * @param {string} uid - User id to update
-          * @param {string} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
-          * @param {string} secret - Authentication secret, assumed to be already base64 encoded.
-          * @param {boolean} login - Use new account to authenticate current session
-          * @param {Tinode.AccountCreationParams} params - User data to pass to the server.
+          * @param {String} uid - User id to update
+          * @param {String} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
+          * @param {String} secret - Authentication secret, assumed to be already base64 encoded.
+          * @param {Boolean=} login - Use new account to authenticate current session
+          * @param {Tinode.AccountCreationParams=} params - User data to pass to the server.
           */
          account: function(uid, scheme, secret, login, params) {
            var pkt = initPacket("acc");
@@ -1373,13 +1377,15 @@
          },
 
         /**
-         * Create a new user.
+         * Create a new user. Wrapper for {@link Tinode#account}.
          * @memberof Tinode#
          *
-         * @param {string} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
-         * @param {string} secret - Authentication.
-         * @param {boolean} login - Use new account to authenticate current session
-         * @param {Tinode.AccountCreationParams} params - User data to pass to the server.
+         * @param {String} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
+         * @param {String} secret - Authentication.
+         * @param {Boolean=} login - Use new account to authenticate current session
+         * @param {Tinode.AccountCreationParams=} params - User data to pass to the server.
+         *
+         * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
          */
         createAccount: function(scheme, secret, login, params) {
           var promise = instance.account(USER_NEW, scheme, secret, login, params);
@@ -1394,9 +1400,14 @@
 
         /**
          * Create user with 'basic' authentication scheme and immediately
-         * use it for authentication.
-         *
+         * use it for authentication. Wrapper for {@link Tinode#account}.
          * @memberof Tinode#
+         *
+         * @param {string} username - Login to use for the new account.
+         * @param {string} password - User's password.
+         * @param {Tinode.AccountCreationParams=} params - User data to pass to the server.
+         *
+         * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
          */
         createAccountBasic: function(username, password, params) {
           // Make sure we are not using 'null' or 'undefined';
@@ -1407,9 +1418,14 @@
         },
 
         /**
-         * Update user's credentials for 'basic' authentication scheme.
-         *
+         * Update user's credentials for 'basic' authentication scheme. Wrapper for {@link Tinode#account}.
          * @memberof Tinode#
+         *
+         * @param {string} uid - User ID to update.
+         * @param {string} username - Login to use for the new account.
+         * @param {string} password - User's password.
+         *
+         * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
          */
         updateAccountBasic: function(uid, username, password) {
           // Make sure we are not using 'null' or 'undefined';
@@ -1420,7 +1436,15 @@
         },
 
         /**
-         * Add account credential to the object.
+         * Helper method to add account credential to an object.
+         * @memberof Tinode#
+         *
+         * @param {Object} obj - Object to modify
+         * @param {String|Object} method - validation method or object with validation data.
+         * @param {Object} params - validation parameters
+         * @param {Strong=} response - validation response
+         *
+         * @returns {Object} Modified object
          */
         addCredential: function(obj, method, value, params, response) {
           if (typeof method == 'object') {
@@ -1478,8 +1502,9 @@
          * Authenticate current session.
          * @memberof Tinode#
          *
-         * @param {string} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
-         * @param {string} secret - Authentication secret, assumed to be already base64 encoded.
+         * @param {String} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
+         * @param {String} secret - Authentication secret, assumed to be already base64 encoded.
+         *
          * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
          */
         login: function(scheme, secret, cred) {
@@ -1499,8 +1524,8 @@
          * Wrapper for {@link Tinode#login} with basic authentication
          * @memberof Tinode#
          *
-         * @param {string} uname - User name.
-         * @param {string} password  - Password.
+         * @param {String} uname - User name.
+         * @param {String} password  - Password.
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         loginBasic: function(uname, password, cred) {
@@ -1515,13 +1540,26 @@
          * Wrapper for {@link Tinode#login} with token authentication
          * @memberof Tinode#
          *
-         * @param {string} token - Token received in response to earlier login.
+         * @param {String} token - Token received in response to earlier login.
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         loginToken: function(token, cred) {
           return instance.login("token", token, cred);
         },
 
+        /**
+         * @typedef AuthToken
+         * @memberof Tinode
+         * @type Object
+         * @property {String} token - Token value.
+         * @property {Date} expires - Token expiration time.
+         */
+        /**
+         * Get stored authentication token.
+         * @memberof Tinode#
+         *
+         * @returns {Tinode.AuthToken} authentication token.
+         */
         getAuthToken: function() {
           if (_authToken && (_authToken.expires.getTime() > Date.now())) {
             return _authToken;
@@ -1531,7 +1569,12 @@
           return null;
         },
 
-        // Application may provide a saved authentication token.
+        /**
+         * Application may provide a saved authentication token.
+         * @memberof Tinode#
+         *
+         * @param {Tinode.AuthToken} token - authentication token.
+         */
         setAuthToken: function(token) {
           _authToken = token;
         },
@@ -1552,8 +1595,8 @@
         /**
          * @typedef SetSub
          * @memberof Tinode
-         * @property {string=} user - UID of the user affected by the request. Default (empty) - current user.
-         * @property {string=} mode - User access mode, either requested or assigned dependent on context.
+         * @property {String=} user - UID of the user affected by the request. Default (empty) - current user.
+         * @property {String=} mode - User access mode, either requested or assigned dependent on context.
          * @property {Object=} info - Free-form payload to pass to the invited user or topic manager.
          */
         /**
@@ -1568,9 +1611,10 @@
          * Send a topic subscription request.
          * @memberof Tinode#
          *
-         * @param {string} topic - Name of the topic to subscribe to.
+         * @param {String} topic - Name of the topic to subscribe to.
          * @param {Tinode.GetQuery=} getParams - Optional subscription metadata query
          * @param {Tinode.SetParams=} setParams - Optional initialization parameters
+         *
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         subscribe: function(topicName, getParams, setParams) {
@@ -1603,8 +1647,9 @@
          * Detach and optionally unsubscribe from the topic
          * @memberof Tinode#
          *
-         * @param {string} topic - Topic to detach from.
-         * @param {boolean} unsub - If <tt>true</tt>, detach and unsubscribe, otherwise just detach.
+         * @param {String} topic - Topic to detach from.
+         * @param {Boolean} unsub - If <tt>true</tt>, detach and unsubscribe, otherwise just detach.
+         *
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         leave: function(topic, unsub) {
@@ -1618,11 +1663,12 @@
          * Publish {data} message to topic.
          * @memberof Tinode#
          *
-         * @param {string} topic - Name of the topic to publish to.
+         * @param {String} topic - Name of the topic to publish to.
          * @param {Object} data - Payload to publish.
-         * @param {boolean} noEcho - If <tt>true</tt>, tell the server not to echo the message to the original session.
-         * @param {string} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
-         * @param {Array} attachments - array of strings containing URLs of files attached to the message.
+         * @param {Boolean=} noEcho - If <tt>true</tt>, tell the server not to echo the message to the original session.
+         * @param {String=} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
+         * @param {Array=} attachments - array of strings containing URLs of files attached to the message.
+         *
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         publish: function(topic, data, noEcho, mimeType, attachments) {
@@ -1639,34 +1685,35 @@
          * @typedef GetQuery
          * @type Object
          * @memberof Tinode
-         * @property {Tinode.GetOptsType} desc - If provided (even if empty), fetch topic description.
-         * @property {Tinode.GetOptsType} sub - If provided (even if empty), fetch topic subscriptions.
-         * @property {Tinode.GetDataType} data - If provided (even if empty), get messages.
+         * @property {Tinode.GetOptsType=} desc - If provided (even if empty), fetch topic description.
+         * @property {Tinode.GetOptsType=} sub - If provided (even if empty), fetch topic subscriptions.
+         * @property {Tinode.GetDataType=} data - If provided (even if empty), get messages.
          */
 
         /**
          * @typedef GetOptsType
          * @type Object
          * @memberof Tinode
-         * @property {Date} ims - "If modified since", fetch data only it was was modified since stated date.
-         * @property {number} limit - Maximum number of results to return. Ignored when querying topic description.
+         * @property {Date=} ims - "If modified since", fetch data only it was was modified since stated date.
+         * @property {Number=} limit - Maximum number of results to return. Ignored when querying topic description.
          */
 
          /**
           * @typedef GetDataType
           * @type Object
           * @memberof Tinode
-          * @property {number} since - Load messages with seq id equal or greater than this value.
-          * @property {number} before - Load messages with seq id lower than this number.
-          * @property {number} limit - Maximum number of results to return.
+          * @property {Number=} since - Load messages with seq id equal or greater than this value.
+          * @property {Number=} before - Load messages with seq id lower than this number.
+          * @property {Number=} limit - Maximum number of results to return.
           */
 
         /**
          * Request topic metadata
          * @memberof Tinode#
          *
-         * @param {string} topic - Name of the topic to query.
+         * @param {String} topic - Name of the topic to query.
          * @param {Tinode.GetQuery} params - Parameters of the query. Use {Tinode.MetaGetBuilder} to generate.
+         *
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         getMeta: function(topic, params) {
@@ -1681,8 +1728,8 @@
          * Update topic's metadata: description, subscribtions.
          * @memberof Tinode#
          *
-         * @param {string} topic - Topic to update.
-         * @param {Tinode.SetParams=} params - topic metadata to update.
+         * @param {String} topic - Topic to update.
+         * @param {Tinode.SetParams} params - topic metadata to update.
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         setMeta: function(topic, params) {
@@ -1706,12 +1753,22 @@
         },
 
         /**
+         * Range of message IDs to delete.
+         *
+         * @typedef DelRange
+         * @type Object
+         * @memberof Tinode
+         * @property {Number} low - low end of the range, inclusive (closed).
+         * @property {Number=} hi - high end of the range, exclusive (open).
+         */
+        /**
          * Delete some or all messages in a topic.
          * @memberof Tinode#
          *
-         * @param {string} topic - Topic name to delete messages from.
-         * @param {Array} list - Ranges of message IDs to delete.
-         * @param {boolean} hard - Hard or soft delete
+         * @param {String} topic - Topic name to delete messages from.
+         * @param {Tinode.DelRange[]} list - Ranges of message IDs to delete.
+         * @param {Boolean=} hard - Hard or soft delete
+         *
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         delMessages: function(topic, ranges, hard) {
@@ -1728,7 +1785,7 @@
          * Delete the topic alltogether. Requires Owner permission.
          * @memberof Tinode#
          *
-         * @param {string} topic - Name of the topic to delete
+         * @param {String} topic - Name of the topic to delete
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         delTopic: function(topic) {
@@ -1745,8 +1802,8 @@
          * Delete subscription. Requires Share permission.
          * @memberof Tinode#
          *
-         * @param {string} topic - Name of the topic to delete
-         * @param {string} user - User ID to remove.
+         * @param {String} topic - Name of the topic to delete
+         * @param {String} user - User ID to remove.
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         delSubscription: function(topic, user) {
@@ -1758,12 +1815,12 @@
         },
 
         /**
-         * Notify server that a message or messages were a read or received.
+         * Notify server that a message or messages were read or received. Does NOT return promise.
          * @memberof Tinode#
          *
-         * @param {string} topic - Name of the topic where the mesage is being aknowledged.
-         * @param {string} what - Action being aknowledged, either "read" or "recv".
-         * @param {number} seq - Maximum id of the message being acknowledged.
+         * @param {String} topic - Name of the topic where the mesage is being aknowledged.
+         * @param {String} what - Action being aknowledged, either "read" or "recv".
+         * @param {Number} seq - Maximum id of the message being acknowledged.
          */
         note: function(topic, what, seq) {
           if (seq <= 0) {
@@ -1781,7 +1838,7 @@
          * typing notifications "user X is typing...".
          * @memberof Tinode#
          *
-         * @param {string} topic - Name of the topic to broadcast to.
+         * @param {String} topic - Name of the topic to broadcast to.
          */
         noteKeyPress: function(topic) {
           var pkt = initPacket("note", topic);
@@ -1794,7 +1851,7 @@
          * There is a single instance of topic for each name.
          * @memberof Tinode#
          *
-         * @param {string} topic - Name of the topic to get.
+         * @param {String} topic - Name of the topic to get.
          * @returns {Tinode.Topic} Requested or newly created topic or <tt>undefined</tt> if topic name is invalid.
          */
         getTopic: function(name) {
@@ -1937,16 +1994,25 @@
           return types[tp];
         },
 
+        /**
+         * Check if given topic is online.
+         * @memberof Tinode#
+         *
+         * @param {String} name - Name of the topic to test.
+         * @returns {Boolean} true if topic is online, false otherwise.
+         */
         isTopicOnline: function(name) {
           var me = instance.getTopic(TOPIC_ME);
           var cont = me && me.getContact(name);
           return cont && cont.online;
         },
+
         /**
-         * Request server to aknowledge messages. Required for promises to function. Default "on".
+         * Include message ID into all subsequest messages to server instructin it to send aknowledgemens.
+         * Required for promises to function. Default is "on".
          * @memberof Tinode#
          *
-         * @param {boolean} status - Turn aknowledgemens on or off.
+         * @param {Boolean} status - Turn aknowledgemens on or off.
          * @deprecated
          */
         wantAkn: function(status) {
@@ -2054,18 +2120,29 @@
     };
   })();
 
+  /**
+   * Helper class for constructing {@link Tinode.GetQuery}.
+   *
+   * @class MetaGetBuilder
+   * @memberof Tinode
+   *
+   * @param {Tinode.Topic} parent topic which instantiated this builder.
+   */
   var MetaGetBuilder = function(parent) {
     this.topic = parent;
     this.what = {};
   }
 
   MetaGetBuilder.prototype = {
+
     /**
-     * Add query parameters to fetch messages within explicit limits. Any/all parameters can be null.
+     * Add query parameters to fetch messages within explicit limits.
+     * @memberof Tinode.MetaGetBuilder#
      *
-     * @param {integer} since messages newer than this (inclusive);
-     * @param {integer} before older than this (exclusive)
-     * @param {integer} limit number of messages to fetch
+     * @param {Number=} since messages newer than this (inclusive);
+     * @param {Number=} before older than this (exclusive)
+     * @param {Number=} limit number of messages to fetch
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
      */
     withData: function(since, before, limit) {
       this.what["data"] = {since: since, before: before, limit: limit};
@@ -2074,8 +2151,11 @@
 
     /**
      * Add query parameters to fetch messages newer than the latest saved message.
+     * @memberof Tinode.MetaGetBuilder#
      *
-     * @param {integer} limit number of messages to fetch
+     * @param {Number=} limit number of messages to fetch
+     *
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
      */
     withLaterData: function(limit) {
       return this.withData(this.topic._maxSeq > 0 ? this.topic._maxSeq + 1 : undefined, undefined, limit);
@@ -2083,22 +2163,49 @@
 
     /**
      * Add query parameters to fetch messages older than the earliest saved message.
+     * @memberof Tinode.MetaGetBuilder#
      *
-     * @param {integer} limit number of messages to fetch
+     * @param {Number=} limit maximum number of messages to fetch.
+     *
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
      */
     withEarlierData: function(limit) {
       return this.withData(undefined, this.topic._minSeq > 0 ? this.topic._minSeq : undefined, limit);
     },
 
+    /**
+     * Add query parameters to fetch topic description if it's newer than the given timestamp.
+     * @memberof Tinode.MetaGetBuilder#
+     *
+     * @param {Date=} ims fetch messages newer than this timestamp.
+     *
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
+     */
     withDesc: function(ims) {
       this.what["desc"] = {ims: ims};
       return this;
     },
 
+    /**
+     * Add query parameters to fetch topic description if it's newer than the last update.
+     * @memberof Tinode.MetaGetBuilder#
+     *
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
+     */
     withLaterDesc: function() {
       return this.withDesc(this.topic._lastDescUpdate);
     },
 
+    /**
+     * Add query parameters to fetch subscriptions.
+     * @memberof Tinode.MetaGetBuilder#
+     *
+     * @param {Date=} ims fetch subscriptions modified more recently than this timestamp
+     * @param {Number=} limit maximum number of subscriptions to fetch.
+     * @param {String=} userOrTopic user ID or topic name to fetch for fetching one subscription.
+     *
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
+     */
     withSub: function(ims, limit, userOrTopic) {
       var opts = {ims: ims, limit: limit};
       if (this.topic.getType() == 'me') {
@@ -2110,18 +2217,49 @@
       return this;
     },
 
+    /**
+     * Add query parameters to fetch a single subscription.
+     * @memberof Tinode.MetaGetBuilder#
+     *
+     * @param {Date=} ims fetch subscriptions modified more recently than this timestamp
+     * @param {String=} userOrTopic user ID or topic name to fetch for fetching one subscription.
+     *
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
+     */
     withOneSub: function(ims, userOrTopic) {
       return this.withSub(ims, undefined, userOrTopic);
     },
 
+    /**
+     * Add query parameters to fetch a single subscription if it's been updated since the last update.
+     * @memberof Tinode.MetaGetBuilder#
+     *
+     * @param {String=} userOrTopic user ID or topic name to fetch for fetching one subscription.
+     *
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
+     */
     withLaterOneSub: function(userOrTopic) {
       return this.withOneSub(this.topic._lastSubsUpdate, userOrTopic);
     },
 
+    /**
+     * Add query parameters to fetch subscriptions updated since the last update.
+     * @memberof Tinode.MetaGetBuilder#
+     *
+     * @param {Number=} limit maximum number of subscriptions to fetch.
+     *
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
+     */
     withLaterSub: function(limit) {
       return this.withSub(this.topic._lastSubsUpdate, limit);
     },
 
+    /**
+     * Add query parameters to fetch topic tags.
+     * @memberof Tinode.MetaGetBuilder#
+     *
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
+     */
     withTags: function() {
       this.what["tags"] = true;
       return this;
@@ -2129,9 +2267,12 @@
 
     /**
      * Add query parameters to fetch deleted messages within explicit limits. Any/all parameters can be null.
+     * @memberof Tinode.MetaGetBuilder#
      *
-     * @param {integer} since ids of messages deleted since this 'del' id (inclusive)
-     * @param {integer} limit number of deleted message ids to fetch
+     * @param {Number=} since ids of messages deleted since this 'del' id (inclusive)
+     * @param {Number=} limit number of deleted message ids to fetch
+     *
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
      */
     withDel: function(since, limit) {
       if (since || limit) {
@@ -2142,8 +2283,11 @@
 
     /**
      * Add query parameters to fetch messages deleted after the saved 'del' id.
+     * @memberof Tinode.MetaGetBuilder#
      *
-     * @param {integer} limit number of deleted message ids to fetch
+     * @param {Number=} limit number of deleted message ids to fetch
+     *
+     * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
      */
     withLaterDel: function(limit) {
       // Specify 'since' only if we have already received some messages. If
@@ -2151,6 +2295,12 @@
       return this.withDel(this.topic._maxSeq > 0 ? this.topic._maxDel + 1 : undefined, limit);
     },
 
+    /**
+     * Construct parameters
+     * @memberof Tinode.MetaGetBuilder#
+     *
+     * @returns {Tinode.GetQuery} Get query
+     */
     build: function() {
       var params = {};
       var what = [];
@@ -2172,6 +2322,14 @@
     }
   };
 
+  /**
+   * Helper class for handling access mode.
+   *
+   * @class AccessMode
+   * @memberof Tinode
+   *
+   * @param {AccessMode|Object=} acs AccessMode to copy or access mode object received from the server.
+   */
   var AccessMode = function(acs) {
     if (acs) {
       this.given = typeof acs.given == 'number' ? acs.given : AccessMode.decode(acs.given);
@@ -2197,7 +2355,6 @@
 
   /**
   * Parse string into an access mode value.
-  *
   * @memberof Tinode.AccessMode
   * @static
   *
@@ -2365,7 +2522,7 @@
    * @memberof Tinode
    *
    * @param {string} name - Name of the topic to create.
-   * @param {Object} callbacks - Object with various event callbacks.
+   * @param {Object=} callbacks - Object with various event callbacks.
    * @param {Tinode.Topic.onData} callbacks.onData - Callback which receives a {data} message.
    * @param {callback} callbacks.onMeta - Callback which receives a {meta} message.
    * @param {callback} callbacks.onPres - Callback which receives a {pres} message.
@@ -2438,7 +2595,7 @@
     /**
      * Check if the topic is subscribed.
      * @memberof Tinode.Topic#
-     * @returns {boolean} True is topic is subscribed, false otherwise.
+     * @returns {boolean} True is topic is attached/subscribed, false otherwise.
      */
     isSubscribed: function() {
       return this._subscribed;
@@ -2448,7 +2605,8 @@
      * Request topic to subscribe. Wrapper for {@link Tinode#subscribe}.
      * @memberof Tinode.Topic#
      *
-     * @param {Tinode.Topic.Subscription} getParams - Subscription parameters.
+     * @param {Tinode.GetQuery=} getParams - get query parameters.
+     * @param {Tinode.SetParams=} setParams - set parameters.
      * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
      */
     subscribe: function(getParams, setParams) {
@@ -2512,9 +2670,9 @@
      * @memberof Tinode.Topic#
      *
      * @param {Object} data - Data to publish.
-     * @param {boolean} noEcho - If <tt>true</tt> server will not echo message back to originating session.
-     * @param {string} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
-     * @param {Array} attachments - URLs of files attached to the message.
+     * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating session.
+     * @param {String=} mimeType - Mime-type of the data. Default is 'text/plain'.
+     * @param {Array=} attachments - URLs of files attached to the message.
      * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
      */
     publish: function(data, noEcho, mimeType, attachments) {
@@ -2531,7 +2689,7 @@
      * Wrapper for {@link Tinode#leave}.
      * @memberof Tinode.Topic#
      *
-     * @param {boolean} unsub - If true, unsubscribe, otherwise just leave.
+     * @param {Boolean=} unsub - If true, unsubscribe, otherwise just leave.
      * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
      */
     leave: function(unsub) {
@@ -2596,7 +2754,7 @@
      * Update topic metadata.
      * @memberof Tinode.Topic#
      *
-     * @param {Object} params parameters to update
+     * @param {Tinode.SetParams} params parameters to update.
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     setMeta: function(params) {
@@ -2655,8 +2813,8 @@
      * Create new topic subscription.
      * @memberof Tinode.Topic#
      *
-     * @param {string} uid - id of the user to invite
-     * @param {string} mode - access mode (could be null - default)
+     * @param {String} uid - ID of the user to invite
+     * @param {String=} mode - Access mode. <tt>null</tt> means to use default.
      *
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
@@ -2668,8 +2826,8 @@
      * Delete messages. Hard-deleting messages requires Owner permission. Wrapper for {@link Tinode#delMessages}.
      * @memberof Tinode.Topic#
      *
-     * @param {Array} ranges - Ranges of message IDs to delete.
-     * @param {boolean} hard - Hard or soft delete
+     * @param {Tinode.DelRange[]} ranges - Ranges of message IDs to delete.
+     * @param {Boolean=} hard - Hard or soft delete
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     delMessages: function(ranges, hard) {
@@ -2682,10 +2840,10 @@
 
     /**
      * Delete all messages. Hard-deleting messages requires Owner permission.
-     *
      * @memberof Tinode.Topic#
      *
      * @param {boolean} hardDel - true if messages should be hard-deleted.
+     *
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     delMessagesAll: function(hardDel) {
@@ -2706,12 +2864,12 @@
     },
 
     /**
-     * Delete all messages. Hard-deleting messages requires Owner permission.
-     *
+     * Delete all messages. Hard-deleting messages requires Owner permission. Wrapper for {@link Tinode#delMessages}.
      * @memberof Tinode.Topic#
      *
-     * @param {array} list - list of seq IDs to delete
-     * @param {boolean} hardDel - true if messages should be hard-deleted.
+     * @param {Tinode.DelRange[]} list - list of seq IDs to delete
+     * @param {Boolean=} hardDel - true if messages should be hard-deleted.
+     *
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     delMessagesList: function(list, hardDel) {
@@ -2781,7 +2939,13 @@
       });
     },
 
-    // Send a read/recv notification
+    /**
+     * Send a read/recv notification
+     * @memberof Tinode.Topic#
+     *
+     * @param {String} what - what notification to send: <tt>recv</tt>, <tt>read</tt>.
+     * @param {Number} seq - ID or the message read or received.
+     */
     note: function(what, seq) {
       var tinode = Tinode.getInstance();
       var user = this._users[tinode.getCurrentUserID()];
@@ -2810,7 +2974,7 @@
      * Send a 'recv' receipt. Wrapper for {@link Tinode#noteRecv}.
      * @memberof Tinode.Topic#
      *
-     * @param {number} seq - ID of the message to aknowledge.
+     * @param {Number} seq - ID of the message to aknowledge.
      */
     noteRecv: function(seq) {
       this.note("recv", seq);
@@ -2820,7 +2984,7 @@
      * Send a 'read' receipt. Wrapper for {@link Tinode#noteRead}.
      * @memberof Tinode.Topic#
      *
-     * @param {number} seq - ID of the message to aknowledge.
+     * @param {Number} seq - ID of the message to aknowledge.
      */
     noteRead: function(seq) {
       this.note("read", seq);
@@ -2838,7 +3002,12 @@
       }
     },
 
-    // Get user description
+    /**
+     * Get user description from cache.
+     * @memberof Tinode.Topic#
+     *
+     * @param {String} uid - ID of the user to fetch.
+     */
     userDesc: function(uid) {
       // TODO(gene): handle asynchronous requests
 
@@ -2853,8 +3022,8 @@
      * Iterate over cached subscribers. If callback is undefined, use this.onMetaSub.
      * @memberof Tinode.Topic#
      *
-     * @param {function} callback - Callback which will receive subscribers one by one.
-     * @param {Object} context - Value of `this` inside the `callback`.
+     * @param {Function} callback - Callback which will receive subscribers one by one.
+     * @param {Object=} context - Value of `this` inside the `callback`.
      */
     subscribers: function(callback, context) {
       var cb = (callback || this.onMetaSub);
@@ -2865,16 +3034,20 @@
       }
     },
 
+    /**
+     * Get a copy of cached tags.
+     * @memberof Tinode.Topic#
+     */
     tags: function() {
       // Return a copy.
       return this._tags.slice(0);
     },
 
     /**
-     * Get subscription for the given user ID
+     * Get cached subscription for the given user ID.
      * @memberof Tinode.Topic#
      *
-     * @param {string} uid - id of the user to query for
+     * @param {String} uid - id of the user to query for
      */
     subscriber: function(uid) {
       return this._users[uid];
@@ -2894,8 +3067,13 @@
       }
     },
 
-    /** Get the number of topic subscribers who marked this message as either recv or read
+    /**
+     * Get the number of topic subscribers who marked this message as either recv or read
      * Current user is excluded from the count.
+     * @memberof Tinode.Topic#
+     *
+     * @param {String} what - what notification to send: <tt>recv</tt>, <tt>read</tt>.
+     * @param {Number} seq - ID or the message read or received.
      */
     msgReceiptCount: function(what, seq) {
       var count = 0;
@@ -2916,8 +3094,8 @@
      * The current user is excluded from the count.
      * @memberof Tinode.Topic#
      *
-     * @param {number} seq - Message id to check.
-     * @returns {number} Number of subscribers who claim to have received the message.
+     * @param {Number} seq - Message id to check.
+     * @returns {Number} Number of subscribers who claim to have received the message.
      */
     msgReadCount: function(seq) {
       return this.msgReceiptCount("read", seq);
@@ -2936,7 +3114,9 @@
     },
 
     /**
-     * Check if more messages are available at the server
+     * Check if cached message IDs indicate that the server may have more messages.
+     * @memberof Tinode.Topic#
+     *
      * @param {boolean} newer check for newer messages
      */
     msgHasMoreMessages: function(newer) {
@@ -2947,6 +3127,8 @@
 
     /**
      * Check if the given seq Id is id of the most recent message.
+     * @memberof Tinode.Topic#
+     *
      * @param {integer} seqId id of the message to check
      */
     isNewMessage: function(seqId) {
@@ -2954,7 +3136,9 @@
     },
 
     /**
-     * Remove message from local cache
+     * Remove message from local cache.
+     * @memberof Tinode.Topic#
+     *
      * @param {integer} seqId id of the message to remove from cache.
      */
     flushMessage: function(seqId) {
@@ -2966,7 +3150,7 @@
      * Get type of the topic: me, p2p, grp, fnd...
      * @memberof Tinode.Topic#
      *
-     * @returns {string} One of 'me', 'p2p', 'grp', 'fnd' or <tt>undefined</tt>.
+     * @returns {String} One of 'me', 'p2p', 'grp', 'fnd' or <tt>undefined</tt>.
      */
     getType: function() {
       return Tinode.getInstance().getTopicType(this.name);
@@ -3259,7 +3443,7 @@
      * Get topic's default access mode.
      * @memberof Tinode.Topic#
      *
-     * @returns {Object} - access mode, such as {auth: `RWP`, anon: `N`}.
+     * @returns {Tinode.DefAcs} - access mode, such as {auth: `RWP`, anon: `N`}.
      */
     getDefaultAccess: function() {
         return this.defacs;
@@ -3267,10 +3451,10 @@
 
 
     /**
-     * Initialize new meta Get query. The query is attched to the current topic.
+     * Initialize new meta {@link Tinode.GetQuery} builder. The query is attched to the current topic.
      * It will not work correctly if used with a different topic.
      *
-     * @returns {MetaGetBuilder} query attached to the current topic.
+     * @returns {Tinode.MetaGetBuilder} query attached to the current topic.
      */
     startMetaQuery: function() {
       return new MetaGetBuilder(this);
@@ -3278,7 +3462,7 @@
   };
 
   /**
-   * @class TopicMe - special case of {@link Tinode.Topic} for receiving and confirming invitations,
+   * @class TopicMe - special case of {@link Tinode.Topic} for
    * managing data of the current user, including contact list.
    * @extends Tinode.Topic
    * @memberof Tinode
@@ -3452,8 +3636,8 @@
      * Iterate over cached contacts. If callback is undefined, use {@link this.onMetaSub}.
      * @function
      * @memberof Tinode.TopicMe#
-     * @param {TopicMe.ContactCallback} callback - Callback to call for each contact.
-     * @param {Object} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
+     * @param {TopicMe.ContactCallback=} callback - Callback to call for each contact.
+     * @param {Object=} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
      */
     contacts: {
       value: function(callback, context) {
@@ -3474,9 +3658,10 @@
      * @function
      * @memberof Tinode.TopicMe#
      *
-     * @param {string} contactName - UID of contact to update.
-     * @param {string} what - Whach count to update, one of <tt>"read", "recv", "msg"</tt>
-     * @param {number} seq - New value of the count.
+     * @param {String} contactName - UID of contact to update.
+     * @param {String} what - Whach count to update, one of <tt>"read", "recv", "msg"</tt>
+     * @param {Number} seq - New value of the count.
+     * @param {Date} ts - Timestamp of the update.
      */
     setMsgReadRecv: {
       value: function(contactName, what, seq, ts) {
@@ -3528,10 +3713,10 @@
     },
 
     /**
-     * Get access mode of a given contact.
+     * Get access mode of a given contact from cache.
      * @memberof Tinode.TopicMe#
      *
-     * @param {string} name - Name of the contact to get access mode for, aither a UID (for p2p topics) or a topic name.
+     * @param {String} name - Name of the contact to get access mode for, aither a UID (for p2p topics) or a topic name.
      * @returns {string} - access mode, such as `RWP`.
      */
     getAccessMode: {
@@ -3656,8 +3841,8 @@
   /**
    * @class LargeFileHelper - collection of utilities for uploading and downloading files
    * out of band. Don't instantiate this class directly. Use {Tinode.getLargeFileHelper} instead.
-   *
    * @memberof Tinode
+   *
    * @param {string} apikey_ - application's API key.
    * @param {string} authtoken_ - previously obtained authentication token.
    */
@@ -3679,7 +3864,8 @@
      * @param {File} file to upload
      * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
      * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
-     * @param {Callbacl} onFailure callback. Called in case of a failure.
+     * @param {Callback} onFailure callback. Called in case of a failure.
+     *
      * @returns {Promise} resolved/rejected when the upload is completed/failed.
      */
     upload: function(file, onProgress, onSuccess, onFailure) {
@@ -3744,8 +3930,9 @@
      *
      * @memberof Tinode.LargeFileHelper#
      *
-     * @param {String} relativeUrl to download the file from. Must be relative url, i.e. must not contain the host.
-     * @param {String} filename to use for the downloaded file.
+     * @param {String} relativeUrl - URL to download the file from. Must be relative url, i.e. must not contain the host.
+     * @param {String=} filename - file name to use for the downloaded file.
+     *
      * @returns {Promise} resolved/rejected when the download is completed/failed.
      */
     download: function(relativeUrl, filename, mimetype, onProgress) {
@@ -3807,9 +3994,9 @@
 
       return result;
     },
+    
     /**
      * Try to cancel an ongoing upload or download.
-     * 
      * @memberof Tinode.LargeFileHelper#
      */
     cancel: function() {
