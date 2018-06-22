@@ -3653,6 +3653,14 @@
   });
   TopicFnd.prototype.constructor = TopicFnd;
 
+  /**
+   * @class LargeFileHelper - collection of utilities for uploading and downloading files
+   * out of band. Don't instantiate this class directly. Use {Tinode.getLargeFileHelper} instead.
+   *
+   * @memberof Tinode
+   * @param {string} apikey_ - application's API key.
+   * @param {string} authtoken_ - previously obtained authentication token.
+   */
   var LargeFileHelper = function(apikey_, authtoken_) {
     this._apiKey = apikey_;
     this._authToken = authtoken_;
@@ -3667,6 +3675,7 @@
      * Start uploading the file.
      *
      * @memberof Tinode.LargeFileHelper#
+     *
      * @param {File} file to upload
      * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
      * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
@@ -3731,11 +3740,10 @@
     },
 
     /**
-     * Download the file from a given URL using POST request.
-     * POST is used to mask authentication token and apikey to make
-     * it a bit harder for the user to accidentally disclose them.
+     * Download the file from a given URL using GET request. This method works with the Tinode server only.
      *
      * @memberof Tinode.LargeFileHelper#
+     *
      * @param {String} relativeUrl to download the file from. Must be relative url, i.e. must not contain the host.
      * @param {String} filename to use for the downloaded file.
      * @returns {Promise} resolved/rejected when the download is completed/failed.
@@ -3799,7 +3807,11 @@
 
       return result;
     },
-
+    /**
+     * Try to cancel an ongoing upload or download.
+     * 
+     * @memberof Tinode.LargeFileHelper#
+     */
     cancel: function() {
       if (this.xhr) {
         this.xhr.abort();
