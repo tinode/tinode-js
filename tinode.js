@@ -3429,7 +3429,7 @@
       } else {
         // Cached object is not found. Issue a request for public/private.
         if (requestUpdate) {
-          this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
+          this.getMeta(this.startMetaQuery().withLaterOneSub(uid).build());
         }
         cached = mergeObj({}, obj);
       }
@@ -3706,6 +3706,28 @@
     getContact: {
       value: function(name) {
         return this._contacts[name];
+      },
+      enumerable: true,
+      configurable: true,
+      writable: true
+    },
+
+    /**
+     * Get the number of unread messages of a given contact.
+     * @memberof Tinode.TopicMe#
+     * @param {string} name - Name of the contact to get unread count for, either a UID (for p2p topics) or a topic name.
+     *
+     * @returns {number} - count of unread messages.
+     */
+    unreadCount: {
+      value: function(name) {
+        var c = this._contacts[name];
+        if (c) {
+          c.seq = ~~c.seq;
+          c.read = ~~c.read;
+          return c.seq - c.read;
+        }
+        return 0;
       },
       enumerable: true,
       configurable: true,
@@ -3994,7 +4016,7 @@
 
       return result;
     },
-    
+
     /**
      * Try to cancel an ongoing upload or download.
      * @memberof Tinode.LargeFileHelper#
