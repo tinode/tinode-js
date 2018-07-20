@@ -3168,10 +3168,14 @@
 
     // Process data message
     _routeData: function(data) {
-      if (!this.touched || this.touched < data.ts) {
-        this.touched = data.ts;
+      // Maybe this is an empty message to indicate there are no actual messages.
+      if (data.content) {
+        if (!this.touched || this.touched < data.ts) {
+          this.touched = data.ts;
+        }
+
+        this._messages.put(data);
       }
-      this._messages.put(data);
 
       if (data.seq > this._maxSeq) {
         this._maxSeq = data.seq;
