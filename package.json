@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Javascript bindings for Tinode",
-  "version": "0.15.2",
+  "version": "0.15.3",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
