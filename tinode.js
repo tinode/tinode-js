@@ -3895,10 +3895,8 @@
      * @returns {Promise} resolved/rejected when the upload is completed/failed.
      */
     upload: function(file, onProgress, onSuccess, onFailure) {
-      var form = new FormData();
       var instance = this;
-      form.append("file", file);
-      this.xhr.open("POST", "/v" + PROTOCOL_VERSION + "/file/u", true);
+      this.xhr.open("POST", "/v" + PROTOCOL_VERSION + "/file/u/", true);
       this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
       this.xhr.setRequestHeader("Authorization", "Token " + this._authToken);
       var result = new Promise(function(resolve, reject) {
@@ -3935,18 +3933,39 @@
             onFailure(pkt.ctrl)
           }
         } else {
-          console.log("Upload: unknown status", this.status, this.response);
+          console.log("Unexpected server response status", this.status, this.response);
         }
       };
-      this.xhr.onabort = function() {
+      this.xhr.onerror = function(e) {
         if (instance.toReject) {
-          instance.toReject(null);
+          instance.toReject(new Error("failed"));
         }
         if (onFailure) {
-          onFailure(null)
+          onFailure(null);
         }
       };
-      this.xhr.send(form);
+
+      this.xhr.onabort = function(e) {
+        if (instance.toReject) {
+          instance.toReject(new Error("upload cancelled by user"));
+        }
+        if (onFailure) {
+          onFailure(null);
+        }
+      };
+
+      try {
+        var form = new FormData();
+        form.append("file", file);
+        this.xhr.send(form);
+      } catch (err) {
+        if (instance.toReject) {
+          instance.toReject(err);
+        }
+        if (onFailure) {
+          onFailure(null);
+        }
+      }
 
       return result;
     },
@@ -4026,7 +4045,7 @@
      * @memberof Tinode.LargeFileHelper#
      */
     cancel: function() {
-      if (this.xhr) {
+      if (this.xhr && this.xhr.readyState < 4) {
         this.xhr.abort();
       }
     }
