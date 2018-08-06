@@ -53,21 +53,29 @@
   'use strict';
 
   // Global constants
-  var PROTOCOL_VERSION = "0";
-  var VERSION = "0.15";
-  var LIBRARY = "tinodejs/" + VERSION;
+  const PROTOCOL_VERSION = "0";
+  const VERSION = "0.15";
+  const LIBRARY = "tinodejs/" + VERSION;
 
-  var TOPIC_NEW = "new";
-  var TOPIC_ME = "me";
-  var TOPIC_FND = "fnd";
-  var USER_NEW = "new";
+  const TOPIC_NEW = "new";
+  const TOPIC_ME = "me";
+  const TOPIC_FND = "fnd";
+  const USER_NEW = "new";
 
-  var DEL_CHAR = "\u2421";
+  // Unicode [del] symbol.
+  const DEL_CHAR = "\u2421";
+  // Starting value of a locally-generated seqId used for pending messages.
+  const LOCAL_SEQID = 0xFFFFFFF;
 
+  const MESSAGE_STATUS_NONE     = 0;
+  const MESSAGE_STATUS_PENDING  = 1;
+  const MESSAGE_STATUS_SENT     = 2;
+  const MESSAGE_STATUS_RECEIVED = 3;
+  const MESSAGE_STATUS_READ     = 4;
   // Utility functions
 
   // RFC3339 formater of Date
-  var rfc3339DateString = function(d) {
+  function rfc3339DateString(d) {
     if (!d || d.getTime() == 0) {
       return undefined;
     }
@@ -96,7 +104,7 @@
   // Recursively merge src's own properties to dst.
   // Ignore properties where ignore[property] is true.
   // Array and Date objects are shallow-copied.
-  var mergeObj = function(dst, src, ignore) {
+  function mergeObj(dst, src, ignore) {
     // Handle the 3 simple types, and null or undefined
     if (src === null || src === undefined) {
       return dst;
@@ -137,13 +145,13 @@
   }
 
   // Update object stored in a cache. Returns updated value.
-  var mergeToCache = function(cache, key, newval, ignore) {
+  function mergeToCache(cache, key, newval, ignore) {
     cache[key] = mergeObj(cache[key], newval, ignore);
     return cache[key];
   }
 
   // Basic cross-domain requester. Supports normal browsers and IE8+
-  var xdreq = function() {
+  function xdreq() {
     var xdreq = null;
 
     // Detect browser support for CORS
@@ -162,7 +170,7 @@
   };
 
   // JSON stringify helper - pre-processor for JSON.stringify
-  var jsonBuildHelper = function(key, val) {
+  function jsonBuildHelper(key, val) {
     if (val instanceof Date) {
       // Convert javascript Date objects to rfc3339 strings
       val = rfc3339DateString(val);
@@ -176,24 +184,35 @@
     return val;
   };
 
-  // Strips all values from an object of they evaluate to false.
-  var simplify = function(obj) {
+  // Strips all values from an object of they evaluate to false or if their name starts with '_'.
+  function simplify(obj) {
   	Object.keys(obj).forEach(function(key) {
-    	if (obj[key] && typeof obj[key] === 'object' && !(obj[key] instanceof Date)) {
-      	simplify(obj[key]);
+      if (key[0] == "_") {
+        // Strip fields like "obj._key".
+        delete obj[key];
+      } else if (!obj[key]) {
+        // Strip fields which evaluate to false.
+        delete obj[key];
+      } else if (Array.isArray(obj[key]) && obj[key].length == 0) {
+        // Strip empty arrays.
+        delete obj[key];
+      } else if (!obj[key]) {
+        // Strip fields which evaluate to false.
+        delete obj[key];
+      } else if (typeof obj[key] == 'object' && !(obj[key] instanceof Date)) {
+        simplify(obj[key]);
+        // Strip empty objects.
         if (Object.getOwnPropertyNames(obj[key]).length == 0) {
         	delete obj[key];
         }
-      } else if (!obj[key]) {
-      	delete obj[key];
       }
-  	});
-  	return obj;
-	};
+    });
+    return obj;
+  };
 
   // Trim whitespace, strip empty and duplicate elements elements.
   // If the result is an empty array, add a single element "\u2421" (Unicode Del character).
-  var normalizeArray = function(arr) {
+  function normalizeArray(arr) {
     var out = [];
     if (Array.isArray(arr)) {
       // Trim, throw away very short and empty tags.
@@ -219,7 +238,7 @@
   }
 
   // Attempt to convert date strings to objects.
-  var jsonParseHelper = function(key, val) {
+  function jsonParseHelper(key, val) {
     // Convert string timestamps with optional milliseconds to Date
     // 2015-09-02T01:45:43[.123]Z
     if (key === 'ts' && typeof val === 'string' &&
@@ -235,7 +254,7 @@
   };
 
   // Trims very long strings (encoded images) to make logged packets more readable.
-  var jsonLoggerHelper = function(key, val) {
+  function jsonLoggerHelper(key, val) {
     if (typeof val === 'string' && val.length > 128) {
       return "<" + val.length + ", bytes: " + val.substring(0, 12) + '...' + val.substring(val.length-12) + ">";
     }
@@ -243,7 +262,7 @@
   };
 
   // Parse browser user agent to extract browser name and version.
-  var getBrowserInfo = function(ua) {
+  function getBrowserInfo(ua) {
     // First test for WebKit based browser.
     ua = ua.replace(' (KHTML, like Gecko)', '');
     var m = ua.match(/(AppleWebKit\/[.\d]+)/i);
@@ -424,15 +443,6 @@
       },
 
       /**
-       * Return the number of elements the buffer holds
-       * @memberof Tinode.CBuffer#
-       * @returns {number} Number of elements in the buffer.
-       */
-      contains: function() {
-        return buffer.length;
-      },
-
-      /**
        * Discard all elements and reset the buffer to the new size (maximum number of elements).
        * @memberof Tinode.CBuffer#
        * @param {number} newSize - New size of the buffer.
@@ -467,12 +477,11 @@
        *
        * @memberof Tinode.CBuffer#
        * @param {Object} elem element to find.
-       * @returns {number} index of the element in the buffer or -1
+       * @returns {number} index of the element in the buffer or -1.
        */
       find: function(elem) {
         return findNearest(elem, buffer, true);
       }
-
     }
   }
 
@@ -521,6 +530,7 @@
     const _BOFF_BASE = 2000; // 2000 milliseconds, minimum delay between reconnects
     const _BOFF_MAX_ITER = 10; // Maximum delay between reconnects 2^10 * 2000 ~ 34 minutes
     const _BOFF_JITTER = 0.3; // Add random delay
+
     var _boffTimer = null;
     var _boffIteration = 0;
     var _boffClosed = false; // Indicator if the socket was manually closed - don't autoreconnect if true.
@@ -873,7 +883,6 @@
       var _inPacketCount = 0;
       // Counter for generating unique message IDs
       var _messageId = 0;
-
       // Information about the server, if connected
       var _serverInfo = null;
 
@@ -1044,7 +1053,8 @@
               "pub": {
                 "id": getNextMessageId(),
                 "topic": topic,
-                "params": {},
+                "noecho": false,
+                "head": null,
                 "content": {}
               }
             };
@@ -1067,7 +1077,8 @@
                 "id": getNextMessageId(),
                 "topic": topic,
                 "desc": {},
-                "sub": {}
+                "sub": {},
+                "tags": []
               }
             };
 
@@ -1075,7 +1086,11 @@
             return {
               "del": {
                 "id": getNextMessageId(),
-                "topic": topic
+                "topic": topic,
+                "what": null,
+                "delseq": null,
+                "user": null,
+                "hard": false
               }
             };
 
@@ -1092,6 +1107,11 @@
           default:
             throw new Error("Unknown packet type requested: " + type);
         }
+      }
+
+      // Create a copy of the packet, with some content being shallow copies.
+      function copyPacket(pkt) {
+
       }
 
       // Send a packet.
@@ -1600,7 +1620,8 @@
          * @property {Object=} info - Free-form payload to pass to the invited user or topic manager.
          */
         /**
-         * Parameters passed to {@link Tinode#subscribe}
+         * Parameters passed to {@link Tinode#subscribe}.
+         *
          * @typedef SubscriptionParams
          * @memberof Tinode
          * @property {Tinode.SetParams=} set - Parameters used to initialize topic
@@ -1660,6 +1681,29 @@
         },
 
         /**
+         * Create message draft without sending it to the server.
+         * @memberof Tinode#
+         *
+         * @param {String} topic - Name of the topic to publish to.
+         * @param {Object} data - Payload to publish.
+         * @param {Boolean=} noEcho - If <tt>true</tt>, tell the server not to echo the message to the original session.
+         * @param {String=} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
+         * @param {Array=} attachments - array of strings containing URLs of files attached to the message.
+         *
+         * @returns {Object} new message which can be sent to the server or otherwise used.
+         */
+        createMessage: function(topic, data, noEcho, mimeType, attachments) {
+          var pkt = initPacket("pub", topic);
+          pkt.pub.noecho = noEcho;
+          pkt.pub.content = data;
+
+          if (mimeType || Array.isArray(attachments)) {
+            pkt.pub.head = { mime: mimeType, attachments: attachments };
+          }
+          return pkt.pub;
+        },
+
+        /**
          * Publish {data} message to topic.
          * @memberof Tinode#
          *
@@ -1672,13 +1716,26 @@
          * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
          */
         publish: function(topic, data, noEcho, mimeType, attachments) {
-          var pkt = initPacket("pub", topic);
-          pkt.pub.noecho = noEcho;
-          pkt.pub.content = data;
-          if (mimeType || Array.isArray(attachments)) {
-            pkt.pub.head = { mime: mimeType, attachments: attachments };
-          }
-          return sendWithPromise(pkt, pkt.pub.id);
+          return instance.publishMessage(
+            instance.createMessage(topic, data, noEcho, mimeType, attachments)
+          );
+        },
+
+        /**
+         * Publish message to topic. The message should be created by {@link Tinode#createMessage}.
+         * @memberof Tinode#
+         *
+         * @param {Object} pub - Message to publish.
+         *
+         * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+         */
+        publishMessage: function(pub) {
+          // Make a shallow copy. Needed in order to clear locally-assigned temp values;
+          pub = Object.assign({}, pub);
+          pub.seq = undefined;
+          pub.from = undefined;
+          pub.ts = undefined;
+          return sendWithPromise({pub: pub}, pub.id);
         },
 
         /**
@@ -1823,7 +1880,7 @@
          * @param {Number} seq - Maximum id of the message being acknowledged.
          */
         note: function(topic, what, seq) {
-          if (seq <= 0) {
+          if (seq <= 0 || seq >= LOCAL_SEQID) {
             console.log("Invalid message id " + seq);
             return;
           }
@@ -1928,7 +1985,7 @@
          */
         getLargeFileHelper: function() {
           var token = instance.getAuthToken();
-          return token ? new LargeFileHelper(_apiKey, token.token) : null;
+          return token ? new LargeFileHelper(_apiKey, token.token, instance.getNextMessageId()) : null;
         },
 
         /**
@@ -2105,7 +2162,14 @@
          * @memberof Tinode#
          * @type {Tinode.onRawMessage}
          */
-        onRawMessage: undefined
+        onRawMessage: undefined,
+
+        // Exported constants
+        MESSAGE_STATUS_NONE: MESSAGE_STATUS_NONE,
+        MESSAGE_STATUS_PENDING: MESSAGE_STATUS_PENDING,
+        MESSAGE_STATUS_SENT: MESSAGE_STATUS_SENT,
+        MESSAGE_STATUS_RECEIVED: MESSAGE_STATUS_RECEIVED,
+        MESSAGE_STATUS_READ: MESSAGE_STATUS_READ
       };
     }
 
@@ -2552,6 +2616,10 @@
     // Locally cached data
     // Subscribed users, for tracking read/recv/msg notifications.
     this._users = {};
+
+    // Current value of locally issued seqId, used for pending messages.
+    this._queuedSeqId = LOCAL_SEQID;
+
     // The maximum known {data.seq} value.
     this._maxSeq = 0;
     // The minimum known {data.seq} value.
@@ -2676,11 +2744,88 @@
      * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
      */
     publish: function(data, noEcho, mimeType, attachments) {
-      if (!this._subscribed) {
-        return Promise.reject(new Error("Cannot publish on inactive topic"));
-      }
       // Send data
-      return Tinode.getInstance().publish(this.name, data, noEcho, mimeType, attachments);
+      return this.publishMessage(
+        this.createMessage(data, noEcho, mimeType, attachments)
+      );
+    },
+
+    /**
+     * Create a draft of a message without sending it to the server.
+     * @memberof Tinode.Topic#
+     *
+     * @param {Object} data - Data to create a draft for.
+     * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating session.
+     * @param {String=} mimeType - Mime-type of the data. Default is 'text/plain'.
+     * @param {Array=} attachments - URLs of files attached to the message.
+     * @returns {Object} message draft.
+     */
+     createMessage: function(data, noEcho, mimeType, attachments) {
+       return Tinode.getInstance().createMessage(this.name, data, noEcho, mimeType, attachments);
+     },
+
+     /**
+      * Publish message created by {@link Tinode.Topic#createMessage}.
+      * @memberof Tinode.Topic#
+      *
+      * @param {Object} pkt - Data to publish.
+      *
+      * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
+      */
+     publishMessage: function(pkt) {
+       if (!this._subscribed) {
+         return Promise.reject(new Error("Cannot publish on inactive topic"));
+       }
+       // Send data
+       return Tinode.getInstance().publishMessage(pkt);
+     },
+
+   /**
+    * Add message to local message cache but do not send to the server.
+    * The message should be created by {@link Tinode.Topic#createMessage}.
+    * @memberof Tinode.Topic#
+    *
+    * @param {Object} pkt - Message to use as a draft.
+    * @param {Promise} prom - Message will be sent when this promise is resolved, discarded if rejected.
+    *
+    * @returns {Promise} derived promise.
+    */
+    publishDraft: function(pub, prom) {
+      // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
+      // before the message is sent.
+      var seq = pub.seq = this._getQueuedSeqId();
+      pub.ts = new Date();
+      pub.from = Tinode.getInstance().getCurrentUserID();
+
+      // Don't need an echo message becasue the message is added to local cache right away.
+      pub.noecho = true;
+      // Add to cache.
+      this._messages.put(pub);
+
+      if (this.onData) {
+        this.onData(pub);
+      }
+
+      // If promise is provided, send the queued message when it's resolved.
+      // If no promise is provided, create on and send immediately.
+      if (!prom) {
+        prom = Promise.resolve(true);
+      }
+      prom = prom.then(
+        (arg) => {
+          return this.publishMessage(pub).then((ctrl) => {
+            pub.seq = ctrl.params.seq;
+            pub.ts = ctrl.ts;
+            if (this.onData) {
+              this.onData(pub);
+            }
+          });
+        },
+        (err) => {
+          this._messages.delAt(this._messages.find(seq));
+          throw err;
+        });
+      return prom;
     },
 
     /**
@@ -2697,12 +2842,12 @@
       if (!this._subscribed && !unsub) {
         return Promise.reject(new Error("Cannot leave inactive topic"));
       }
+
       // Send a 'leave' message, handle async response
-      var topic = this;
-      return Tinode.getInstance().leave(this.name, unsub).then(function(ctrl) {
-        topic._resetSub();
+      return Tinode.getInstance().leave(this.name, unsub).then((ctrl) => {
+        this._resetSub();
         if (unsub) {
-          topic._gone();
+          this._gone();
         }
         return ctrl;
       });
@@ -3166,6 +3311,51 @@
       return this.acs;
     },
 
+    /**
+     * Get topic's default access mode.
+     * @memberof Tinode.Topic#
+     *
+     * @returns {Tinode.DefAcs} - access mode, such as {auth: `RWP`, anon: `N`}.
+     */
+    getDefaultAccess: function() {
+        return this.defacs;
+    },
+
+    /**
+     * Initialize new meta {@link Tinode.GetQuery} builder. The query is attched to the current topic.
+     * It will not work correctly if used with a different topic.
+     * @memberof Tinode.Topic#
+     *
+     * @returns {Tinode.MetaGetBuilder} query attached to the current topic.
+     */
+    startMetaQuery: function() {
+      return new MetaGetBuilder(this);
+    },
+
+    /**
+     * Get status (queued, sent, received etc) of a given message in the context
+     * of this topic.
+     * @memberof Tinode.Topic#
+     *
+     * @param {Message} msg message to check for status.
+     * @returns message status constant.
+     */
+    getMessageStatus: function(msg) {
+      var status = MESSAGE_STATUS_NONE;
+      if (msg.from == Tinode.getInstance().getCurrentUserID()) {
+        if (msg.seq >= LOCAL_SEQID) {
+          status = MESSAGE_STATUS_PENDING;
+        } else if (this.msgReadCount(msg.seq) > 0) {
+          status = MESSAGE_STATUS_READ;
+        } else if (this.msgRecvCount(msg.seq) > 0) {
+          status = MESSAGE_STATUS_RECEIVED;
+        } else if (msg.seq > 0) {
+          status = MESSAGE_STATUS_SENT;
+        }
+      }
+      return status;
+    },
+
     // Process data message
     _routeData: function(data) {
       // Maybe this is an empty message to indicate there are no actual messages.
@@ -3443,25 +3633,9 @@
       return mergeToCache(this._users, uid, cached);
     },
 
-    /**
-     * Get topic's default access mode.
-     * @memberof Tinode.Topic#
-     *
-     * @returns {Tinode.DefAcs} - access mode, such as {auth: `RWP`, anon: `N`}.
-     */
-    getDefaultAccess: function() {
-        return this.defacs;
-    },
-
-
-    /**
-     * Initialize new meta {@link Tinode.GetQuery} builder. The query is attched to the current topic.
-     * It will not work correctly if used with a different topic.
-     *
-     * @returns {Tinode.MetaGetBuilder} query attached to the current topic.
-     */
-    startMetaQuery: function() {
-      return new MetaGetBuilder(this);
+    // Get local seqId for a queued message.
+    _getQueuedSeqId: function() {
+      return this._queuedSeqId++;
     }
   };
 
@@ -3872,9 +4046,10 @@
    * @param {string} apikey_ - application's API key.
    * @param {string} authtoken_ - previously obtained authentication token.
    */
-  var LargeFileHelper = function(apikey_, authtoken_) {
+  var LargeFileHelper = function(apikey_, authtoken_, msgId_) {
     this._apiKey = apikey_;
     this._authToken = authtoken_;
+    this._msgId = msgId_;
     this.xhr = xdreq();
     this.toResolve = null;
     this.toReject = null;
@@ -3957,6 +4132,7 @@
       try {
         var form = new FormData();
         form.append("file", file);
+        form.set("id", this._msgId);
         this.xhr.send(form);
       } catch (err) {
         if (instance.toReject) {
@@ -4048,9 +4224,50 @@
       if (this.xhr && this.xhr.readyState < 4) {
         this.xhr.abort();
       }
-    }
+    },
 
+    /**
+     * Get unique id of this request.
+     * @memberof Tinode.LargeFileHelper#
+     *
+     * @returns {string} unique id
+     */
+    getId: function() {
+      return this._msgId;
+    }
   };
+
+  /**
+   * Definition of a message.
+   * Work in progress.
+   */
+  var Message = function(topic_, content_) {
+    this.status = Message.STATUS_NONE;
+    this.topic = topic_;
+    this.content = content_;
+  }
+
+  Message.STATUS_NONE     = MESSAGE_STATUS_NONE;
+  Message.STATUS_PENDING  = MESSAGE_STATUS_PENDING;
+  Message.STATUS_SENT     = MESSAGE_STATUS_SENT;
+  Message.STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED;
+  Message.STATUS_READ     = MESSAGE_STATUS_READ;
+
+  Message.prototype = {
+    /**
+     * Convert message object to {pub} packet.
+     */
+    toJSON: function() {
+
+    },
+    /**
+     * Parse JSON into message.
+     */
+    fromJSON: function(json) {
+
+    }
+  }
+  Message.prototype.constructor = Message;
 
   // Export for the window object or node; Check that is not already defined.
   if (typeof(environment.Tinode) === 'undefined') {
