@@ -1985,7 +1985,7 @@
          */
         getLargeFileHelper: function() {
           var token = instance.getAuthToken();
-          return token ? new LargeFileHelper(_apiKey, token.token, instance.getNextMessageId()) : null;
+          return token ? new LargeFileHelper(_apiKey, token.token, getNextMessageId()) : null;
         },
 
         /**
@@ -2783,6 +2783,7 @@
    /**
     * Add message to local message cache but do not send to the server.
     * The message should be created by {@link Tinode.Topic#createMessage}.
+    * This is probably not the final API.
     * @memberof Tinode.Topic#
     *
     * @param {Object} pkt - Message to use as a draft.
@@ -2808,17 +2809,15 @@
 
       // If promise is provided, send the queued message when it's resolved.
       // If no promise is provided, create on and send immediately.
-      if (!prom) {
-        prom = Promise.resolve(true);
-      }
-      prom = prom.then(
-        (arg) => {
+      prom = (prom || Promise.resolve(true)).then(
+        (/* argument ignored */) => {
           return this.publishMessage(pub).then((ctrl) => {
             pub.seq = ctrl.params.seq;
             pub.ts = ctrl.ts;
             if (this.onData) {
               this.onData(pub);
             }
+            return ctrl;
           });
         },
         (err) => {
@@ -3340,7 +3339,7 @@
      * @param {Message} msg message to check for status.
      * @returns message status constant.
      */
-    getMessageStatus: function(msg) {
+    msgStatus: function(msg) {
       var status = MESSAGE_STATUS_NONE;
       if (msg.from == Tinode.getInstance().getCurrentUserID()) {
         if (msg.seq >= LOCAL_SEQID) {
@@ -4069,7 +4068,7 @@
      *
      * @returns {Promise} resolved/rejected when the upload is completed/failed.
      */
-    upload: function(file, onProgress, onSuccess, onFailure) {
+    upload: function(file, getLargeFileHelperonProgress, onSuccess, onFailure) {
       var instance = this;
       this.xhr.open("POST", "/v" + PROTOCOL_VERSION + "/file/u/", true);
       this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
