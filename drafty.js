@@ -391,8 +391,10 @@ Sample JSON representation of the text above:
 
       /**
        * Parse plain text into structured representation.
+       * @memberof Drafty#
+       *
        * @param {String} content plain-text content to parse.
-       * @return {Drafty} parsed object.
+       * @return {Drafty} parsed object or null if the source is not plain text.
        */
       parse: function(content) {
         // Make sure we are parsing strings only.
@@ -500,7 +502,8 @@ Sample JSON representation of the text above:
       },
 
       /**
-       * Add inline image to Drafty content
+       * Add inline image to Drafty content.
+       * @memberof Drafty#
        *
        * @param {Drafty} content object to add image to.
        * @param {integer} at index where the object is inserted. The length of the image is always 1.
@@ -509,10 +512,10 @@ Sample JSON representation of the text above:
        * @param {integer} width width of the image
        * @param {integer} height height of the image
        * @param {string} fname file name suggestion for downloading the image.
-       * @param {string} refurl reference to the content. Could be null or undefined.
        * @param {integer} size size of the external file. Treat is as an untrusted hint.
+       * @param {string} refurl reference to the content. Could be null or undefined.
        */
-      insertImage: function(content, at, mime, base64bits, width, height, fname, refurl, size) {
+      insertImage: function(content, at, mime, base64bits, width, height, fname, size, refurl) {
         content = content || {txt: " "};
         content.ent = content.ent || [];
         content.fmt = content.fmt || [];
@@ -540,15 +543,16 @@ Sample JSON representation of the text above:
 
       /**
        * Add file to Drafty content. Either as a blob or as a reference.
+       * @memberof Drafty#
        *
        * @param {Drafty} content object to attach file to.
        * @param {string} mime mime-type of the file, e.g. "image/png"
        * @param {string} base64bits base64-encoded file content
        * @param {string} fname file name suggestion for downloading.
-       * @param {string} refurl reference to the content. Could be null or undefined.
        * @param {integer} size size of the external file. Treat is as an untrusted hint.
+       * @param {string | Promise} refurl optional reference to the content.
        */
-      attachFile: function(content, mime, base64bits, fname, refurl, size) {
+      attachFile: function(content, mime, base64bits, fname, size, refurl) {
         content = content || {txt: ""};
         content.ent = content.ent || [];
         content.fmt = content.fmt || [];
@@ -559,7 +563,7 @@ Sample JSON representation of the text above:
           key: content.ent.length
         });
 
-        content.ent.push({
+        let ex = {
           tp: "EX",
           data: {
             mime: mime,
@@ -568,7 +572,13 @@ Sample JSON representation of the text above:
             ref: refurl,
             size: size | 0
           }
-        });
+        }
+        if (refurl instanceof Promise) {
+          refurl.then((url) => {
+            ex.data.ref = url;
+          });
+        }
+        content.ent.push(ex);
 
         return content;
       },
@@ -578,6 +588,7 @@ Sample JSON representation of the text above:
        * No attempt is made to strip pre-existing html markup.
        * This is potentially unsafe because `content.txt` may contain malicious
        * markup.
+       * @memberof Drafty#
        *
        * @param {drafy} content - structured representation of rich text.
        *
@@ -624,6 +635,7 @@ Sample JSON representation of the text above:
       /**
        * Callback for applying custom formatting/transformation to a Drafty object.
        * Called once for each syle span.
+       * @memberof Drafty#
        *
        * @callback Formatter
        * @param {string} style style code such as "ST" or "IM".
@@ -633,6 +645,7 @@ Sample JSON representation of the text above:
 
       /**
        * Transform Drafty using custom formatting.
+       * @memberof Drafty#
        *
        * @param {Drafty} content - content to transform.
        * @param {Formatter} formatter - callback which transforms individual elements
@@ -683,6 +696,7 @@ Sample JSON representation of the text above:
 
       /**
        * Given structured representation of rich text, convert it to plain text.
+       * @memberof Drafty#
        *
        * @param {Drafty} content - content to convert to plain text.
        */
@@ -692,6 +706,7 @@ Sample JSON representation of the text above:
 
       /**
        * Returns true if content has no markup and no entities.
+       * @memberof Drafty#
        *
        * @param {Drafty} content - content to check for presence of markup.
        * @returns true is content is plain text, false otherwise.
@@ -702,11 +717,12 @@ Sample JSON representation of the text above:
 
       /**
        * Check if the drafty content has attachments.
+       * @memberof Drafty#
        *
        * @param {Drafty} content - content to check for attachments.
        * @returns true if there are attachments.
        */
-      hasAttachment: function(content) {
+      hasAttachments: function(content) {
         if (content.ent && content.ent.length > 0) {
           for (var i in content.ent) {
             if (content.ent[i].tp == "EX") {
@@ -720,6 +736,7 @@ Sample JSON representation of the text above:
       /**
        * Callback for applying custom formatting/transformation to a Drafty object.
        * Called once for each syle span.
+       * @memberof Drafty#
        *
        * @callback AttachmentCallback
        * @param {Object} data attachment data
@@ -727,7 +744,8 @@ Sample JSON representation of the text above:
        */
 
       /**
-       * Enumerate attachments
+       * Enumerate attachments.
+       * @memberof Drafty#
        *
        * @param {Drafty} content - drafty object to process for attachments.
        * @param {AttachmentCallback} callback - callback to call for each attachment.
@@ -746,41 +764,64 @@ Sample JSON representation of the text above:
       /**
        * Given the entity, get URL which can be used for downloading
        * entity data.
+       * @memberof Drafty#
        *
-       * @param {Object} entity to get the URl from.
+       * @param {Object} entity.data to get the URl from.
        */
-      getDownloadUrl: function(entity) {
-        return entity.ref ? entity.ref : base64toObjectUrl(entity.val, entity.mime);
+      getDownloadUrl: function(entData) {
+        let url = null;
+        if (entData.val) {
+          url = base64toObjectUrl(entData.val, entData.mime);
+        } else if (typeof entData.ref == 'string') {
+          url = entData.ref;
+        }
+        return url;
+      },
+
+      /**
+       * Check if the entity data is being uploaded to the server.
+       * @memberof Drafty#
+       *
+       * @param {Object} entity.data to get the URl from.
+       * @returns {boolean} true if upload is in progress, false otherwise.
+       */
+      isUploading: function(entData) {
+        return entData.ref instanceof Promise;
       },
 
       /**
        * Given the entity, get URL which can be used for previewing
        * the entity.
+       * @memberof Drafty#
        *
-       * @param {Object} entity to get the URl from.
+       * @param {Object} entity.data to get the URl from.
+       *
+       * @returns {string} url for previewing or null if no such url is available.
        */
-      getPreviewUrl: function(entity) {
-        return base64toObjectUrl(entity.val, entity.mime);
+      getPreviewUrl: function(entData) {
+        return entData.val ? base64toObjectUrl(entData.val, entData.mime) : null;
       },
 
       /**
        * Get approximate size of the entity.
+       * @memberof Drafty#
        *
-       * @param {Object} entity to get the size for.
+       * @param {Object} entity.data to get the size for.
        */
-      getEntitySize: function(entity) {
+      getEntitySize: function(entData) {
         // Either size hint or length of value. The value is base64 encoded,
         // the actual object size is smaller than the encoded length.
-        return entity.size ? entity.size : entity.val ? (entity.val.length * 0.75) | 0 : 0;
+        return entData.size ? entData.size : entData.val ? (entData.val.length * 0.75) | 0 : 0;
       },
 
       /**
        * Get entity mime type.
+       * @memberof Drafty#
        *
-       * @param {Object} entity to get the type for.
+       * @param {Object} entity.data to get the type for.
        */
-      getEntityMimeType: function(entity) {
-        return entity.mime || "text/plain";
+      getEntityMimeType: function(entData) {
+        return entData.mime || "text/plain";
       },
 
       /**
@@ -796,6 +837,8 @@ Sample JSON representation of the text above:
        * For a given data bundle generate an object with HTML attributes,
        * for instance, given {url: "http://www.example.com/"} return
        * {href: "http://www.example.com/"}
+       * @memberof Drafty#
+       *
        * @param {string} style - tw-letter style to generate attributes for.
        * @param {Object} data - data bundle to convert to attributes
        * @returns object with HTML attributes.
@@ -810,7 +853,9 @@ Sample JSON representation of the text above:
 
       /**
        * Drafty MIME type.
-       * @returns string suitabe for HTTP Content-Type field.
+       * @memberof Drafty#
+       *
+       * @returns {string} HTTP Content-Type "text/x-drafty".
        */
       getContentType: function() {
         return "text/x-drafty";

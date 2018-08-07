@@ -2743,26 +2743,32 @@
      * @param {Array=} attachments - URLs of files attached to the message.
      * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
      */
-    publish: function(data, noEcho, mimeType, attachments) {
+    publish: function(data) {
       // Send data
-      return this.publishMessage(
-        this.createMessage(data, noEcho, mimeType, attachments)
-      );
+      return this.publishMessage(this.createMessage(data));
     },
 
     /**
      * Create a draft of a message without sending it to the server.
      * @memberof Tinode.Topic#
      *
-     * @param {Object} data - Data to create a draft for.
-     * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating session.
-     * @param {String=} mimeType - Mime-type of the data. Default is 'text/plain'.
-     * @param {Array=} attachments - URLs of files attached to the message.
+     * @param {Object} data - Content to wrap in a a draft.
+     * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating
+     * session. Otherwise the server will send a copy of the message to sender.
+     *
      * @returns {Object} message draft.
      */
-     createMessage: function(data, noEcho, mimeType, attachments) {
-       return Tinode.getInstance().createMessage(this.name, data, noEcho, mimeType, attachments);
-     },
+    createMessage: function(data, noEcho) {
+      var mimeType, attachments;
+      if (!Drafty.isPlainText(data)) {
+        mimeType = Drafty.getContentType();
+        if (Drafty.hasAttachments(data)) {
+          attachments = [];
+          Drafty.attachments(data, (val) => { attachments.push(val); });
+        }
+      }
+      return Tinode.getInstance().createMessage(this.name, data, noEcho, mimeType, attachments);
+    },
 
      /**
       * Publish message created by {@link Tinode.Topic#createMessage}.
@@ -2776,6 +2782,7 @@
        if (!this._subscribed) {
          return Promise.reject(new Error("Cannot publish on inactive topic"));
        }
+
        // Send data
        return Tinode.getInstance().publishMessage(pkt);
      },
@@ -2792,6 +2799,10 @@
     * @returns {Promise} derived promise.
     */
     publishDraft: function(pub, prom) {
+      if (!prom && !this._subscribed) {
+        return Promise.reject(new Error("Cannot publish on inactive topic"));
+      }
+
       // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
       // before the message is sent.
       var seq = pub.seq = this._getQueuedSeqId();
@@ -2857,6 +2868,7 @@
      * @memberof Tinode.Topic#
      *
      * @param {Tinode.GetQuery} request parameters
+     *
      * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
      */
     getMeta: function(params) {
@@ -4050,8 +4062,15 @@
     this._authToken = authtoken_;
     this._msgId = msgId_;
     this.xhr = xdreq();
+
+    // Promise
     this.toResolve = null;
     this.toReject = null;
+
+    // Callbacks
+    this.onProgress = null;
+    this.onSuccess = null;
+    this.onFailure = null;
   }
 
   LargeFileHelper.prototype = {
@@ -4068,7 +4087,7 @@
      *
      * @returns {Promise} resolved/rejected when the upload is completed/failed.
      */
-    upload: function(file, getLargeFileHelperonProgress, onSuccess, onFailure) {
+    upload: function(file, onProgress, onSuccess, onFailure) {
       var instance = this;
       this.xhr.open("POST", "/v" + PROTOCOL_VERSION + "/file/u/", true);
       this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
@@ -4077,13 +4096,17 @@
         instance.toResolve = resolve;
         instance.toReject = reject;
       });
-      if (onProgress) {
-        this.xhr.upload.onprogress = function(e) {
-          if (e.lengthComputable) {
-            onProgress(e.loaded / e.total);
-          }
+
+      this.onProgress = onProgress;
+      this.onSuccess = onSuccess;
+      this.onFailure = onFailure;
+
+      this.xhr.upload.onprogress = function(e) {
+        if (e.lengthComputable && instance.onProgress) {
+          instance.onProgress(e.loaded / e.total);
         }
       }
+
       this.xhr.onload = function() {
         var pkt;
         try {
@@ -4094,28 +4117,29 @@
 
         if (this.status >= 200 && this.status < 300) {
           if (instance.toResolve) {
-            instance.toResolve(pkt.ctrl);
+            instance.toResolve(pkt.ctrl.params.url);
           }
-          if (onSuccess) {
-            onSuccess(pkt.ctrl);
+          if (instance.onSuccess) {
+            instance.onSuccess(pkt.ctrl);
           }
         } else if (this.status >= 400) {
           if (instance.toReject) {
             instance.toReject(new Error(pkt.ctrl.text + " (" + pkt.ctrl.code + ")"));
           }
-          if (onFailure) {
-            onFailure(pkt.ctrl)
+          if (instance.onFailure) {
+            instance.onFailure(pkt.ctrl)
           }
         } else {
           console.log("Unexpected server response status", this.status, this.response);
         }
       };
+
       this.xhr.onerror = function(e) {
         if (instance.toReject) {
           instance.toReject(new Error("failed"));
         }
-        if (onFailure) {
-          onFailure(null);
+        if (instance.onFailure) {
+          instance.onFailure(null);
         }
       };
 
@@ -4123,8 +4147,8 @@
         if (instance.toReject) {
           instance.toReject(new Error("upload cancelled by user"));
         }
-        if (onFailure) {
-          onFailure(null);
+        if (instance.onFailure) {
+          instance.onFailure(null);
         }
       };
 
@@ -4134,11 +4158,11 @@
         form.set("id", this._msgId);
         this.xhr.send(form);
       } catch (err) {
-        if (instance.toReject) {
-          instance.toReject(err);
+        if (this.toReject) {
+          this.toReject(err);
         }
-        if (onFailure) {
-          onFailure(null);
+        if (this.onFailure) {
+          this.onFailure(null);
         }
       }
 
@@ -4167,11 +4191,19 @@
       this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
       this.xhr.setRequestHeader("Authorization", "Token " + this._authToken);
       this.xhr.responseType = "blob";
-      this.xhr.onprogress = onProgress;
+
+      this.onProgress = onProgress;
+      this.xhr.onprogress = function(e) {
+        if (e.lengthComputable && instance.onProgress) {
+          instance.onProgress(e.loaded / e.total);
+        }
+      };
+
       var result = new Promise(function(resolve, reject) {
         instance.toResolve = resolve;
         instance.toReject = reject;
       });
+
       // The blob needs to be saved as file. There is no known way to
       // save the blob as file other than to fake a click on an <a href... download=...>.
       this.xhr.onload = function() {
