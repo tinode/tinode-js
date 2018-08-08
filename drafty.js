@@ -574,9 +574,10 @@ Sample JSON representation of the text above:
           }
         }
         if (refurl instanceof Promise) {
-          refurl.then((url) => {
-            ex.data.ref = url;
-          });
+          refurl.then(
+            (url) => { ex.data.ref = url; },
+            (err) => { /* catch error, otherwise it will appear in the console. */ }
+          );
         }
         content.ent.push(ex);
 

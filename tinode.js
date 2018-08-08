@@ -2832,8 +2832,10 @@
           });
         },
         (err) => {
-          this._messages.delAt(this._messages.find(seq));
-          throw err;
+          this._messages.delAt(this._messages.find(pub));
+          if (this.onData) {
+            this.onData();
+          }
         });
       return prom;
     },
@@ -4092,9 +4094,9 @@
       this.xhr.open("POST", "/v" + PROTOCOL_VERSION + "/file/u/", true);
       this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
       this.xhr.setRequestHeader("Authorization", "Token " + this._authToken);
-      var result = new Promise(function(resolve, reject) {
-        instance.toResolve = resolve;
-        instance.toReject = reject;
+      var result = new Promise((resolve, reject) => {
+        this.toResolve = resolve;
+        this.toReject = reject;
       });
 
       this.onProgress = onProgress;
@@ -4194,14 +4196,16 @@
 
       this.onProgress = onProgress;
       this.xhr.onprogress = function(e) {
-        if (e.lengthComputable && instance.onProgress) {
-          instance.onProgress(e.loaded / e.total);
+        if (instance.onProgress) {
+          // Passing e.loaded instead of e.loaded/e.total because e.total
+          // is always 0 with gzip compression enabled by the server.
+          instance.onProgress(e.loaded);
         }
       };
 
-      var result = new Promise(function(resolve, reject) {
-        instance.toResolve = resolve;
-        instance.toReject = reject;
+      var result = new Promise((resolve, reject) => {
+        this.toResolve = resolve;
+        this.toReject = reject;
       });
 
       // The blob needs to be saved as file. There is no known way to
@@ -4236,13 +4240,26 @@
           reader.readAsText(this.response);
         }
       };
+
+      this.xhr.onerror = function(e) {
+        if (instance.toReject) {
+          instance.toReject(new Error("failed"));
+        }
+      };
+
       this.xhr.onabort = function() {
         if (instance.toReject) {
           instance.toReject(null);
         }
       };
 
-      this.xhr.send();
+      try {
+        this.xhr.send();
+      } catch (err) {
+        if (this.toReject) {
+          this.toReject(err);
+        }
+      }
 
       return result;
     },
