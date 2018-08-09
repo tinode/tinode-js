@@ -1,18 +1,18 @@
-// Basic parser and formatter for very simple text markup. Mostly targeted at
-// mobile use cases similar to Telegram and WhatsApp.
-//
-// Supports:
-//   *abc* -> <b>abc</b>
-//   _abc_ -> <i>abc</i>
-//   ~abc~ -> <del>abc</del>
-//   `abc` -> <tt>abc</tt>
-// Nested frmatting is supported, e.g. *abc _def_* -> <b>abc <i>def</i></b>
-//
-// URLs, @mentions, and #hashtags are extracted and converted into links.
-//
-// JSON data representation is inspired by Draft.js raw formatting.
-
 /*
+Basic parser and formatter for very simple text markup. Mostly targeted at
+mobile use cases similar to Telegram and WhatsApp.
+
+Supports:
+   *abc* -> <b>abc</b>
+   _abc_ -> <i>abc</i>
+   ~abc~ -> <del>abc</del>
+   `abc` -> <tt>abc</tt>
+Nested formatting is supported, e.g. *abc _def_* -> <b>abc <i>def</i></b>
+
+URLs, @mentions, and #hashtags are extracted and converted into links.
+
+JSON data representation is inspired by Draft.js raw formatting.
+
 Text:
     this is *bold*, `code` and _italic_, ~strike~
     combined *bold and _italic_*
@@ -40,7 +40,6 @@ Sample JSON representation of the text above:
    ]
 }
 */
-
 'use strict';
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
@@ -827,7 +826,8 @@ var Drafty = (function() {
     /**
      * Get HTML tag for a given two-letter style name
      * @param {string} style - two-letter style, like ST or LN
-     * @returns
+     *
+     * @returns {string} tag name
      */
     tagName: function(style) {
       return HTML_TAGS[style] ? HTML_TAGS[style].name : undefined;
@@ -841,7 +841,8 @@ var Drafty = (function() {
      *
      * @param {string} style - tw-letter style to generate attributes for.
      * @param {Object} data - data bundle to convert to attributes
-     * @returns object with HTML attributes.
+     *
+     * @returns {Object} object with HTML attributes.
      */
     attrValue: function(style, data) {
       if (data && DECORATORS[style]) {
