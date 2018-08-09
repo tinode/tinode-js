@@ -8,9 +8,13 @@ NPM package is at https://www.npmjs.com/package/tinode-sdk
 
 You may include the latest standalone minified SDK into your html file as
 ```html
-<script crossorigin src="https://unpkg.com/tinode-sdk/umd/tinode.prod.js"></script>
+<script crossorigin
+  src="https://unpkg.com/tinode-sdk/umd/tinode.prod.js">
+</script>
 ```
 or while developing as
 ```html
-<script crossorigin src="https://unpkg.com/tinode-sdk/umd/tinode.dev.js"></script>
+<script crossorigin
+  src="https://unpkg.com/tinode-sdk/umd/tinode.dev.js">
+</script>
 ```

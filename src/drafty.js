@@ -1,50 +1,56 @@
-/*
-Basic parser and formatter for very simple text markup. Mostly targeted at
-mobile use cases similar to Telegram and WhatsApp.
+/**
+ * @file Basic parser and formatter for very simple text markup. Mostly targeted at
+ * mobile use cases similar to Telegram and WhatsApp.
+ *
+ * Supports:
+ *   *abc* -> <b>abc</b>
+ *   _abc_ -> <i>abc</i>
+ *   ~abc~ -> <del>abc</del>
+ *   `abc` -> <tt>abc</tt>
+ *
+ * Nested formatting is supported, e.g. *abc _def_* -> <b>abc <i>def</i></b>
+ * URLs, @mentions, and #hashtags are extracted and converted into links.
+ * JSON data representation is inspired by Draft.js raw formatting.
+ *
+ * @copyright 2015-2018 Tinode
+ * @summary Javascript bindings for Tinode.
+ * @license Apache 2.0
+ * @version 0.15
+ *
+ * @example
+ * Text:
+ *     this is *bold*, `code` and _italic_, ~strike~
+ *     combined *bold and _italic_*
+ *     an url: https://www.example.com/abc#fragment and another _www.tinode.co_
+ *     this is a @mention and a #hashtag in a string
+ *     second #hashtag
+ *
+ *  Sample JSON representation of the text above:
+ *  {
+ *     "txt": "this is bold, code and italic, strike combined bold and italic an url: https://www.example.com/abc#fragment " +
+ *             "and another www.tinode.co this is a @mention and a #hashtag in a string second #hashtag",
+ *     "fmt": [
+ *         { "at":8, "len":4,"tp":"ST" },{ "at":14, "len":4, "tp":"CO" },{ "at":23, "len":6, "tp":"EM"},
+ *         { "at":31, "len":6, "tp":"DL" },{ "tp":"BR", "len":1, "at":37 },{ "at":56, "len":6, "tp":"EM" },
+ *         { "at":47, "len":15, "tp":"ST" },{ "tp":"BR", "len":1, "at":62 },{ "at":120, "len":13, "tp":"EM" },
+ *         { "at":71, "len":36, "key":0 },{ "at":120, "len":13, "key":1 },{ "tp":"BR", "len":1, "at":133 },
+ *         { "at":144, "len":8, "key":2 },{ "at":159, "len":8, "key":3 },{ "tp":"BR", "len":1, "at":179 },
+ *         { "at":187, "len":8, "key":3 },{ "tp":"BR", "len":1, "at":195 }
+ *     ],
+ *     "ent": [
+ *         { "tp":"LN", "data":{ "url":"https://www.example.com/abc#fragment" } },
+ *         { "tp":"LN", "data":{ "url":"http://www.tinode.co" } },
+ *         { "tp":"MN", "data":{ "val":"mention" } },
+ *         { "tp":"HT", "data":{ "val":"hashtag" } }
+ *     ]
+ *  }
+ */
 
-Supports:
-   *abc* -> <b>abc</b>
-   _abc_ -> <i>abc</i>
-   ~abc~ -> <del>abc</del>
-   `abc` -> <tt>abc</tt>
-Nested formatting is supported, e.g. *abc _def_* -> <b>abc <i>def</i></b>
-
-URLs, @mentions, and #hashtags are extracted and converted into links.
-
-JSON data representation is inspired by Draft.js raw formatting.
-
-Text:
-    this is *bold*, `code` and _italic_, ~strike~
-    combined *bold and _italic_*
-    an url: https://www.example.com/abc#fragment and another _www.tinode.co_
-    this is a @mention and a #hashtag in a string
-    second #hashtag
-
-Sample JSON representation of the text above:
-{
-   "txt": "this is bold, code and italic, strike combined bold and italic an url: https://www.example.com/abc#fragment " +
-           "and another www.tinode.co this is a @mention and a #hashtag in a string second #hashtag",
-   "fmt": [
-       { "at":8, "len":4,"tp":"ST" },{ "at":14, "len":4, "tp":"CO" },{ "at":23, "len":6, "tp":"EM"},
-       { "at":31, "len":6, "tp":"DL" },{ "tp":"BR", "len":1, "at":37 },{ "at":56, "len":6, "tp":"EM" },
-       { "at":47, "len":15, "tp":"ST" },{ "tp":"BR", "len":1, "at":62 },{ "at":120, "len":13, "tp":"EM" },
-       { "at":71, "len":36, "key":0 },{ "at":120, "len":13, "key":1 },{ "tp":"BR", "len":1, "at":133 },
-       { "at":144, "len":8, "key":2 },{ "at":159, "len":8, "key":3 },{ "tp":"BR", "len":1, "at":179 },
-       { "at":187, "len":8, "key":3 },{ "tp":"BR", "len":1, "at":195 }
-   ],
-   "ent": [
-       { "tp":"LN", "data":{ "url":"https://www.example.com/abc#fragment" } },
-       { "tp":"LN", "data":{ "url":"http://www.tinode.co" } },
-       { "tp":"MN", "data":{ "val":"mention" } },
-       { "tp":"HT", "data":{ "val":"hashtag" } }
-   ]
-}
-*/
 'use strict';
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
-var INLINE_STYLES = [
+const INLINE_STYLES = [
   // Strong = bold, *bold text*
   {name: "ST", start: /(?:^|\W)(\*)[^\s*]/, end: /[^\s*](\*)(?=$|\W)/},
   // Emphesized = italic, _italic text_
@@ -56,7 +62,7 @@ var INLINE_STYLES = [
 ];
 
 // RegExps for entity extraction (RF = reference)
-var ENTITY_TYPES = [
+const ENTITY_TYPES = [
   // URLs
   {name: "LN", dataName: "url",
     pack: function(val) {
@@ -78,7 +84,7 @@ var ENTITY_TYPES = [
 ];
 
 // HTML tag name suggestions
-var HTML_TAGS = {
+const HTML_TAGS = {
   ST: { name: 'b', isVoid: false },
   EM: { name: 'i', isVoid: false },
   DL: { name: 'del', isVoid: false },
@@ -161,6 +167,12 @@ var DECORATORS = {
   }
 };
 
+/**
+ * Th main object which performs all the formatting actions.
+ * @class Drafty
+ * @memberof Tinode
+ * @constructor
+ */
 var Drafty = (function() {
 
   // Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
@@ -389,7 +401,8 @@ var Drafty = (function() {
 
     /**
      * Parse plain text into structured representation.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {String} content plain-text content to parse.
      * @return {Drafty} parsed object or null if the source is not plain text.
@@ -501,7 +514,8 @@ var Drafty = (function() {
 
     /**
      * Add inline image to Drafty content.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Drafty} content object to add image to.
      * @param {integer} at index where the object is inserted. The length of the image is always 1.
@@ -541,7 +555,8 @@ var Drafty = (function() {
 
     /**
      * Add file to Drafty content. Either as a blob or as a reference.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Drafty} content object to attach file to.
      * @param {string} mime mime-type of the file, e.g. "image/png"
@@ -587,7 +602,8 @@ var Drafty = (function() {
      * No attempt is made to strip pre-existing html markup.
      * This is potentially unsafe because `content.txt` may contain malicious
      * markup.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {drafy} content - structured representation of rich text.
      *
@@ -634,7 +650,8 @@ var Drafty = (function() {
     /**
      * Callback for applying custom formatting/transformation to a Drafty object.
      * Called once for each syle span.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @callback Formatter
      * @param {string} style style code such as "ST" or "IM".
@@ -644,7 +661,8 @@ var Drafty = (function() {
 
     /**
      * Transform Drafty using custom formatting.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Drafty} content - content to transform.
      * @param {Formatter} formatter - callback which transforms individual elements
@@ -695,7 +713,8 @@ var Drafty = (function() {
 
     /**
      * Given structured representation of rich text, convert it to plain text.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Drafty} content - content to convert to plain text.
      */
@@ -705,7 +724,8 @@ var Drafty = (function() {
 
     /**
      * Returns true if content has no markup and no entities.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Drafty} content - content to check for presence of markup.
      * @returns true is content is plain text, false otherwise.
@@ -716,7 +736,8 @@ var Drafty = (function() {
 
     /**
      * Check if the drafty content has attachments.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Drafty} content - content to check for attachments.
      * @returns true if there are attachments.
@@ -735,7 +756,8 @@ var Drafty = (function() {
     /**
      * Callback for applying custom formatting/transformation to a Drafty object.
      * Called once for each syle span.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @callback AttachmentCallback
      * @param {Object} data attachment data
@@ -744,7 +766,8 @@ var Drafty = (function() {
 
     /**
      * Enumerate attachments.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Drafty} content - drafty object to process for attachments.
      * @param {AttachmentCallback} callback - callback to call for each attachment.
@@ -763,7 +786,8 @@ var Drafty = (function() {
     /**
      * Given the entity, get URL which can be used for downloading
      * entity data.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Object} entity.data to get the URl from.
      */
@@ -779,7 +803,8 @@ var Drafty = (function() {
 
     /**
      * Check if the entity data is being uploaded to the server.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Object} entity.data to get the URl from.
      * @returns {boolean} true if upload is in progress, false otherwise.
@@ -791,7 +816,8 @@ var Drafty = (function() {
     /**
      * Given the entity, get URL which can be used for previewing
      * the entity.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Object} entity.data to get the URl from.
      *
@@ -803,7 +829,8 @@ var Drafty = (function() {
 
     /**
      * Get approximate size of the entity.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Object} entity.data to get the size for.
      */
@@ -815,7 +842,8 @@ var Drafty = (function() {
 
     /**
      * Get entity mime type.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {Object} entity.data to get the type for.
      */
@@ -825,6 +853,9 @@ var Drafty = (function() {
 
     /**
      * Get HTML tag for a given two-letter style name
+     * @memberof Tinode.Drafty#
+     * @static
+     *
      * @param {string} style - two-letter style, like ST or LN
      *
      * @returns {string} tag name
@@ -837,7 +868,8 @@ var Drafty = (function() {
      * For a given data bundle generate an object with HTML attributes,
      * for instance, given {url: "http://www.example.com/"} return
      * {href: "http://www.example.com/"}
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @param {string} style - tw-letter style to generate attributes for.
      * @param {Object} data - data bundle to convert to attributes
@@ -854,7 +886,8 @@ var Drafty = (function() {
 
     /**
      * Drafty MIME type.
-     * @memberof Drafty#
+     * @memberof Tinode.Drafty#
+     * @static
      *
      * @returns {string} HTTP Content-Type "text/x-drafty".
      */
