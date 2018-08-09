@@ -1,27 +1,41 @@
 {
   "name": "tinode-sdk",
   "description": "Javascript bindings for Tinode",
-  "version": "0.15.3",
+  "version": "0.15.4-rc2",
   "scripts": {
+    "build": "npm run build:tn-prod && npm run build:tn-dev && npm run build:dr-prod && npm run build:dr-dev",
+    "build:tn-prod": "browserify ./src/tinode.js --plugin tinyify > ./umd/tinode.prod.js",
+    "build:tn-dev": "browserify ./src/tinode.js > ./umd/tinode.dev.js",
+    "build:dr-prod": "browserify ./src/drafty.js --plugin tinyify > ./umd/drafty.prod.js",
+    "build:dr-dev": "browserify ./src/drafty.js > ./umd/drafty.dev.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tinode/tinode-js.git"
   },
+  "files": [
+    "src/tinode.js",
+    "src/drafty.js",
+    "umd/tinode.dev.js",
+    "umd/tinode.prod.js",
+    "umd/drafty.dev.js",
+    "umd/drafty.prod.js"
+  ],
   "keywords": [
     "instant messenger",
     "messenger",
     "chat"
   ],
-  "author": " <gene@tinode.co>",
+  "author": "Gene <gene@tinode.co>",
   "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/tinode/tinode-js/issues"
   },
   "homepage": "https://github.com/tinode/chat",
-  "main": "tinode.js",
+  "main": "./umd/tinode.prod.js",
   "devDependencies": {
-    "minami": "^1.2.3"
+    "minami": "^1.2.3",
+    "tinyify": "^2.4.3"
   }
 }
