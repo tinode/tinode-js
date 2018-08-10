@@ -2800,6 +2800,7 @@ Topic.prototype = {
     // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
     // before the message is sent.
     var seq = pub.seq = this._getQueuedSeqId();
+    pub._generated = true;
     pub.ts = new Date();
     pub.from = Tinode.getInstance().getCurrentUserID();
 
@@ -2819,9 +2820,7 @@ Topic.prototype = {
         return this.publishMessage(pub).then((ctrl) => {
           pub.seq = ctrl.params.seq;
           pub.ts = ctrl.ts;
-          if (this.onData) {
-            this.onData(pub);
-          }
+          this._routeData(pub);
           return ctrl;
         });
       },
@@ -3371,7 +3370,9 @@ Topic.prototype = {
         this.touched = data.ts;
       }
 
-      this._messages.put(data);
+      if (!data._generated) {
+        this._messages.put(data);
+      }
     }
 
     if (data.seq > this._maxSeq) {
@@ -3862,6 +3863,10 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           oldVal = cont.read;
           cont.read = cont.read ? Math.max(cont.read, seq) : seq;
           doUpdate = (oldVal != cont.read);
+          if (cont.recv < cont.read) {
+            cont.recv = cont.read;
+            doUpdate = true;
+          }
         } else if (what === "msg") {
           oldVal = cont.seq;
           cont.seq = cont.seq ? Math.max(cont.seq, seq) : seq;
@@ -4311,7 +4316,5 @@ Message.prototype = {
 }
 Message.prototype.constructor = Message;
 
-module.exports = {
-  tinode: Tinode.getInstance(),
-  drafty: Drafty
-};
+module.exports = Tinode.getInstance();
+module.exports.Drafty = Drafty;

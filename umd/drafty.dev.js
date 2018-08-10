@@ -1,4 +1,4 @@
-(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.Drafty = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 /**
  * @file Basic parser and formatter for very simple text markup. Mostly targeted at
  * mobile use cases similar to Telegram and WhatsApp.
@@ -46,11 +46,12 @@
  *     ]
  *  }
  */
+
 'use strict';
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
-var INLINE_STYLES = [
+const INLINE_STYLES = [
   // Strong = bold, *bold text*
   {name: "ST", start: /(?:^|\W)(\*)[^\s*]/, end: /[^\s*](\*)(?=$|\W)/},
   // Emphesized = italic, _italic text_
@@ -62,7 +63,7 @@ var INLINE_STYLES = [
 ];
 
 // RegExps for entity extraction (RF = reference)
-var ENTITY_TYPES = [
+const ENTITY_TYPES = [
   // URLs
   {name: "LN", dataName: "url",
     pack: function(val) {
@@ -84,7 +85,7 @@ var ENTITY_TYPES = [
 ];
 
 // HTML tag name suggestions
-var HTML_TAGS = {
+const HTML_TAGS = {
   ST: { name: 'b', isVoid: false },
   EM: { name: 'i', isVoid: false },
   DL: { name: 'del', isVoid: false },
@@ -899,4 +900,5 @@ var Drafty = (function() {
 
 module.exports = Drafty();
 
-},{}]},{},[1]);
+},{}]},{},[1])(1)
+});
