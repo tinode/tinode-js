@@ -2035,7 +2035,7 @@ var Tinode = (function() {
        * @param {string} name - Name of the topic to test.
        * @returns {string} One of <tt>'me'</tt>, <tt>'grp'</tt>, <tt>'p2p'</tt> or <tt>undefined</tt>.
        */
-      getTopicType: function(name) {
+      topicType: function(name) {
         var types = {
           'me': 'me', 'fnd': 'fnd',
           'grp': 'grp', 'new': 'grp',
@@ -2690,6 +2690,9 @@ Topic.prototype = {
         return ctrl;
       }
 
+      topic._subscribed = true;
+      topic.acs = (ctrl.params && ctrl.params.acs) ? ctrl.params.acs : topic.acs;
+
       // Set topic name for new topics and add it to cache.
       if (topic._new) {
         topic._new = false;
@@ -2710,18 +2713,15 @@ Topic.prototype = {
             created: ctrl.ts,
             updated: ctrl.ts,
             touched: ctrl.ts,
-            acs: ctrl.params ? ctrl.params.acs : undefined,
+            acs: topic.acs
           }]);
         }
 
-        if (setParams) {
+        if (setParams && setParams.desc) {
+          setParams.desc._generated = true;
           topic._processMetaDesc(setParams.desc);
         }
       }
-
-      topic.acs = ctrl.params ? ctrl.params.acs : undefined;
-
-      topic._subscribed = true;
 
       return ctrl;
     });
@@ -2814,8 +2814,8 @@ Topic.prototype = {
     }
 
     // If promise is provided, send the queued message when it's resolved.
-    // If no promise is provided, create on and send immediately.
-    prom = (prom || Promise.resolve(true)).then(
+    // If no promise is provided, create a resolved one and send immediately.
+    prom = (prom || Promise.resolve()).then(
       (/* argument ignored */) => {
         return this.publishMessage(pub).then((ctrl) => {
           pub.seq = ctrl.params.seq;
@@ -2843,7 +2843,7 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
   leave: function(unsub) {
-    // FIXME(gene): It's possible to unsubscribe (unsub==true) from inactive topic.
+    // It's possible to unsubscribe (unsub==true) from inactive topic.
     if (!this._subscribed && !unsub) {
       return Promise.reject(new Error("Cannot leave inactive topic"));
     }
@@ -3304,7 +3304,7 @@ Topic.prototype = {
    * @returns {String} One of 'me', 'p2p', 'grp', 'fnd' or <tt>undefined</tt>.
    */
   getType: function() {
-    return Tinode.getInstance().getTopicType(this.name);
+    return Tinode.getInstance().topicType(this.name);
   },
 
   /**
@@ -3433,15 +3433,16 @@ Topic.prototype = {
         }
         break;
       case "acs":
-        user = this._users[pres.src];
+        let uid = pres.src == "me" ? Tinode.getInstance().getCurrentUserID() : pres.src;
+        user = this._users[uid];
         if (!user) {
           // Update for an unknown user
           var acs = new AccessMode().updateAll(pres.dacs);
           if (acs && acs.mode != AccessMode._NONE) {
-            user = this._cacheGetUser(pres.src);
+            user = this._cacheGetUser(uid);
             var requestUpdate = !user;
             if (!user) {
-              user = {user: pres.src, acs: acs};
+              user = {user: uid, acs: acs};
             } else {
               user.acs = acs;
             }
@@ -3452,13 +3453,18 @@ Topic.prototype = {
         } else {
           // Known user
           user.acs.updateAll(pres.dacs);
-          if (pres.src == Tinode.getInstance().getCurrentUserID()) {
+          if (uid == Tinode.getInstance().getCurrentUserID()) {
             this.acs.updateAll(pres.dacs);
           }
+          // User left topic.
           if (!user.acs || user.acs.mode == AccessMode._NONE) {
-            // User left topic.
+            if (this.getType() == 'p2p') {
+              // If the second user unsubscribed from the topic, then the topic is no longer
+              // useful.
+              this.leave();
+            }
             this._processMetaSub([{
-              user: pres.src,
+              user: uid,
               deleted: new Date(),
               _generated: true}]);
           }
@@ -3501,8 +3507,9 @@ Topic.prototype = {
     if (typeof this.touched === "string") {
       this.touched = new Date(this.touched);
     }
-          // Update relevant contact in the me topic, if available:
-    if (this.name !== 'me' && !fromMe) {
+
+    // Update relevant contact in the me topic, if available:
+    if (this.name !== 'me' && !fromMe && !desc._generated) {
       var me = Tinode.getInstance().getMeTopic();
       if (me) {
         me._processMetaSub([{
@@ -3599,7 +3606,6 @@ Topic.prototype = {
   },
 
   // Reset subscribed state
-  // TODO(gene): should it also clear the message cache?
   _resetSub: function() {
     this._subscribed = false;
   },
@@ -3690,7 +3696,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             sub.seen.when = new Date(sub.seen.when);
           }
           cont = mergeToCache(this._contacts, topicName, sub);
-          if (tinode.getTopicType(topicName) === 'p2p') {
+          if (tinode.topicType(topicName) === 'p2p') {
             this._cachePutUser(topicName, cont);
           }
 
@@ -4285,8 +4291,12 @@ LargeFileHelper.prototype = {
 };
 
 /**
- * Definition of a message.
+ * @class Message - definition a communication message.
  * Work in progress.
+ * @memberof Tinode
+ *
+ * @param {string} topic_ - name of the topic the message belongs to.
+ * @param {string | Drafty} content_ - message contant.
  */
 var Message = function(topic_, content_) {
   this.status = Message.STATUS_NONE;
