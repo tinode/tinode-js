@@ -416,7 +416,7 @@ var CBuffer = function(compare) {
     /**
      * Remove element at the given position.
      * @memberof Tinode.CBuffer#
-     * @param {number} at - Position to fetch from.
+     * @param {number} at - Position to delete at.
      * @returns {Object} Element at the given position or <tt>undefined</tt>
      */
     delAt: function(at) {
@@ -426,6 +426,18 @@ var CBuffer = function(compare) {
       }
       return undefined;
     },
+
+    /**
+     * Remove elements between two positions.
+     * @memberof Tinode.CBuffer#
+     * @param {number} since - Position to delete from (inclusive).
+     * @param {number} before - Position to delete to (exclusive).
+     *
+     * @returns {Array} array of removed elements (could be zero length).
+     */
+     delRange: function(since, before) {
+       return buffer.splice(since, before-since);
+     },
 
     /**
      * Return the maximum number of element the buffer can hold
@@ -468,13 +480,14 @@ var CBuffer = function(compare) {
 
     /**
      * Find element in buffer using buffer's comparison function.
-     *
      * @memberof Tinode.CBuffer#
-     * @param {Object} elem element to find.
+     *
+     * @param {Object} elem - element to find.
+     * @param {boolean=} nearest - when true and exact match is not found, return the nearest element (insertion point).
      * @returns {number} index of the element in the buffer or -1.
      */
-    find: function(elem) {
-      return findNearest(elem, buffer, true);
+    find: function(elem, nearest) {
+      return findNearest(elem, buffer, !nearest);
     }
   }
 }
@@ -2974,7 +2987,8 @@ Topic.prototype = {
   },
 
   /**
-   * Delete messages. Hard-deleting messages requires Owner permission. Wrapper for {@link Tinode#delMessages}.
+   * Delete messages. Hard-deleting messages requires Owner permission.
+   * Wrapper for {@link Tinode#delMessages}.
    * @memberof Tinode.Topic#
    *
    * @param {Tinode.DelRange[]} ranges - Ranges of message IDs to delete.
@@ -2985,8 +2999,62 @@ Topic.prototype = {
     if (!this._subscribed) {
       return Promise.reject(new Error("Cannot delete messages in inactive topic"));
     }
+
+    // Sort ranges in accending order by low, the descending by hi.
+    ranges.sort(function(r1, r2) {
+      if (r1.low < r2.low) {
+    		return true;
+    	}
+      if (r1.low == r2.low) {
+    		return !r2.hi || (r1.hi >= r2.hi);
+    	}
+    	return false;
+    });
+
+    // Remove pending messages from ranges possibly clipping some ranges.
+    let tosend = ranges.reduce((out, r) => {
+      if (r.low < LOCAL_SEQID) {
+        if (!r.hi || r.hi < LOCAL_SEQID) {
+          out.push(r);
+        } else {
+          // Clip hi to max allowed value.
+          out.push({low: r.low, hi: this._maxSeq+1});
+        }
+      }
+      return out;
+    }, []);
+
     // Send {del} message, return promise
-    return Tinode.getInstance().delMessages(this.name, ranges, hard);
+    let result;
+    if (ranges.length > 0) {
+      result = Tinode.getInstance().delMessages(this.name, tosend, hard);
+    } else {
+      result = Promise.resolve({params: {del: 0}});
+    }
+    // Update local cache.
+    return result.then((ctrl) => {
+      if (ctrl.params.del > this._maxDel) {
+        this._maxDel = ctrl.params.del;
+      }
+
+      if (ranges[0] && ranges[0]._all) {
+        this._messages.reset();
+      } else {
+        ranges.map((r) => {
+          if (r.hi) {
+            this.flushMessageRange(r.low, r.hi);
+          } else {
+            this.flushMessage(r.low);
+          }
+        });
+      }
+
+      if (this.onData) {
+        // Calling with no parameters to indicate the messages were deleted.
+        this.onData();
+      }
+      return ctrl;
+    });
   },
 
   /**
@@ -2998,24 +3066,11 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   delMessagesAll: function(hardDel) {
-    var topic = this;
-    // Send {del} message, return promise
-    return this.delMessages([{low: 1, hi: this._maxSeq+1}], hardDel)
-      .then(function(ctrl) {
-        if (ctrl.params.del > topic._maxDel) {
-          topic._maxDel = ctrl.params.del;
-        }
-        topic._messages.reset();
-        if (topic.onData) {
-          // Calling with no parameters to indicate the messages were deleted.
-          topic.onData();
-        }
-        return ctrl;
-      });
+    return this.delMessages([{low: 1, hi: this._maxSeq+1, _all: true}], hardDel);
   },
 
   /**
-   * Delete all messages. Hard-deleting messages requires Owner permission. Wrapper for {@link Tinode#delMessages}.
+   * Delete multiple messages defined by their IDs. Hard-deleting messages requires Owner permission.
    * @memberof Tinode.Topic#
    *
    * @param {Tinode.DelRange[]} list - list of seq IDs to delete
@@ -3024,31 +3079,27 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   delMessagesList: function(list, hardDel) {
-    var topic = this;
-    // Sort the list of ids in ascending order
-    list.sort(function(a, b) {
-      return a - b;
-    });
-    var ranges = list.map(function(id) {
-      return {low: id};
-    });
+    // Sort the list in ascending order
+    list.sort((a, b) => a - b);
+    // Convert the array of IDs to ranges.
+    var ranges = list.reduce((out, id) => {
+      if (out.length == 0) {
+        // First element.
+        out.push({low: id});
+      } else {
+        let prev = out[out.length-1];
+        if ((!prev.hi && (id != prev.low + 1)) || (id > prev.hi)) {
+          // New range.
+          out.push({low: id});
+        } else {
+          // Expand existing range.
+          prev.hi = prev.hi ? Math.max(prev.hi, id + 1) : id + 1;
+        }
+      }
+      return out;
+    }, []);
     // Send {del} message, return promise
     return this.delMessages(ranges, hardDel)
-      .then(function(ctrl) {
-        // Update del ID
-        if (ctrl.params.del > topic._maxDel) {
-          topic._maxDel = ctrl.params.del;
-        }
-        // Remove from the buffer messages with matching ids:
-        list.map(function(id) {
-          topic.flushMessage(id);
-        });
-        if (topic.onData) {
-          // Calling with no parameters to indicate that messages were deleted.
-          topic.onData();
-        }
-        return ctrl;
-      });
   },
 
   /**
@@ -3287,15 +3338,33 @@ Topic.prototype = {
   },
 
   /**
-   * Remove message from local cache.
+   * Remove one message from local cache.
    * @memberof Tinode.Topic#
    *
    * @param {integer} seqId id of the message to remove from cache.
+   * @returns {Message} removed message or undefined if such message was not found.
    */
   flushMessage: function(seqId) {
-    var idx = this._messages.find({seq: seqId});
+    let idx = this._messages.find({seq: seqId});
     return idx >=0 ? this._messages.delAt(idx) : undefined;
   },
+
+  /**
+   * Remove a range of messages from the local cache.
+   * @memberof Tinode.Topic#
+   *
+   * @param {integer} fromId seq ID of the first message to remove (inclusive).
+   * @param {integer} untilId seqID of the last message to remove (exclusive).
+   *
+   * @returns {Message[]} array of removed messages (could be empty).
+   */
+  flushMessageRange: function(fromId, untilId) {
+    // start: find exact match.
+    // end: find insertion point (nearest == true).
+    let since = this._messages.find({seq: fromId});
+    return since >= 0 ? this._messages.delRange(since, this._messages.find({seq: untilId}, true)) : [];
+  },
+
 
   /**
    * Get type of the topic: me, p2p, grp, fnd...
