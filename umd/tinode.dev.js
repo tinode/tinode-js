@@ -964,11 +964,13 @@ const DEL_CHAR = "\u2421";
 // Starting value of a locally-generated seqId used for pending messages.
 const LOCAL_SEQID = 0xFFFFFFF;
 
-const MESSAGE_STATUS_NONE     = 0;
-const MESSAGE_STATUS_PENDING  = 1;
-const MESSAGE_STATUS_SENT     = 2;
-const MESSAGE_STATUS_RECEIVED = 3;
-const MESSAGE_STATUS_READ     = 4;
+const MESSAGE_STATUS_NONE     = 0; // Status not assigned.
+const MESSAGE_STATUS_QUEUED   = 1; // Local ID assigned, in progress to be sent.
+const MESSAGE_STATUS_SENDING  = 2; // Transmission started.
+const MESSAGE_STATUS_SENT     = 3; // Delivered to the server.
+const MESSAGE_STATUS_RECEIVED = 4; // Received by the client.
+const MESSAGE_STATUS_READ     = 5; // Read by the user.
+const MESSAGE_STATUS_TO_ME    = 6; // Message from another user.
 // Utility functions
 
 // RFC3339 formater of Date
@@ -1373,10 +1375,14 @@ var CBuffer = function(compare) {
      * @memberof Tinode.CBuffer#
      *
      * @param {Tinode.ForEachCallbackType} callback - Function to call for each element.
+     * @param {integer} startIdx- Optional index to start iterating from (inclusive).
+     * @param {integer} beforeIdx - Optional index to stop iterating before (exclusive).
      * @param {Object} context - calling context (i.e. value of 'this' in callback)
      */
-    forEach: function(callback, context) {
-      for (var i = 0; i < buffer.length; i++) {
+    forEach: function(callback, startIdx, beforeIdx, context) {
+      startIdx = startIdx | 0;
+      beforeIdx = beforeIdx || buffer.length;
+      for (var i = startIdx; i < beforeIdx; i++) {
         callback.call(context, buffer[i], i);
       }
     },
@@ -2019,22 +2025,12 @@ var Tinode = (function() {
       }
     }
 
-    // Create a copy of the packet, with some content being shallow copies.
-    function copyPacket(pkt) {
-
-    }
-
-    // Send a packet.
-    function sendBasic(pkt) {
-      pkt = simplify(pkt);
-      var msg = JSON.stringify(pkt);
-      log("out: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
-      _connection.sendText(msg);
-    }
-
-    // Send a packet returning a promise.
-    function sendWithPromise(pkt, id) {
-      var promise = makePromise(id);
+    // Send a packet. If packet id is provided return a promise.
+    function send(pkt, id) {
+      let promise;
+      if (id) {
+        promise = makePromise(id);
+      }
       pkt = simplify(pkt);
       var msg = JSON.stringify(pkt);
       log("out: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
@@ -2303,7 +2299,7 @@ var Tinode = (function() {
            pkt.acc.cred = params.cred;
          }
 
-         return sendWithPromise(pkt, pkt.acc.id);
+         return send(pkt, pkt.acc.id);
        },
 
       /**
@@ -2408,7 +2404,7 @@ var Tinode = (function() {
       hello: function() {
         var pkt = initPacket("hi");
 
-        return sendWithPromise(pkt, pkt.hi.id)
+        return send(pkt, pkt.hi.id)
           .then(function(ctrl) {
             // Server response contains server protocol version, build,
             // and session ID for long polling. Save them.
@@ -2443,7 +2439,7 @@ var Tinode = (function() {
         pkt.login.secret = secret;
         pkt.login.cred = cred;
 
-        return sendWithPromise(pkt, pkt.login.id)
+        return send(pkt, pkt.login.id)
           .then(function(ctrl) {
             loginSuccessful(ctrl);
             return ctrl;
@@ -2571,7 +2567,7 @@ var Tinode = (function() {
           }
         }
 
-        return sendWithPromise(pkt, pkt.sub.id);
+        return send(pkt, pkt.sub.id);
       },
 
       /**
@@ -2587,7 +2583,7 @@ var Tinode = (function() {
         var pkt = initPacket("leave", topic);
         pkt.leave.unsub = unsub;
 
-        return sendWithPromise(pkt, pkt.leave.id);
+        return send(pkt, pkt.leave.id);
       },
 
       /**
@@ -2645,7 +2641,7 @@ var Tinode = (function() {
         pub.seq = undefined;
         pub.from = undefined;
         pub.ts = undefined;
-        return sendWithPromise({pub: pub}, pub.id);
+        return send({pub: pub}, pub.id);
       },
 
       /**
@@ -2688,7 +2684,7 @@ var Tinode = (function() {
 
         pkt.get = mergeObj(pkt.get, params);
 
-        return sendWithPromise(pkt, pkt.get.id);
+        return send(pkt, pkt.get.id);
       },
 
       /**
@@ -2716,7 +2712,7 @@ var Tinode = (function() {
           return Promise.reject(new Error("Invalid {set} parameters"));
         }
 
-        return sendWithPromise(pkt, pkt.set.id);
+        return send(pkt, pkt.set.id);
       },
 
       /**
@@ -2745,7 +2741,7 @@ var Tinode = (function() {
         pkt.del.delseq = ranges;
         pkt.del.hard = hard;
 
-        return sendWithPromise(pkt, pkt.del.id);
+        return send(pkt, pkt.del.id);
       },
 
       /**
@@ -2759,7 +2755,7 @@ var Tinode = (function() {
         var pkt = initPacket("del", topic);
         pkt.del.what = "topic";
 
-        return sendWithPromise(pkt, pkt.del.id).then(function(ctrl) {
+        return send(pkt, pkt.del.id).then(function(ctrl) {
           cacheDel("topic", topic);
           return ctrl;
         });
@@ -2778,7 +2774,7 @@ var Tinode = (function() {
         pkt.del.what = "sub";
         pkt.del.user = user;
 
-        return sendWithPromise(pkt, pkt.del.id);
+        return send(pkt, pkt.del.id);
       },
 
       /**
@@ -2797,7 +2793,7 @@ var Tinode = (function() {
         var pkt = initPacket("note", topic);
         pkt.note.what = what;
         pkt.note.seq = seq;
-        sendBasic(pkt);
+        send(pkt);
       },
 
       /**
@@ -2810,7 +2806,7 @@ var Tinode = (function() {
       noteKeyPress: function(topic) {
         var pkt = initPacket("note", topic);
         pkt.note.what = "kp";
-        sendBasic(pkt);
+        send(pkt);
       },
 
       /**
@@ -3075,11 +3071,13 @@ var Tinode = (function() {
       onRawMessage: undefined,
 
       // Exported constants
-      MESSAGE_STATUS_NONE: MESSAGE_STATUS_NONE,
-      MESSAGE_STATUS_PENDING: MESSAGE_STATUS_PENDING,
-      MESSAGE_STATUS_SENT: MESSAGE_STATUS_SENT,
+      MESSAGE_STATUS_NONE:     MESSAGE_STATUS_NONE,
+      MESSAGE_STATUS_QUEUED:   MESSAGE_STATUS_QUEUED,
+      MESSAGE_STATUS_SENDING:  MESSAGE_STATUS_SENDING,
+      MESSAGE_STATUS_SENT:     MESSAGE_STATUS_SENT,
       MESSAGE_STATUS_RECEIVED: MESSAGE_STATUS_RECEIVED,
-      MESSAGE_STATUS_READ: MESSAGE_STATUS_READ
+      MESSAGE_STATUS_READ:     MESSAGE_STATUS_READ,
+      MESSAGE_STATUS_TO_ME:    MESSAGE_STATUS_TO_ME,
     };
   }
 
@@ -3688,13 +3686,14 @@ Topic.prototype = {
     *
     * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
     */
-   publishMessage: function(pkt) {
+   publishMessage: function(pub) {
      if (!this._subscribed) {
        return Promise.reject(new Error("Cannot publish on inactive topic"));
      }
 
      // Send data
-     return Tinode.getInstance().publishMessage(pkt);
+     pub._sending = true;
+     return Tinode.getInstance().publishMessage(pub);
    },
 
  /**
@@ -3733,7 +3732,11 @@ Topic.prototype = {
     // If no promise is provided, create a resolved one and send immediately.
     prom = (prom || Promise.resolve()).then(
       (/* argument ignored */) => {
+        if (pub._cancelled) {
+          return {code: 300, text: "cancelled"};
+        }
         return this.publishMessage(pub).then((ctrl) => {
+          pub._sending = false;
           pub.seq = ctrl.params.seq;
           pub.ts = ctrl.ts;
           this._routeData(pub);
@@ -3741,6 +3744,7 @@ Topic.prototype = {
         });
       },
       (err) => {
+        pub._sending = false;
         this._messages.delAt(this._messages.find(pub));
         if (this.onData) {
           this.onData();
@@ -3940,17 +3944,13 @@ Topic.prototype = {
         this._maxDel = ctrl.params.del;
       }
 
-      if (ranges[0] && ranges[0]._all) {
-        this._messages.reset();
-      } else {
-        ranges.map((r) => {
-          if (r.hi) {
-            this.flushMessageRange(r.low, r.hi);
-          } else {
-            this.flushMessage(r.low);
-          }
-        });
-      }
+      ranges.map((r) => {
+        if (r.hi) {
+          this.flushMessageRange(r.low, r.hi);
+        } else {
+          this.flushMessage(r.low);
+        }
+      });
 
       if (this.onData) {
         // Calling with no parameters to indicate the messages were deleted.
@@ -4163,12 +4163,18 @@ Topic.prototype = {
    * @memberof Tinode.Topic#
    *
    * @param {function} callback - Callback which will receive messages one by one. See {@link Tinode.CBuffer#forEach}
+   * @param {integer} sinceId - Optional seqId to start iterating from (inclusive).
+   * @param {integer} beforeId - Optional seqId to stop iterating before (exclusive).
    * @param {Object} context - Value of `this` inside the `callback`.
    */
-  messages: function(callback, context) {
+  messages: function(callback, sinceId, beforeId, context) {
     var cb = (callback || this.onData);
     if (cb) {
-      this._messages.forEach(cb, context);
+      let startIdx = typeof sinceId == 'number' ? this._messages.find({seq: sinceId}) : undefined;
+      let beforeIdx = typeof beforeId == 'number' ? this._messages.find({seq: beforeId}, true) : undefined;
+      if (startIdx != -1 && beforeIdx != -1) {
+        this._messages.forEach(cb, startIdx, beforeIdx, context);
+      }
     }
   },
 
@@ -4268,6 +4274,27 @@ Topic.prototype = {
     return since >= 0 ? this._messages.delRange(since, this._messages.find({seq: untilId}, true)) : [];
   },
 
+  /**
+   * Attempt to stop message from being sent.
+   * @memberof Tinode.Topic#
+   *
+   * @param {integer} seqId id of the message to stop sending and remove from cache.
+   *
+   * @returns {boolean} true if message was cancelled, false otherwise.
+   */
+  cancelSend: function(seqId) {
+    let idx = this._messages.find({seq: seqId});
+    if (idx >=0) {
+      let msg = this._messages.getAt(idx);
+      let status = this.msgStatus(msg);
+      if (status == MESSAGE_STATUS_QUEUED) {
+        msg._cancelled = true;
+        this._messages.delAt(idx);
+        return true;
+      }
+    }
+    return false;
+  },
 
   /**
    * Get type of the topic: me, p2p, grp, fnd...
@@ -4321,8 +4348,10 @@ Topic.prototype = {
   msgStatus: function(msg) {
     var status = MESSAGE_STATUS_NONE;
     if (msg.from == Tinode.getInstance().getCurrentUserID()) {
-      if (msg.seq >= LOCAL_SEQID) {
-        status = MESSAGE_STATUS_PENDING;
+      if (msg._sending) {
+        status = MESSAGE_STATUS_SENDING;
+      } else if (msg.seq >= LOCAL_SEQID) {
+        status = MESSAGE_STATUS_QUEUED;
       } else if (this.msgReadCount(msg.seq) > 0) {
         status = MESSAGE_STATUS_READ;
       } else if (this.msgRecvCount(msg.seq) > 0) {
@@ -4330,6 +4359,8 @@ Topic.prototype = {
       } else if (msg.seq > 0) {
         status = MESSAGE_STATUS_SENT;
       }
+    } else {
+      status = MESSAGE_STATUS_TO_ME;
     }
     return status;
   },
@@ -5277,10 +5308,12 @@ var Message = function(topic_, content_) {
 }
 
 Message.STATUS_NONE     = MESSAGE_STATUS_NONE;
-Message.STATUS_PENDING  = MESSAGE_STATUS_PENDING;
+Message.STATUS_QUEUED   = MESSAGE_STATUS_QUEUED;
+Message.STATUS_SENDING  = MESSAGE_STATUS_SENDING;
 Message.STATUS_SENT     = MESSAGE_STATUS_SENT;
 Message.STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED;
 Message.STATUS_READ     = MESSAGE_STATUS_READ;
+Message.STATUS_TO_ME    = MESSAGE_STATUS_TO_ME;
 
 Message.prototype = {
   /**
