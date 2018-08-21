@@ -2365,21 +2365,19 @@ var Tinode = (function() {
        * Helper method to add account credential to an object.
        * @memberof Tinode#
        *
-       * @param {Object} obj - Object to modify
-       * @param {String|Object} method - validation method or object with validation data.
-       * @param {Object} params - validation parameters
-       * @param {Strong=} response - validation response
+       * @param {Object} obj - Object to modify. A new object will be allocated if obj is null or undefined.
+       * @param {String|Object} meth - validation method or object with validation data.
+       * @param {String=} val - validation value (e.g. email or phone number).
+       * @param {Object=} params - validation parameters.
+       * @param {String=} resp - validation response.
        *
        * @returns {Object} Modified object
        */
-      addCredential: function(obj, method, value, params, response) {
-        if (typeof method == 'object') {
-          value     = method.val;
-          params    = method.params;
-          response  = method.resp;
-          method    = method.meth;
-        }
-        if (method && (value || response)) {
+      addCredential: function(obj, meth, val, params, resp) {
+        if (typeof meth == 'object') {
+          ({val, params, resp, meth} = meth);
+        };
+        if (meth && (val || resp)) {
           if (!obj) {
             obj = {};
           }
@@ -2387,9 +2385,9 @@ var Tinode = (function() {
             obj.cred = [];
           }
           obj.cred.push({
-            "meth": method,
-            "val": value,
-            "resp": response,
+            "meth": meth,
+            "val": val,
+            "resp": resp,
             "params": params
           });
         }

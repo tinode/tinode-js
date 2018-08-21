@@ -1472,8 +1472,8 @@ var Tinode = (function() {
        */
       addCredential: function(obj, meth, val, params, resp) {
         if (typeof meth == 'object') {
-          {val, params, resp, meth} = meth;
-        }
+          ({val, params, resp, meth} = meth);
+        };
         if (meth && (val || resp)) {
           if (!obj) {
             obj = {};
