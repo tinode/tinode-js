@@ -3538,9 +3538,9 @@ Topic.prototype = {
           var acs = new AccessMode().updateAll(pres.dacs);
           if (acs && acs.mode != AccessMode._NONE) {
             user = this._cacheGetUser(uid);
-            var requestUpdate = !user;
             if (!user) {
               user = {user: uid, acs: acs};
+              this.getMeta(this.startMetaQuery().withOneSub(undefined, uid).build());
             } else {
               user.acs = acs;
             }
@@ -3831,7 +3831,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
     value: function(pres) {
       var cont = this._contacts[pres.src];
       if (cont) {
-        switch(pres.what) {
+        switch (pres.what) {
           case "on": // topic came online
             cont.online = true;
             break;
