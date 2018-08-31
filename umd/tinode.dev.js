@@ -1162,8 +1162,9 @@ function jsonLoggerHelper(key, val) {
 
 // Parse browser user agent to extract browser name and version.
 function getBrowserInfo(ua) {
+
   // First test for WebKit based browser.
-  ua = ua.replace(' (KHTML, like Gecko)', '');
+  ua = (ua||'').replace(' (KHTML, like Gecko)', '');
   var m = ua.match(/(AppleWebKit\/[.\d]+)/i);
   var result;
   if (m) {
