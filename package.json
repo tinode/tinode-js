@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Javascript bindings for Tinode",
-  "version": "0.15.5rc6",
+  "version": "0.15.5",
   "scripts": {
     "build": "npm run build:tn-prod && npm run build:tn-dev && npm run build:dr-prod && npm run build:dr-dev",
     "build:tn-prod": "browserify ./src/tinode.js --standalone Tinode --plugin tinyify > ./umd/tinode.prod.js",
