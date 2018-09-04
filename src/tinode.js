@@ -30,9 +30,8 @@
  *    // Loggedin fine, attach callbacks, subscribe to 'me'.
  *    var me = Tinode.getMeTopic();
  *    me.onMetaDesc = function(meta) { ... };
- *    me.onData = function(invite) { ... };
- *    // Subscribe, fetch topic description, the list of contacts and messages (invites).
- *    me.subscribe({get: {desc: {}, sub: {}, data: {}}});
+ *    // Subscribe, fetch topic description and the list of contacts.
+ *    me.subscribe({get: {desc: {}, sub: {}});
  *  }).catch(function(err) {
  *    // Login or subscription failed, do something.
  *    ...

@@ -1,7 +1,5 @@
 # Javascript bindings for Tinode
 
-Basic documentation: http://tinode.github.io/js-api/
-
 See demo at http://api.tinode.co/ ([source](https://github.com/tinode/example-react-js))
 
 NPM package is at https://www.npmjs.com/package/tinode-sdk
@@ -18,3 +16,9 @@ or while developing as
   src="https://unpkg.com/tinode-sdk/umd/tinode.dev.js">
 </script>
 ```
+
+## Getting support
+
+* Read [client-side](http://tinode.github.io/js-api/) and [server-side](https://github.com/tinode/chat/blob/master/docs/API.md) API documentation.
+* For support, general questions, discussions post to [https://groups.google.com/d/forum/tinode](https://groups.google.com/d/forum/tinode).
+* For bugs and feature requests [open an issue](https://github.com/tinode/tinode-js/issues/new).
