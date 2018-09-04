@@ -1169,6 +1169,15 @@ var Tinode = (function() {
           if (pkt.ctrl.id) {
             execPromise(pkt.ctrl.id, pkt.ctrl.code, pkt.ctrl, pkt.ctrl.text);
           }
+
+          // All messages received: "params":{"count":11,"what":"data"},
+          if (pkt.ctrl.params && pkt.ctrl.params.what == "data") {
+            var topic = cacheGet("topic", pkt.ctrl.topic);
+            if (topic) {
+              topic._allMessagesReceived(pkt.ctrl.params.count);
+            }
+          }
+
         } else if (pkt.meta) {
           // Handling a {meta} message.
 
@@ -1922,7 +1931,7 @@ var Tinode = (function() {
           } else {
             topic = new Topic(name);
           }
-          topic._new = false;
+          // topic._new = false;
           cachePut("topic", name, topic);
         }
         if (topic) {
@@ -2425,7 +2434,7 @@ AccessMode._INVALID  = 0x100000;
 * @memberof Tinode.AccessMode
 * @static
 *
-* @param {string} mode - String representation of the access mode to parse.
+* @param {string | number} mode - either a String representation of the access mode to parse or a set of bits to assign.
 * @returns {number} - Access mode as a numeric value.
 */
 AccessMode.decode = function(str) {
@@ -2546,12 +2555,52 @@ AccessMode.update = function(val, upd) {
  * @memberof Tinode
  */
 AccessMode.prototype = {
+  /**
+   * Assign value to 'mode'.
+   * @memberof Tinode.AccessMode
+   *
+   * @param {string | number} m - either a string representation of the access mode or a set of bits.
+   * @returns {AccessMode} - <b>this</b> AccessMode.
+   */
   setMode: function(m) { this.mode = AccessMode.decode(m); return this; },
+  /**
+   * Update 'mode' value.
+   * @memberof Tinode.AccessMode
+   *
+   * @param {string} u - string representation of the changes to apply to access mode.
+   * @returns {AccessMode} - <b>this</b> AccessMode.
+   */
   updateMode: function(u) { this.mode = AccessMode.update(this.mode, u); return this; },
+  /**
+   * Get 'mode' value as a string.
+   * @memberof Tinode.AccessMode
+   *
+   * @returns {string} - <b>mode</b> value.
+   */
   getMode: function() { return AccessMode.encode(this.mode); },
 
+  /**
+   * Assign 'given' value.
+   * @memberof Tinode.AccessMode
+   *
+   * @param {string | number} m - either a string representation of the access mode or a set of bits.
+   * @returns {AccessMode} - <b>this</b> AccessMode.
+   */
   setGiven: function(g) { this.given = AccessMode.decode(g); return this; },
+  /**
+   * Update 'given' value.
+   * @memberof Tinode.AccessMode
+   *
+   * @param {string} u - string representation of the changes to apply to access mode.
+   * @returns {AccessMode} - <b>this</b> AccessMode.
+   */
   updateGiven: function(u) { this.given = AccessMode.update(this.given, u); return this; },
+  /**
+   * Get 'given' value as a string.
+   * @memberof Tinode.AccessMode
+   *
+   * @returns {string} - <b>given</b> value.
+   */
   getGiven: function() { return AccessMode.encode(this.given);},
 
   setWant: function(w) { this.want = AccessMode.decode(w); return this; },
@@ -2597,7 +2646,8 @@ AccessMode.prototype = {
  * @param {callback} callbacks.onMetaDesc - Callback which receives changes to topic desctioption {@link desc}.
  * @param {callback} callbacks.onMetaSub - Called for a single subscription record change.
  * @param {callback} callbacks.onSubsUpdated - Called after a batch of subscription changes have been recieved and cached.
- * @param {callback} callbacks.onDeleteTopic - Called when the topic is being deleted.
+ * @param {callback} callbacks.onDeleteTopic - Called after the topic is deleted.
+ * @param {callback} callbacls.onAllMessagesReceived - Called when all requested {data} messages have been recived.
  */
 var Topic = function(name, callbacks) {
   // Server-provided data, locally immutable.
@@ -2658,6 +2708,7 @@ var Topic = function(name, callbacks) {
     this.onSubsUpdated = callbacks.onSubsUpdated;
     this.onTagsUpdated = callbacks.onTagsUpdated;
     this.onDeleteTopic = callbacks.onDeleteTopic;
+    this.onAllMessagesReceived = callbacks.onAllMessagesReceived;
   }
 };
 
@@ -3702,6 +3753,13 @@ Topic.prototype = {
       this.onData();
     }
   },
+
+  // Topic is informed that the entire response to {get what=data} has been received.
+  _allMessagesReceived: function(count) {
+    if (this.onAllMessagesReceived) {
+      this.onAllMessagesReceived(count);
+    }
+  }
 
   // Reset subscribed state
   _resetSub: function() {
