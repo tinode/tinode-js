@@ -933,9 +933,8 @@ module.exports = Drafty();
  *    // Loggedin fine, attach callbacks, subscribe to 'me'.
  *    var me = Tinode.getMeTopic();
  *    me.onMetaDesc = function(meta) { ... };
- *    me.onData = function(invite) { ... };
- *    // Subscribe, fetch topic description, the list of contacts and messages (invites).
- *    me.subscribe({get: {desc: {}, sub: {}, data: {}}});
+ *    // Subscribe, fetch topic description and the list of contacts.
+ *    me.subscribe({get: {desc: {}, sub: {}});
  *  }).catch(function(err) {
  *    // Login or subscription failed, do something.
  *    ...
@@ -1433,12 +1432,14 @@ function makeBaseUrl(host, protocol, apiKey) {
 * @param {string} transport_ - network transport to use, either `ws`/`wss` for websocket or `lp` for long polling.
 * @returns a connection object.
 */
-var Connection = (function(transport_, autoreconnect_) {
-  var instance;
+var Connection = function(transport_, autoreconnect_) {
+  console.log("Connection", this);
 
   var host;
   var secure;
   var apiKey;
+
+  var logger;
 
   var autoreconnect = autoreconnect_;
 
@@ -1452,15 +1453,15 @@ var Connection = (function(transport_, autoreconnect_) {
   var _boffClosed = false; // Indicator if the socket was manually closed - don't autoreconnect if true.
 
   function log(text) {
-    if (instance.logger) {
-      instance.logger(text);
+    if (logger) {
+      logger(text);
     }
   }
 
   // Reconnect after a timeout.
   function reconnect() {
     // Clear timer
-    window.clearTimeout(_boffTimer);
+    clearTimeout(_boffTimer);
     // Calculate when to fire the reconnect attempt
     var timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 +_BOFF_JITTER * Math.random()));
     // Update iteration counter for future use
@@ -1469,118 +1470,116 @@ var Connection = (function(transport_, autoreconnect_) {
       console.log("Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
       // Maybe the socket was closed while we waited for the timer?
       if (!_boffClosed) {
-        instance.connect().catch(function(){/* do nothing */});
+        this.connect().catch(function(){/* do nothing */});
       }
     }, timeout);
   }
 
   // Initialization for Websocket
-  function init_ws() {
+  function init_ws(instance) {
     var _socket = null;
 
-    return {
-      /**
-      * Initiate a new connection
-      * @memberof Tinode.Connection#
-      * @return {Promise} Promise resolved/rejected when the connection call completes,
-          resolution is called without parameters, rejection passes the {Error} as parameter.
-      */
-      connect: function(host_) {
-        if (_socket && _socket.readyState === 1) {
-          return Promise.resolve();
-        }
-
-        if (host_) {
-          host = host_;
-        }
-
-        return new Promise(function(resolve, reject) {
-          var url = makeBaseUrl(host, secure ? "wss" : "ws", apiKey);
-
-          log("Connecting to: " + url);
-
-          var conn = new WebSocket(url);
-
-          conn.onopen = function(evt) {
-            _boffClosed = false;
-
-            if (instance.onOpen) {
-              instance.onOpen();
-            }
-            resolve();
-
-            if (autoreconnect) {
-              window.clearTimeout(_boffTimer);
-              _boffTimer = null;
-              _boffIteration = 0;
-            }
-          }
-
-          conn.onclose = function(evt) {
-            _socket = null;
-
-            if (instance.onDisconnect) {
-              instance.onDisconnect(null);
-            }
-
-            if (!_boffClosed && autoreconnect) {
-              reconnect();
-            }
-          }
-
-          conn.onerror = function(err) {
-            reject(err);
-          }
-
-          conn.onmessage = function(evt) {
-            if (instance.onMessage) {
-              instance.onMessage(evt.data);
-            }
-          }
-          _socket = conn;
-        });
-      },
-
-      /**
-       * Terminate the network connection
-       * @memberof Tinode.Connection#
-       */
-      disconnect: function() {
-        if (_socket) {
-          _boffClosed = true;
-          _socket.close();
-        }
-        _socket = null;
-      },
-
-      /**
-       * Send a string to the server.
-       * @memberof Tinode.Connection#
-       *
-       * @param {string} msg - String to send.
-       * @throws Throws an exception if the underlying connection is not live.
-       */
-      sendText: function(msg) {
-        if (_socket && (_socket.readyState == _socket.OPEN)) {
-          _socket.send(msg);
-        } else {
-          throw new Error("Websocket is not connected");
-        }
-      },
-
-      /**
-       * Check if socket is alive.
-       * @memberof Tinode.Connection#
-       * @returns {boolean} true if connection is live, false otherwise
-       */
-      isConnected: function() {
-        return (_socket && (_socket.readyState === 1));
+    /**
+    * Initiate a new connection
+    * @memberof Tinode.Connection#
+    * @return {Promise} Promise resolved/rejected when the connection call completes,
+        resolution is called without parameters, rejection passes the {Error} as parameter.
+    */
+    instance.connect = function(host_) {
+      if (_socket && _socket.readyState === 1) {
+        return Promise.resolve();
       }
+
+      if (host_) {
+        host = host_;
+      }
+
+      return new Promise(function(resolve, reject) {
+        var url = makeBaseUrl(host, secure ? "wss" : "ws", apiKey);
+
+        log("Connecting to: " + url);
+
+        var conn = new WebSocket(url);
+
+        conn.onopen = function(evt) {
+          _boffClosed = false;
+
+          if (instance.onOpen) {
+            instance.onOpen();
+          }
+          resolve();
+
+          if (autoreconnect) {
+            window.clearTimeout(_boffTimer);
+            _boffTimer = null;
+            _boffIteration = 0;
+          }
+        }
+
+        conn.onclose = function(evt) {
+          _socket = null;
+
+          if (instance.onDisconnect) {
+            instance.onDisconnect(null);
+          }
+
+          if (!_boffClosed && autoreconnect) {
+            reconnect();
+          }
+        }
+
+        conn.onerror = function(err) {
+          reject(err);
+        }
+
+        conn.onmessage = function(evt) {
+          if (instance.onMessage) {
+            instance.onMessage(evt.data);
+          }
+        }
+        _socket = conn;
+      });
+    };
+
+    /**
+     * Terminate the network connection
+     * @memberof Tinode.Connection#
+     */
+    instance.disconnect = function() {
+      if (_socket) {
+        _boffClosed = true;
+        _socket.close();
+      }
+      _socket = null;
+    };
+
+    /**
+     * Send a string to the server.
+     * @memberof Tinode.Connection#
+     *
+     * @param {string} msg - String to send.
+     * @throws Throws an exception if the underlying connection is not live.
+     */
+    instance.sendText = function(msg) {
+      if (_socket && (_socket.readyState == _socket.OPEN)) {
+        _socket.send(msg);
+      } else {
+        throw new Error("Websocket is not connected");
+      }
+    };
+
+    /**
+     * Check if socket is alive.
+     * @memberof Tinode.Connection#
+     * @returns {boolean} true if connection is live, false otherwise
+     */
+    instance.isConnected = function() {
+      return (_socket && (_socket.readyState === 1));
     }
   }
 
   // Initialization for long polling.
-  function init_lp() {
+  function init_lp(instance) {
     var XDR_UNSENT = 0;   //	Client has been created. open() not called yet.
     var XDR_OPENED = 1;   //	open() has been called.
     var XDR_HEADERS_RECEIVED = 2;	// send() has been called, and headers and status are available.
@@ -1649,73 +1648,74 @@ var Connection = (function(transport_, autoreconnect_) {
       return poller;
     }
 
-    return {
-      connect: function(host_) {
-        if (host_) {
-          host = host_;
-        }
+    instance.connect = function(host_) {
+      if (host_) {
+        host = host_;
+      }
 
-        return new Promise(function(resolve, reject){
-          var url = makeBaseUrl(host, secure ? "https" : "http", apiKey);
-          log("Connecting to: " + url);
-          _poller = lp_poller(url, resolve, reject);
-          _poller.send(null)
-        }).catch(function() {
-          // Do nothing
-        });
-      },
-      disconnect: function() {
-        if (_sender) {
-          _sender.abort();
-          _sender = null;
-        }
-        if (_poller) {
-          _poller.abort();
-          _poller = null;
-        }
-        if (instance.onDisconnect) {
-          instance.onDisconnect(null);
-        }
-        // Ensure it's reconstructed
-        _lpURL = null;
-      },
-      sendText: function(msg) {
-        _sender = lp_sender(_lpURL);
-        if (_sender && (_sender.readyState == 1)) { // 1 == OPENED
-          _sender.send(msg);
-        } else {
-          throw new Error("Long poller failed to connect");
-        }
-      },
-      isConnected: function() {
-        return (_poller && true);
+      return new Promise(function(resolve, reject){
+        var url = makeBaseUrl(host, secure ? "https" : "http", apiKey);
+        log("Connecting to: " + url);
+        _poller = lp_poller(url, resolve, reject);
+        _poller.send(null)
+      }).catch(function() {
+        // Do nothing
+      });
+    };
+
+    instance.disconnect = function() {
+      if (_sender) {
+        _sender.abort();
+        _sender = null;
+      }
+      if (_poller) {
+        _poller.abort();
+        _poller = null;
+      }
+      if (instance.onDisconnect) {
+        instance.onDisconnect(null);
+      }
+      // Ensure it's reconstructed
+      _lpURL = null;
+    }
+
+    instance.sendText = function(msg) {
+      _sender = lp_sender(_lpURL);
+      if (_sender && (_sender.readyState == 1)) { // 1 == OPENED
+        _sender.send(msg);
+      } else {
+        throw new Error("Long poller failed to connect");
       }
     };
-  }
 
-  if (transport_ === "lp") {
-    // explicit request to use long polling
-    instance = init_lp();
-  } else if (transport_ === "ws") {
-    // explicit request to use web socket
-    // if websockets are not available, horrible things will happen
-    instance = init_ws();
-  } else {
-    // Default transport selection
-    if (!window["WebSocket"]) {
-      // The browser has no websockets
-      instance = init_lp();
-    } else {
-      // Using web sockets -- default
-      instance = init_ws();
+    instance.isConnected = function() {
+      return (_poller && true);
     }
   }
 
-  instance.setup = function(host_, secure_, apiKey_) {
+  this.setup = function(host_, secure_, apiKey_) {
     host = host_;
     secure = secure_;
     apiKey = apiKey_;
   };
+
+  if (transport_ === "lp") {
+    // explicit request to use long polling
+    init_lp(this);
+  } else if (transport_ === "ws") {
+    // explicit request to use web socket
+    // if websockets are not available, horrible things will happen
+    init_ws(this);
+  } else {
+    // Default transport selection
+    if (!window["WebSocket"]) {
+      // The browser has no websockets
+      init_lp(this);
+    } else {
+      // Using web sockets -- default
+      init_ws(this);
+    }
+  }
 
   // Callbacks:
   /**
@@ -1729,14 +1729,14 @@ var Connection = (function(transport_, autoreconnect_) {
   * @type {Tinode.Connection.OnMessage}
   * @memberof Tinode.Connection#
   */
-  instance.onMessage = undefined;
+  this.onMessage = undefined;
 
   /**
   * A callback for reporting a dropped connection.
   * @type {function}
   * @memberof Tinode.Connection#
   */
-  instance.onDisconnect = undefined;
+  this.onDisconnect = undefined;
 
   /**
    * A callback called when the connection is ready to be used for sending. For websockets it's socket open,
@@ -1744,7 +1744,7 @@ var Connection = (function(transport_, autoreconnect_) {
    * @type {function}
    * @memberof Tinode.Connection#
    */
-  instance.onOpen = undefined;
+  this.onOpen = undefined;
 
  /**
   * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
@@ -1757,10 +1757,8 @@ var Connection = (function(transport_, autoreconnect_) {
   * @memberof Tinode.Connection#
   * @type {Tinode.Connection.LoggerCallbackType}
   */
-  instance.logger = undefined;
-
-  return instance;
-});
+  this.logger = undefined;
+};
 
 
 // Core Tinode functionality.
@@ -2072,6 +2070,15 @@ var Tinode = (function() {
           if (pkt.ctrl.id) {
             execPromise(pkt.ctrl.id, pkt.ctrl.code, pkt.ctrl, pkt.ctrl.text);
           }
+
+          // All messages received: "params":{"count":11,"what":"data"},
+          if (pkt.ctrl.params && pkt.ctrl.params.what == "data") {
+            var topic = cacheGet("topic", pkt.ctrl.topic);
+            if (topic) {
+              topic._allMessagesReceived(pkt.ctrl.params.count);
+            }
+          }
+
         } else if (pkt.meta) {
           // Handling a {meta} message.
 
@@ -2182,7 +2189,7 @@ var Tinode = (function() {
        */
       setup: function(appname_, host_, apiKey_, transport_, secure_) {
 
-        if(secure_ === undefined){
+        if (secure_ === undefined) {
             secure_ = (window.location && window.location.protocol === 'https:')
         }
         // Initialize with a random id each time, to avoid confusing with packets
@@ -2211,7 +2218,7 @@ var Tinode = (function() {
           _connection.disconnect();
         }
 
-        _connection = Connection(transport_, true);
+        _connection = new Connection(transport_, true);
         _connection.logger = log;
         _connection.onMessage = dispatchMessage;
         _connection.onDisconnect = handleDisconnect;
@@ -2830,7 +2837,7 @@ var Tinode = (function() {
           } else {
             topic = new Topic(name);
           }
-          topic._new = false;
+          // topic._new = false;
           cachePut("topic", name, topic);
         }
         if (topic) {
@@ -3333,7 +3340,7 @@ AccessMode._INVALID  = 0x100000;
 * @memberof Tinode.AccessMode
 * @static
 *
-* @param {string} mode - String representation of the access mode to parse.
+* @param {string | number} mode - either a String representation of the access mode to parse or a set of bits to assign.
 * @returns {number} - Access mode as a numeric value.
 */
 AccessMode.decode = function(str) {
@@ -3454,12 +3461,52 @@ AccessMode.update = function(val, upd) {
  * @memberof Tinode
  */
 AccessMode.prototype = {
+  /**
+   * Assign value to 'mode'.
+   * @memberof Tinode.AccessMode
+   *
+   * @param {string | number} m - either a string representation of the access mode or a set of bits.
+   * @returns {AccessMode} - <b>this</b> AccessMode.
+   */
   setMode: function(m) { this.mode = AccessMode.decode(m); return this; },
+  /**
+   * Update 'mode' value.
+   * @memberof Tinode.AccessMode
+   *
+   * @param {string} u - string representation of the changes to apply to access mode.
+   * @returns {AccessMode} - <b>this</b> AccessMode.
+   */
   updateMode: function(u) { this.mode = AccessMode.update(this.mode, u); return this; },
+  /**
+   * Get 'mode' value as a string.
+   * @memberof Tinode.AccessMode
+   *
+   * @returns {string} - <b>mode</b> value.
+   */
   getMode: function() { return AccessMode.encode(this.mode); },
 
+  /**
+   * Assign 'given' value.
+   * @memberof Tinode.AccessMode
+   *
+   * @param {string | number} m - either a string representation of the access mode or a set of bits.
+   * @returns {AccessMode} - <b>this</b> AccessMode.
+   */
   setGiven: function(g) { this.given = AccessMode.decode(g); return this; },
+  /**
+   * Update 'given' value.
+   * @memberof Tinode.AccessMode
+   *
+   * @param {string} u - string representation of the changes to apply to access mode.
+   * @returns {AccessMode} - <b>this</b> AccessMode.
+   */
   updateGiven: function(u) { this.given = AccessMode.update(this.given, u); return this; },
+  /**
+   * Get 'given' value as a string.
+   * @memberof Tinode.AccessMode
+   *
+   * @returns {string} - <b>given</b> value.
+   */
   getGiven: function() { return AccessMode.encode(this.given);},
 
   setWant: function(w) { this.want = AccessMode.decode(w); return this; },
@@ -3505,7 +3552,8 @@ AccessMode.prototype = {
  * @param {callback} callbacks.onMetaDesc - Callback which receives changes to topic desctioption {@link desc}.
  * @param {callback} callbacks.onMetaSub - Called for a single subscription record change.
  * @param {callback} callbacks.onSubsUpdated - Called after a batch of subscription changes have been recieved and cached.
- * @param {callback} callbacks.onDeleteTopic - Called when the topic is being deleted.
+ * @param {callback} callbacks.onDeleteTopic - Called after the topic is deleted.
+ * @param {callback} callbacls.onAllMessagesReceived - Called when all requested {data} messages have been recived.
  */
 var Topic = function(name, callbacks) {
   // Server-provided data, locally immutable.
@@ -3566,6 +3614,7 @@ var Topic = function(name, callbacks) {
     this.onSubsUpdated = callbacks.onSubsUpdated;
     this.onTagsUpdated = callbacks.onTagsUpdated;
     this.onDeleteTopic = callbacks.onDeleteTopic;
+    this.onAllMessagesReceived = callbacks.onAllMessagesReceived;
   }
 };
 
@@ -4608,6 +4657,13 @@ Topic.prototype = {
     }
     if (count > 0 && this.onData) {
       this.onData();
+    }
+  },
+
+  // Topic is informed that the entire response to {get what=data} has been received.
+  _allMessagesReceived: function(count) {
+    if (this.onAllMessagesReceived) {
+      this.onAllMessagesReceived(count);
     }
   },
 
