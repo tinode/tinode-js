@@ -2180,7 +2180,7 @@ var Tinode = (function() {
        * @param {string} transport - See {@link Tinode.Connection#transport}.
        * @param {boolean} secure - (Optional) Use Secure webSocket if true. Default is location.protocol === 'https:'
        */
-      setup: function(appname_, host_, apiKey_, transport_ , secure_) {
+      setup: function(appname_, host_, apiKey_, transport_, secure_) {
 
         if(secure_ === undefined){
             secure_ = (window.location && window.location.protocol === 'https:')
