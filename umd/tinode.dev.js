@@ -2183,7 +2183,7 @@ var Tinode = (function() {
       setup: function(appname_, host_, apiKey_, transport, secure_) {
 
         if(secure_ === undefined){
-            secure_ = (location && location.protocol === 'https:')
+            secure_ = (window.location && window.location.protocol === 'https:')
         }
         // Initialize with a random id each time, to avoid confusing with packets
         // from a previous session.
