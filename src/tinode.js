@@ -857,419 +857,418 @@ var Connection = function(transport_, autoreconnect_) {
 
 
 // Core Tinode functionality.
-var Tinode = (function() {
-  var instance;
+var Tinode = function() {
+  // Private variables
 
-  // Initialize Tinode instance
-  function init() {
-    // Private variables
+  // Client-provided application name, format <Name>/<version number>
+  var _appName = "Undefined";
+  var _platform = "undefined";
+  // Name and version of the browser.
+  var _browser = '';
+  // Underlying OS.
+  var _platform = '';
+  if (typeof navigator != 'undefined') {
+    _browser = getBrowserInfo(navigator.userAgent);
+    _platform = navigator.platform;
+  }
+  // Logging to console enabled
+  var _loggingEnabled = false;
+  // When logging, trip long strings (base64-encoded images) for readability
+  var _trimLongStrings = false;
+  // A connection object, see Connection above.
+  var _connection = null;
+  // API Key.
+  var _apiKey = null;
+  // UID of the currently authenticated user.
+  var _myUID = null;
+  // Status of connection: authenticated or not.
+  var _authenticated = false;
+  // Login used in the last successful basic authentication
+  var _login = null;
+  // Token which can be used for login instead of login/password.
+  var _authToken = null;
+  // Counter of received packets
+  var _inPacketCount = 0;
+  // Counter for generating unique message IDs
+  var _messageId = 0;
+  // Information about the server, if connected
+  var _serverInfo = null;
 
-    // Client-provided application name, format <Name>/<version number>
-    var _appName = "Undefined";
-    var _platform = "undefined";
-    var _browser = '';
-    if (typeof navigator != 'undefined') {
-      _browser = getBrowserInfo(navigator.userAgent);
-      _platform = navigator.platform;
+  // Generic cache, currently used for topics/users
+  var _cache = {};
+  // Cache of pending promises
+  var _pendingPromises = {};
+
+  // Private methods
+
+  // Console logger
+  function log(str) {
+    if (_loggingEnabled) {
+      var d = new Date()
+      var dateString = ('0' + d.getUTCHours()).slice(-2) + ':' +
+        ('0' + d.getUTCMinutes()).slice(-2) + ':' +
+        ('0' + d.getUTCSeconds()).slice(-2) + ':' +
+        ('0' + d.getUTCMilliseconds()).slice(-3);
+
+      console.log('[' + dateString + '] ' + str);
     }
-    // Logging to console enabled
-    var _loggingEnabled = false;
-    // When logging, trip long strings (base64-encoded images) for readability
-    var _trimLongStrings = false;
-    // A connection object, see Connection above.
-    var _connection = null;
-    // API Key.
-    var _apiKey = null;
-    // UID of the currently authenticated user.
-    var _myUID = null;
-    // Status of connection: authenticated or not.
-    var _authenticated = false;
-    // Login used in the last successful basic authentication
-    var _login = null;
-    // Token which can be used for login instead of login/password.
-    var _authToken = null;
-    // Counter of received packets
-    var _inPacketCount = 0;
-    // Counter for generating unique message IDs
-    var _messageId = 0;
-    // Information about the server, if connected
-    var _serverInfo = null;
+  }
 
-    // Generic cache, currently used for topics/users
-    var _cache = {};
-    // Cache of pending promises
-    var _pendingPromises = {};
+  // Access to Tinode's cache of objects
+  function cachePut(type, name, obj) {
+    _cache[type + ":" + name] = obj;
+  }
 
-    // Private methods
+  function cacheGet(type, name) {
+    return _cache[type + ":" + name];
+  }
 
-    // Console logger
-    function log(str) {
-      if (_loggingEnabled) {
-        var d = new Date()
-        var dateString = ('0' + d.getUTCHours()).slice(-2) + ':' +
-          ('0' + d.getUTCMinutes()).slice(-2) + ':' +
-          ('0' + d.getUTCSeconds()).slice(-2) + ':' +
-          ('0' + d.getUTCMilliseconds()).slice(-3);
-
-        console.log('[' + dateString + '] ' + str);
+  function cacheDel(type, name) {
+    delete _cache[type + ":" + name];
+  }
+  // Enumerate all items in cache, call func for each item.
+  // Enumeration stops if func returns true.
+  function cacheMap(func, context) {
+    for (var idx in _cache) {
+      if (func(_cache[idx], idx, context)) {
+        break;
       }
     }
+  }
 
-    // Access to Tinode's cache of objects
-    function cachePut(type, name, obj) {
-      _cache[type + ":" + name] = obj;
+  // Make limited cache management available to topic.
+  // Caching user.public only. Everything else is per-topic.
+  function attachCacheToTopic(topic) {
+    topic._cacheGetUser = function(uid) {
+      var pub = cacheGet("user", uid);
+      if (pub) {
+        return {user: uid, public: mergeObj({}, pub)};
+      }
+      return undefined;
+    };
+    topic._cachePutUser = function(uid, user) {
+      return cachePut("user", uid, mergeObj({}, user.public));
+    };
+    topic._cacheDelUser = function(uid) {
+      return cacheDel("user", uid);
+    };
+    topic._cachePutSelf = function() {
+      return cachePut("topic", topic.name, topic);
     }
+    topic._cacheDelSelf = function() {
+      return cacheDel("topic", topic.name);
+    }
+  }
 
-    function cacheGet(type, name) {
-      return _cache[type + ":" + name];
-    }
-
-    function cacheDel(type, name) {
-      delete _cache[type + ":" + name];
-    }
-    // Enumerate all items in cache, call func for each item.
-    // Enumeration stops if func returns true.
-    function cacheMap(func, context) {
-      for (var idx in _cache) {
-        if (func(_cache[idx], idx, context)) {
-          break;
+  // Resolve or reject a pending promise.
+  // Unresolved promises are stored in _pendingPromises.
+  function execPromise(id, code, onOK, errorText) {
+    var callbacks = _pendingPromises[id];
+    if (callbacks) {
+      delete _pendingPromises[id];
+      if (code >= 200 && code < 400) {
+        if (callbacks.resolve) {
+          callbacks.resolve(onOK);
         }
+      } else if (callbacks.reject) {
+        callbacks.reject(new Error("Error: " + errorText + " (" + code + ")"));
       }
     }
+  }
 
-    // Make limited cache management available to topic.
-    // Caching user.public only. Everything else is per-topic.
-    function attachCacheToTopic(topic) {
-      topic._cacheGetUser = function(uid) {
-        var pub = cacheGet("user", uid);
-        if (pub) {
-          return {user: uid, public: mergeObj({}, pub)};
-        }
-        return undefined;
-      };
-      topic._cachePutUser = function(uid, user) {
-        return cachePut("user", uid, mergeObj({}, user.public));
-      };
-      topic._cacheDelUser = function(uid) {
-        return cacheDel("user", uid);
-      };
-      topic._cachePutSelf = function() {
-        return cachePut("topic", topic.name, topic);
-      }
-      topic._cacheDelSelf = function() {
-        return cacheDel("topic", topic.name);
-      }
-    }
-
-    // Resolve or reject a pending promise.
-    // Unresolved promises are stored in _pendingPromises.
-    function execPromise(id, code, onOK, errorText) {
-      var callbacks = _pendingPromises[id];
-      if (callbacks) {
-        delete _pendingPromises[id];
-        if (code >= 200 && code < 400) {
-          if (callbacks.resolve) {
-            callbacks.resolve(onOK);
-          }
-        } else if (callbacks.reject) {
-          callbacks.reject(new Error("Error: " + errorText + " (" + code + ")"));
-        }
-      }
-    }
-
-    // Generator of default promises for sent packets
-    var makePromise = function(id) {
-      var promise = null;
-      if (id) {
-        var promise = new Promise(function(resolve, reject) {
-          // Stored callbacks will be called when the response packet with this Id arrives
-          _pendingPromises[id] = {
-            "resolve": resolve,
-            "reject": reject
-          };
-        })
-      }
-      return promise;
-    }
-
-    // Generates unique message IDs
-    function getNextMessageId() {
-      return (_messageId != 0) ? '' + _messageId++ : undefined;
-    }
-
-    // Get User Agent string
-    function getUserAgent() {
-      return _appName + " (" + (_browser ? _browser + "; " : "") + _platform + "); " + LIBRARY;
-    }
-
-    // Generator of packets stubs
-    function initPacket(type, topic) {
-      var pkt = null;
-      switch (type) {
-        case "hi":
-          return {
-            "hi": {
-              "id": getNextMessageId(),
-              "ver": VERSION,
-              "ua": getUserAgent(),
-            }
-          };
-
-        case "acc":
-          return {
-            "acc": {
-              "id": getNextMessageId(),
-              "user": null,
-              "scheme": null,
-              "secret": null,
-              "login": false,
-              "tags": null,
-              "desc": {},
-              "cred": {}
-            }
-          };
-
-        case "login":
-          return {
-            "login": {
-              "id": getNextMessageId(),
-              "scheme": null,
-              "secret": null
-            }
-          };
-
-        case "sub":
-          return {
-            "sub": {
-              "id": getNextMessageId(),
-              "topic": topic,
-              "set": {},
-              "get": {}
-            }
-          };
-
-        case "leave":
-          return {
-            "leave": {
-              "id": getNextMessageId(),
-              "topic": topic,
-              "unsub": false
-            }
-          };
-
-        case "pub":
-          return {
-            "pub": {
-              "id": getNextMessageId(),
-              "topic": topic,
-              "noecho": false,
-              "head": null,
-              "content": {}
-            }
-          };
-
-        case "get":
-          return {
-            "get": {
-              "id": getNextMessageId(),
-              "topic": topic,
-              "what": null, // data, sub, desc, space separated list; unknown strings are ignored
-              "desc": {},
-              "sub": {},
-              "data": {}
-            }
-          };
-
-        case "set":
-          return {
-            "set": {
-              "id": getNextMessageId(),
-              "topic": topic,
-              "desc": {},
-              "sub": {},
-              "tags": []
-            }
-          };
-
-        case "del":
-          return {
-            "del": {
-              "id": getNextMessageId(),
-              "topic": topic,
-              "what": null,
-              "delseq": null,
-              "user": null,
-              "hard": false
-            }
-          };
-
-        case "note":
-          return {
-            "note": {
-              // no id by design
-              "topic": topic,
-              "what": null, // one of "recv", "read", "kp"
-              "seq": undefined // the server-side message id aknowledged as received or read
-            }
-          };
-
-        default:
-          throw new Error("Unknown packet type requested: " + type);
-      }
-    }
-
-    // Send a packet. If packet id is provided return a promise.
-    function send(pkt, id) {
-      let promise;
-      if (id) {
-        promise = makePromise(id);
-      }
-      pkt = simplify(pkt);
-      var msg = JSON.stringify(pkt);
-      log("out: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
-      _connection.sendText(msg);
-      return promise;
-    }
-
-    // The main message dispatcher.
-    function dispatchMessage(data) {
-      // Skip empty response. This happens when LP times out.
-      if (!data) return;
-
-      _inPacketCount++;
-
-      // Send raw message to listener
-      if (instance.onRawMessage) {
-        instance.onRawMessage(data);
-      }
-
-      var pkt = JSON.parse(data, jsonParseHelper);
-      if (!pkt) {
-        log("in: " + data);
-        log("ERROR: failed to parse data");
-      } else {
-        log("in: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : data));
-
-        // Send complete packet to listener
-        if (instance.onMessage) {
-          instance.onMessage(pkt);
-        }
-
-        if (pkt.ctrl) {
-          // Handling {ctrl} message
-          if (instance.onCtrlMessage) {
-            instance.onCtrlMessage(pkt.ctrl);
-          }
-
-          // Resolve or reject a pending promise, if any
-          if (pkt.ctrl.id) {
-            execPromise(pkt.ctrl.id, pkt.ctrl.code, pkt.ctrl, pkt.ctrl.text);
-          }
-
-          // All messages received: "params":{"count":11,"what":"data"},
-          if (pkt.ctrl.params && pkt.ctrl.params.what == "data") {
-            var topic = cacheGet("topic", pkt.ctrl.topic);
-            if (topic) {
-              topic._allMessagesReceived(pkt.ctrl.params.count);
-            }
-          }
-
-        } else if (pkt.meta) {
-          // Handling a {meta} message.
-
-          // Preferred API: Route meta to topic, if one is registered
-          var topic = cacheGet("topic", pkt.meta.topic);
-          if (topic) {
-            topic._routeMeta(pkt.meta);
-          }
-
-          // Secondary API: callback
-          if (instance.onMetaMessage) {
-            instance.onMetaMessage(pkt.meta);
-          }
-        } else if (pkt.data) {
-          // Handling {data} message
-
-          // Preferred API: Route data to topic, if one is registered
-          var topic = cacheGet("topic", pkt.data.topic);
-          if (topic) {
-            topic._routeData(pkt.data);
-          }
-
-          // Secondary API: Call callback
-          if (instance.onDataMessage) {
-            instance.onDataMessage(pkt.data);
-          }
-        } else if (pkt.pres) {
-          // Handling {pres} message
-
-          // Preferred API: Route presence to topic, if one is registered
-          var topic = cacheGet("topic", pkt.pres.topic);
-          if (topic) {
-            topic._routePres(pkt.pres);
-          }
-
-          // Secondary API - callback
-          if (instance.onPresMessage) {
-            instance.onPresMessage(pkt.pres);
-          }
-        } else if (pkt.info) {
-          // {info} message - read/received notifications and key presses
-
-          // Preferred API: Route {info}} to topic, if one is registered
-          var topic = cacheGet("topic", pkt.info.topic);
-          if (topic) {
-            topic._routeInfo(pkt.info);
-          }
-
-          // Secondary API - callback
-          if (instance.onInfoMessage) {
-            instance.onInfoMessage(pkt.info);
-          }
-        } else {
-          log("ERROR: Unknown packet received.");
-        }
-      }
-    }
-
-    function handleReadyToSend() {
-      instance.hello();
-    }
-
-    function handleDisconnect(err) {
-      _inPacketCount = 0;
-      _serverInfo = null;
-      _authenticated = false;
-
-      cacheMap(function(obj, key) {
-        if (key.lastIndexOf("topic:", 0) === 0) {
-          obj._resetSub();
-        }
-      });
-
-      if (instance.onDisconnect) {
-        instance.onDisconnect(err);
-      }
-    }
-
-    function loginSuccessful(ctrl) {
-      // This is a response to a successful login,
-      // extract UID and security token, save it in Tinode module
-      _myUID = ctrl.params.user;
-      _authenticated = (ctrl && ctrl.code >= 200 && ctrl.code < 300);
-      if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
-        _authToken = {
-          token: ctrl.params.token,
-          expires: new Date(ctrl.params.expires)
+  // Generator of default promises for sent packets
+  var makePromise = function(id) {
+    var promise = null;
+    if (id) {
+      var promise = new Promise(function(resolve, reject) {
+        // Stored callbacks will be called when the response packet with this Id arrives
+        _pendingPromises[id] = {
+          "resolve": resolve,
+          "reject": reject
         };
-      } else {
-        _authToken = null;
+      })
+    }
+    return promise;
+  }
+
+  // Generates unique message IDs
+  function getNextMessageId() {
+    return (_messageId != 0) ? '' + _messageId++ : undefined;
+  }
+
+  // Get User Agent string
+  function getUserAgent() {
+    return _appName + " (" + (_browser ? _browser + "; " : "") + _platform + "); " + LIBRARY;
+  }
+
+  // Generator of packets stubs
+  function initPacket(type, topic) {
+    var pkt = null;
+    switch (type) {
+      case "hi":
+        return {
+          "hi": {
+            "id": getNextMessageId(),
+            "ver": VERSION,
+            "ua": getUserAgent(),
+          }
+        };
+
+      case "acc":
+        return {
+          "acc": {
+            "id": getNextMessageId(),
+            "user": null,
+            "scheme": null,
+            "secret": null,
+            "login": false,
+            "tags": null,
+            "desc": {},
+            "cred": {}
+          }
+        };
+
+      case "login":
+        return {
+          "login": {
+            "id": getNextMessageId(),
+            "scheme": null,
+            "secret": null
+          }
+        };
+
+      case "sub":
+        return {
+          "sub": {
+            "id": getNextMessageId(),
+            "topic": topic,
+            "set": {},
+            "get": {}
+          }
+        };
+
+      case "leave":
+        return {
+          "leave": {
+            "id": getNextMessageId(),
+            "topic": topic,
+            "unsub": false
+          }
+        };
+
+      case "pub":
+        return {
+          "pub": {
+            "id": getNextMessageId(),
+            "topic": topic,
+            "noecho": false,
+            "head": null,
+            "content": {}
+          }
+        };
+
+      case "get":
+        return {
+          "get": {
+            "id": getNextMessageId(),
+            "topic": topic,
+            "what": null, // data, sub, desc, space separated list; unknown strings are ignored
+            "desc": {},
+            "sub": {},
+            "data": {}
+          }
+        };
+
+      case "set":
+        return {
+          "set": {
+            "id": getNextMessageId(),
+            "topic": topic,
+            "desc": {},
+            "sub": {},
+            "tags": []
+          }
+        };
+
+      case "del":
+        return {
+          "del": {
+            "id": getNextMessageId(),
+            "topic": topic,
+            "what": null,
+            "delseq": null,
+            "user": null,
+            "hard": false
+          }
+        };
+
+      case "note":
+        return {
+          "note": {
+            // no id by design
+            "topic": topic,
+            "what": null, // one of "recv", "read", "kp"
+            "seq": undefined // the server-side message id aknowledged as received or read
+          }
+        };
+
+      default:
+        throw new Error("Unknown packet type requested: " + type);
+    }
+  }
+
+  // Send a packet. If packet id is provided return a promise.
+  function send(pkt, id) {
+    let promise;
+    if (id) {
+      promise = makePromise(id);
+    }
+    pkt = simplify(pkt);
+    var msg = JSON.stringify(pkt);
+    log("out: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
+    _connection.sendText(msg);
+    return promise;
+  }
+
+  // The main message dispatcher.
+  function dispatchMessage(data) {
+    // Skip empty response. This happens when LP times out.
+    if (!data) return;
+
+    _inPacketCount++;
+
+    // Send raw message to listener
+    if (instance.onRawMessage) {
+      instance.onRawMessage(data);
+    }
+
+    var pkt = JSON.parse(data, jsonParseHelper);
+    if (!pkt) {
+      log("in: " + data);
+      log("ERROR: failed to parse data");
+    } else {
+      log("in: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : data));
+
+      // Send complete packet to listener
+      if (instance.onMessage) {
+        instance.onMessage(pkt);
       }
 
-      if (instance.onLogin) {
-        instance.onLogin(ctrl.code, ctrl.text);
+      if (pkt.ctrl) {
+        // Handling {ctrl} message
+        if (instance.onCtrlMessage) {
+          instance.onCtrlMessage(pkt.ctrl);
+        }
+
+        // Resolve or reject a pending promise, if any
+        if (pkt.ctrl.id) {
+          execPromise(pkt.ctrl.id, pkt.ctrl.code, pkt.ctrl, pkt.ctrl.text);
+        }
+
+        // All messages received: "params":{"count":11,"what":"data"},
+        if (pkt.ctrl.params && pkt.ctrl.params.what == "data") {
+          var topic = cacheGet("topic", pkt.ctrl.topic);
+          if (topic) {
+            topic._allMessagesReceived(pkt.ctrl.params.count);
+          }
+        }
+
+      } else if (pkt.meta) {
+        // Handling a {meta} message.
+
+        // Preferred API: Route meta to topic, if one is registered
+        var topic = cacheGet("topic", pkt.meta.topic);
+        if (topic) {
+          topic._routeMeta(pkt.meta);
+        }
+
+        // Secondary API: callback
+        if (instance.onMetaMessage) {
+          instance.onMetaMessage(pkt.meta);
+        }
+      } else if (pkt.data) {
+        // Handling {data} message
+
+        // Preferred API: Route data to topic, if one is registered
+        var topic = cacheGet("topic", pkt.data.topic);
+        if (topic) {
+          topic._routeData(pkt.data);
+        }
+
+        // Secondary API: Call callback
+        if (instance.onDataMessage) {
+          instance.onDataMessage(pkt.data);
+        }
+      } else if (pkt.pres) {
+        // Handling {pres} message
+
+        // Preferred API: Route presence to topic, if one is registered
+        var topic = cacheGet("topic", pkt.pres.topic);
+        if (topic) {
+          topic._routePres(pkt.pres);
+        }
+
+        // Secondary API - callback
+        if (instance.onPresMessage) {
+          instance.onPresMessage(pkt.pres);
+        }
+      } else if (pkt.info) {
+        // {info} message - read/received notifications and key presses
+
+        // Preferred API: Route {info}} to topic, if one is registered
+        var topic = cacheGet("topic", pkt.info.topic);
+        if (topic) {
+          topic._routeInfo(pkt.info);
+        }
+
+        // Secondary API - callback
+        if (instance.onInfoMessage) {
+          instance.onInfoMessage(pkt.info);
+        }
+      } else {
+        log("ERROR: Unknown packet received.");
       }
     }
+  }
+
+  function handleReadyToSend() {
+    instance.hello();
+  }
+
+  function handleDisconnect(err) {
+    _inPacketCount = 0;
+    _serverInfo = null;
+    _authenticated = false;
+
+    cacheMap(function(obj, key) {
+      if (key.lastIndexOf("topic:", 0) === 0) {
+        obj._resetSub();
+      }
+    });
+
+    if (instance.onDisconnect) {
+      instance.onDisconnect(err);
+    }
+  }
+
+  function loginSuccessful(ctrl) {
+    // This is a response to a successful login,
+    // extract UID and security token, save it in Tinode module
+    _myUID = ctrl.params.user;
+    _authenticated = (ctrl && ctrl.code >= 200 && ctrl.code < 300);
+    if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
+      _authToken = {
+        token: ctrl.params.token,
+        expires: new Date(ctrl.params.expires)
+      };
+    } else {
+      _authToken = null;
+    }
+
+    if (instance.onLogin) {
+      instance.onLogin(ctrl.code, ctrl.text);
+    }
+  }
     // Returning an initialized instance with public methods;
     return {
 
@@ -1285,7 +1284,7 @@ var Tinode = (function() {
       setup: function(appname_, host_, apiKey_, transport_, secure_) {
 
         if (secure_ === undefined) {
-            secure_ = (window.location && window.location.protocol === 'https:')
+          secure_ = (window.location && window.location.protocol == 'https:')
         }
         // Initialize with a random id each time, to avoid confusing with packets
         // from a previous session.
@@ -2184,18 +2183,7 @@ var Tinode = (function() {
       MESSAGE_STATUS_READ:     MESSAGE_STATUS_READ,
       MESSAGE_STATUS_TO_ME:    MESSAGE_STATUS_TO_ME,
     };
-  }
-
-  return {
-    // Get the Singleton instance if one exists or create one if it doesn't.
-    getInstance: function() {
-      if (!instance) {
-        instance = init();
-      }
-      return instance;
-    }
-  };
-})();
+};
 
 /**
  * Helper class for constructing {@link Tinode.GetQuery}.
@@ -2584,7 +2572,7 @@ AccessMode.prototype = {
    * Assign 'given' value.
    * @memberof Tinode.AccessMode
    *
-   * @param {string | number} m - either a string representation of the access mode or a set of bits.
+   * @param {string | number} g - either a string representation of the access mode or a set of bits.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
   setGiven: function(g) { this.given = AccessMode.decode(g); return this; },
@@ -2604,8 +2592,28 @@ AccessMode.prototype = {
    */
   getGiven: function() { return AccessMode.encode(this.given);},
 
+  /**
+   * Assign 'want' value.
+   * @memberof Tinode.AccessMode
+   *
+   * @param {string | number} w - either a string representation of the access mode or a set of bits.
+   * @returns {AccessMode} - <b>this</b> AccessMode.
+   */
   setWant: function(w) { this.want = AccessMode.decode(w); return this; },
+  /**
+   * Update 'want' value.
+   * @memberof Tinode.AccessMode
+   *
+   * @param {string} u - string representation of the changes to apply to access mode.
+   * @returns {AccessMode} - <b>this</b> AccessMode.
+   */
   updateWant: function(u) { this.want = AccessMode.update(this.want, u); return this; },
+  /**
+   * Get 'want' value as a string.
+   * @memberof Tinode.AccessMode
+   *
+   * @returns {string} - <b>given</b> value.
+   */
   getWant: function() { return AccessMode.encode(this.want); },
 
   updateAll: function(val) {
