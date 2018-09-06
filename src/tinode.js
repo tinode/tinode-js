@@ -1279,6 +1279,81 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
   }
 };
 
+// Static methods.
+
+/**
+ * Helper method to add account credential to an object.
+ * @memberof Tinode
+ * @static
+ *
+ * @param {Object} obj - Object to modify. A new object will be allocated if obj is null or undefined.
+ * @param {String|Object} meth - validation method or object with validation data.
+ * @param {String=} val - validation value (e.g. email or phone number).
+ * @param {Object=} params - validation parameters.
+ * @param {String=} resp - validation response.
+ *
+ * @returns {Object} Modified object
+ */
+Tinode.addCredential = function(obj, meth, val, params, resp) {
+  if (typeof meth == 'object') {
+    ({val, params, resp, meth} = meth);
+  };
+  if (meth && (val || resp)) {
+    if (!obj) {
+      obj = {};
+    }
+    if (!obj.cred) {
+      obj.cred = [];
+    }
+    obj.cred.push({
+      "meth": meth,
+      "val": val,
+      "resp": resp,
+      "params": params
+    });
+  }
+  return obj;
+};
+
+/**
+ * Determine topic type from topic's name: grp, p2p, me, fnd.
+ * @memberof Tinode
+ * @static
+ *
+ * @param {string} name - Name of the topic to test.
+ * @returns {string} One of <tt>'me'</tt>, <tt>'grp'</tt>, <tt>'p2p'</tt> or <tt>undefined</tt>.
+ */
+Tinode.topicType = function(name) {
+  var types = {
+    'me': 'me', 'fnd': 'fnd',
+    'grp': 'grp', 'new': 'grp',
+    'usr': 'p2p'
+  };
+  var tp = (typeof name === "string") ? name.substring(0, 3) : 'xxx';
+  return types[tp];
+};
+
+/**
+ * Return information about the current version of this Tinode client library.
+ * @memberof Tinode
+ * @static
+ * 
+ * @returns {string} current version in the MAJOR.MINOR format, e.g. '0.8'.
+ */
+Tinode.getVersion = function() {
+  return VERSION;
+};
+
+// Exported constants
+Tinode.MESSAGE_STATUS_NONE =     MESSAGE_STATUS_NONE,
+Tinode.MESSAGE_STATUS_QUEUED =   MESSAGE_STATUS_QUEUED,
+Tinode.MESSAGE_STATUS_SENDING =  MESSAGE_STATUS_SENDING,
+Tinode.MESSAGE_STATUS_SENT =     MESSAGE_STATUS_SENT,
+Tinode.MESSAGE_STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED,
+Tinode.MESSAGE_STATUS_READ =     MESSAGE_STATUS_READ,
+Tinode.MESSAGE_STATUS_TO_ME =    MESSAGE_STATUS_TO_ME,
+
+
 // Public methods;
 Tinode.prototype = {
   /**
@@ -1426,40 +1501,6 @@ Tinode.prototype = {
     password = password || '';
     return this.account(uid, "basic",
       b64EncodeUnicode(username + ":" + password), false, null);
-  },
-
-  /**
-   * Helper method to add account credential to an object.
-   * @memberof Tinode#
-   * @static
-   *
-   * @param {Object} obj - Object to modify. A new object will be allocated if obj is null or undefined.
-   * @param {String|Object} meth - validation method or object with validation data.
-   * @param {String=} val - validation value (e.g. email or phone number).
-   * @param {Object=} params - validation parameters.
-   * @param {String=} resp - validation response.
-   *
-   * @returns {Object} Modified object
-   */
-  addCredential: function(obj, meth, val, params, resp) {
-    if (typeof meth == 'object') {
-      ({val, params, resp, meth} = meth);
-    };
-    if (meth && (val || resp)) {
-      if (!obj) {
-        obj = {};
-      }
-      if (!obj.cred) {
-        obj.cred = [];
-      }
-      obj.cred.push({
-        "meth": meth,
-        "val": val,
-        "resp": resp,
-        "params": params
-      });
-    }
-    return obj;
   },
 
   /**
@@ -1986,15 +2027,6 @@ Tinode.prototype = {
   },
 
   /**
-   * Return information about the current version of this Tinode client library.
-   * @memberof Tinode#
-   * @returns {string} current version in the MAJOR.MINOR format, e.g. '0.8'.
-   */
-  getVersion: function() {
-    return VERSION;
-  },
-
-  /**
    * Toggle console logging. Logging is off by default.
    * @memberof Tinode#
    * @param {boolean} enabled - Set to <tt>true</tt> to enable logging to console.
@@ -2002,24 +2034,6 @@ Tinode.prototype = {
   enableLogging: function(enabled, trimLongStrings) {
     this._loggingEnabled = enabled;
     this._trimLongStrings = trimLongStrings;
-  },
-
-  /**
-   * Determine topic type from topic's name: grp, p2p, me, fnd.
-   * @memberof Tinode
-   * @static
-   *
-   * @param {string} name - Name of the topic to test.
-   * @returns {string} One of <tt>'me'</tt>, <tt>'grp'</tt>, <tt>'p2p'</tt> or <tt>undefined</tt>.
-   */
-  topicType: function(name) {
-    var types = {
-      'me': 'me', 'fnd': 'fnd',
-      'grp': 'grp', 'new': 'grp',
-      'usr': 'p2p'
-    };
-    var tp = (typeof name === "string") ? name.substring(0, 3) : 'xxx';
-    return types[tp];
   },
 
   /**
@@ -2134,15 +2148,6 @@ Tinode.prototype = {
    * @type {Tinode.onRawMessage}
    */
   onRawMessage: undefined,
-
-  // Exported constants
-  MESSAGE_STATUS_NONE:     MESSAGE_STATUS_NONE,
-  MESSAGE_STATUS_QUEUED:   MESSAGE_STATUS_QUEUED,
-  MESSAGE_STATUS_SENDING:  MESSAGE_STATUS_SENDING,
-  MESSAGE_STATUS_SENT:     MESSAGE_STATUS_SENT,
-  MESSAGE_STATUS_RECEIVED: MESSAGE_STATUS_RECEIVED,
-  MESSAGE_STATUS_READ:     MESSAGE_STATUS_READ,
-  MESSAGE_STATUS_TO_ME:    MESSAGE_STATUS_TO_ME,
 };
 
 /**
