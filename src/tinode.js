@@ -1131,8 +1131,8 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
     }
     pkt = simplify(pkt);
     var msg = JSON.stringify(pkt);
-    this.logger("out: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
-    _connection.sendText(msg);
+    this.logger("out: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
+    this._connection.sendText(msg);
     return promise;
   }
 
@@ -1173,7 +1173,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       this.logger("in: " + data);
       this.logger("ERROR: failed to parse data");
     } else {
-      this.logger("in: " + (_trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : data));
+      this.logger("in: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : data));
 
       // Send complete packet to listener
       if (this.onMessage) {
@@ -1282,37 +1282,30 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
 // Static methods.
 
 /**
- * Helper method to add account credential to an object.
+ * Helper method to package account credential.
  * @memberof Tinode
  * @static
  *
- * @param {Object} obj - Object to modify. A new object will be allocated if obj is null or undefined.
  * @param {String|Object} meth - validation method or object with validation data.
  * @param {String=} val - validation value (e.g. email or phone number).
  * @param {Object=} params - validation parameters.
  * @param {String=} resp - validation response.
  *
- * @returns {Object} Modified object
+ * @returns {Array} array with a single credentail or null if no valid credentials were given.
  */
-Tinode.addCredential = function(obj, meth, val, params, resp) {
+Tinode.credential = function(meth, val, params, resp) {
   if (typeof meth == 'object') {
     ({val, params, resp, meth} = meth);
-  };
+  }
   if (meth && (val || resp)) {
-    if (!obj) {
-      obj = {};
-    }
-    if (!obj.cred) {
-      obj.cred = [];
-    }
-    obj.cred.push({
+    return [{
       "meth": meth,
       "val": val,
       "resp": resp,
       "params": params
-    });
+    }];
   }
-  return obj;
+  return null;
 };
 
 /**
@@ -1337,7 +1330,7 @@ Tinode.topicType = function(name) {
  * Return information about the current version of this Tinode client library.
  * @memberof Tinode
  * @static
- * 
+ *
  * @returns {string} current version in the MAJOR.MINOR format, e.g. '0.8'.
  */
 Tinode.getVersion = function() {
@@ -2714,47 +2707,45 @@ Topic.prototype = {
     }
 
     var name = this.name;
-    // Closure for the promise below.
-    var topic = this;
     // Send subscribe message, handle async response.
     // If topic name is explicitly provided, use it. If no name, then it's a new group topic,
     // use "new".
-    return this._tinode.subscribe(name || TOPIC_NEW, getParams, setParams).then(function(ctrl) {
+    return this._tinode.subscribe(name || TOPIC_NEW, getParams, setParams).then((ctrl) => {
       if (ctrl.code >= 300) {
-        // If the topic already exists, do nothing.
+        // Do nothing ff the topic is already subscribed to.
         return ctrl;
       }
 
-      topic._subscribed = true;
-      topic.acs = (ctrl.params && ctrl.params.acs) ? ctrl.params.acs : topic.acs;
+      this._subscribed = true;
+      this.acs = (ctrl.params && ctrl.params.acs) ? ctrl.params.acs : this.acs;
 
       // Set topic name for new topics and add it to cache.
-      if (topic._new) {
-        topic._new = false;
+      if (this._new) {
+        this._new = false;
 
-        topic.name = ctrl.topic;
-        topic.created = ctrl.ts;
-        topic.updated = ctrl.ts;
-        topic.touched = ctrl.ts;
+        this.name = ctrl.topic;
+        this.created = ctrl.ts;
+        this.updated = ctrl.ts;
+        this.touched = ctrl.ts;
 
-        topic._cachePutSelf();
+        this._cachePutSelf();
 
         // Add the new topic to the list of contacts maintained by the 'me' topic.
-        var me = tinode.getMeTopic();
+        var me = this._tinode.getMeTopic();
         if (me) {
           me._processMetaSub([{
             _generated: true,
-            topic: topic.name,
+            topic: this.name,
             created: ctrl.ts,
             updated: ctrl.ts,
             touched: ctrl.ts,
-            acs: topic.acs
+            acs: this.acs
           }]);
         }
 
         if (setParams && setParams.desc) {
           setParams.desc._generated = true;
-          topic._processMetaDesc(setParams.desc);
+          this._processMetaDesc(setParams.desc);
         }
       }
 
@@ -2952,13 +2943,12 @@ Topic.prototype = {
       return Promise.reject(new Error("Cannot update inactive topic"));
     }
 
-    var topic = this;
     if (params.tags) {
       params.tags = normalizeArray(params.tags);
     }
     // Send Set message, handle async response.
     return this._tinode.setMeta(this.name, params)
-      .then(function(ctrl) {
+      .then((ctrl) => {
         if (ctrl && ctrl.code >= 300) {
           // Not modified
           return ctrl;
@@ -2972,14 +2962,14 @@ Topic.prototype = {
           if (!params.sub.user) {
             // This is a subscription update of the current user.
             // Assign user ID otherwise the update will be ignored by _processMetaSub.
-            params.sub.user = topic._tinode.getCurrentUserID();
+            params.sub.user = this._tinode.getCurrentUserID();
             if (!params.desc) {
               // Force update to topic's asc.
               params.desc = {};
             }
           }
           params.sub._generated = true;
-          topic._processMetaSub([params.sub]);
+          this._processMetaSub([params.sub]);
         }
 
         if (params.desc) {
@@ -2987,11 +2977,11 @@ Topic.prototype = {
             params.desc.acs = ctrl.params.acs;
             params.desc.updated = ctrl.ts;
           }
-          topic._processMetaDesc(params.desc);
+          this._processMetaDesc(params.desc);
         }
 
         if (params.tags) {
-          topic._processMetaTags(params.tags);
+          this._processMetaTags(params.tags);
         }
 
         return ctrl;
@@ -3171,7 +3161,6 @@ Topic.prototype = {
   note: function(what, seq) {
     var user = this._users[this._tinode.getCurrentUserID()];
     if (user) {
-
       if (!user[what] || user[what] < seq) {
         if (this._subscribed) {
           this._tinode.note(this.name, what, seq);
@@ -3181,7 +3170,7 @@ Topic.prototype = {
       }
       user[what] = seq;
     } else {
-      this._tinode.logger("note(): user not found " + tinode.getCurrentUserID());
+      this._tinode.logger("note(): user not found " + this._tinode.getCurrentUserID());
     }
 
     // Update locally cached contact with the new count
@@ -3418,7 +3407,7 @@ Topic.prototype = {
    * @returns {String} One of 'me', 'p2p', 'grp', 'fnd' or <tt>undefined</tt>.
    */
   getType: function() {
-    return this._tinode.topicType(this.name);
+    return Tinode.topicType(this.name);
   },
 
   /**
@@ -3806,8 +3795,8 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       for (var idx in subs) {
         var sub = subs[idx];
         var topicName = sub.topic;
-        // Don't show 'fnd' topic in the list of contacts
-        if (topicName === TOPIC_FND) {
+        // Don't show 'me' and 'fnd' topics in the list of contacts.
+        if (topicName == TOPIC_FND || topicName == TOPIC_ME) {
           continue;
         }
         sub.updated = new Date(sub.updated);
@@ -3820,7 +3809,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             sub.seen.when = new Date(sub.seen.when);
           }
           cont = mergeToCache(this._contacts, topicName, sub);
-          if (this._tinode.topicType(topicName) === 'p2p') {
+          if (Tinode.topicType(topicName) === 'p2p') {
             this._cachePutUser(topicName, cont);
           }
 
