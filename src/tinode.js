@@ -1,8 +1,7 @@
 /**
- * @file All the logic need to connect to Tinode chat server. Tinode is a single js
- * file with no dependencies. Just include <tt>tinode.js</tt> into your project.
- * It will add a singleton Tinode object to the top level object, usually <tt>window</tt>.
- * See <a href="https://github.com/tinode/example-react-js">https://github.com/tinode/example-react-js</a> for real-life usage.
+ * @file SDK to connect to Tinode chat server.
+ * See <a href="https://github.com/tinode/webapp">
+ * https://github.com/tinode/webapp</a> for real-life usage.
  *
  * @copyright 2015-2018 Tinode
  * @summary Javascript bindings for Tinode.
@@ -17,22 +16,22 @@
  * <body>
  *  ...
  * <script>
- *  Tinode.enableLogging(true);
+ *  // Instantiate tinode.
+ *  let tinode = new Tinode(APP_NAME, HOST, API_KEY, null, true);
+ *  tinode.enableLogging(true);
  *  // Add logic to handle disconnects.
- *  Tinode.onDisconnect = function() { ... };
- *  // Setup with the default transport, usually websocket.
- *  Tinode.setup(APP_NAME, HOST, API_KEY);
+ *  tinode.onDisconnect = function() { ... };
  *  // Connect to the server.
- *  Tinode.connect().then(function() {
- *    // Login.
- *    return Tinode.loginBasic(login, password);
- *  }).then(function(ctrl) {
- *    // Loggedin fine, attach callbacks, subscribe to 'me'.
- *    var me = Tinode.getMeTopic();
+ *  tinode.connect().then(() => {
+ *    // Connected. Login now.
+ *    return tinode.loginBasic(login, password);
+ *  }).then((ctrl) => {
+ *    // Logged in fine, attach callbacks, subscribe to 'me'.
+ *    var me = tinode.getMeTopic();
  *    me.onMetaDesc = function(meta) { ... };
  *    // Subscribe, fetch topic description and the list of contacts.
  *    me.subscribe({get: {desc: {}, sub: {}});
- *  }).catch(function(err) {
+ *  }).catch((err) => {
  *    // Login or subscription failed, do something.
  *    ...
  *  });
