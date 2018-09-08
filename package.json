@@ -27,7 +27,8 @@
     "messenger",
     "chat"
   ],
-  "author": "Gene <gene@tinode.co>",
+  "email": "info@tinode.co",
+  "author": "Tinode Authors <info@tinode.co>",
   "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/tinode/tinode-js/issues"

@@ -42,8 +42,6 @@
 
 'use strict';
 
-var Drafty = require('./drafty.js');
-
 // Global constants
 const PROTOCOL_VERSION = "0";
 const VERSION = "0.15";
@@ -2777,15 +2775,7 @@ Topic.prototype = {
    *
    * @returns {Object} message draft.
    */
-  createMessage: function(data, noEcho) {
-    var mimeType, attachments;
-    if (!Drafty.isPlainText(data)) {
-      mimeType = Drafty.getContentType();
-      if (Drafty.hasAttachments(data)) {
-        attachments = [];
-        Drafty.attachments(data, (val) => { attachments.push(val); });
-      }
-    }
+  createMessage: function(data, noEcho, mimeType, attachments) {
     return this._tinode.createMessage(this.name, data, noEcho, mimeType, attachments);
   },
 
@@ -3802,6 +3792,11 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         sub.touched = sub.touched ? new Date(sub.touched) : null;
         sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
 
+        // Ensure the values are numeric.
+        sub.seq = sub.seq | 0;
+        sub.read = sub.read | 0;
+        sub.unread = sub.seq - sub.read;
+
         var cont = null;
         if (!sub.deleted) {
           if (sub.seen && sub.seen.when) {
@@ -4445,4 +4440,3 @@ Message.prototype = {
 Message.prototype.constructor = Message;
 
 module.exports = Tinode;
-module.exports.Drafty = Drafty;
