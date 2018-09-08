@@ -3792,8 +3792,9 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         sub.touched = sub.touched ? new Date(sub.touched) : null;
         sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
 
-        // Ensure the values are numeric.
+        // Ensure the values are integer.
         sub.seq = sub.seq | 0;
+        sub.recv = sub.recv | 0;
         sub.read = sub.read | 0;
         sub.unread = sub.seq - sub.read;
 
