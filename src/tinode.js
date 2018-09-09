@@ -52,8 +52,6 @@ const TOPIC_ME = "me";
 const TOPIC_FND = "fnd";
 const USER_NEW = "new";
 
-// Unicode [del] symbol.
-const DEL_CHAR = "\u2421";
 // Starting value of a locally-generated seqId used for pending messages.
 const LOCAL_SEQID = 0xFFFFFFF;
 
@@ -1343,6 +1341,8 @@ Tinode.MESSAGE_STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED,
 Tinode.MESSAGE_STATUS_READ =     MESSAGE_STATUS_READ,
 Tinode.MESSAGE_STATUS_TO_ME =    MESSAGE_STATUS_TO_ME,
 
+// Unicode [del] symbol.
+Tinode.DEL_CHAR = "\u2421";
 
 // Public methods;
 Tinode.prototype = {
@@ -3857,7 +3857,8 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             break;
           case "msg": // new message received
             cont.touched = new Date();
-            cont.seq = pres.seq;
+            cont.seq = pres.seq | 0;
+            cont.unread = cont.seq - cont.read;
             break;
           case "upd": // desc updated
             // Request updated description
@@ -3874,10 +3875,11 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             cont.seen = {when: new Date(), ua: pres.ua};
             break;
           case "recv": // user's other session marked some messges as received
-            cont.recv = cont.recv ? Math.max(cont.recv, pres.seq) : pres.seq;
+            cont.recv = cont.recv ? Math.max(cont.recv, pres.seq) : (pres.seq | 0);
             break;
           case "read": // user's other session marked some messages as read
-            cont.read = cont.read ? Math.max(cont.read, pres.seq) : pres.seq;
+            cont.read = cont.read ? Math.max(cont.read, pres.seq) : (pres.seq | 0);
+            cont.unread = cont.seq - cont.read;
             break;
           case "gone": // topic deleted or unsubscribed from
             delete this._contacts[pres.src];
