@@ -557,7 +557,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     var timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 +_BOFF_JITTER * Math.random()));
     // Update iteration counter for future use
     _boffIteration = (_boffIteration >= _BOFF_MAX_ITER ? _boffIteration : _boffIteration + 1);
-    _boffTimer = setTimeout(function() {
+    _boffTimer = setTimeout(() => {
       log("Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
       // Maybe the socket was closed while we waited for the timer?
       if (!_boffClosed) {
@@ -615,7 +615,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
           }
 
           if (!_boffClosed && autoreconnect) {
-            reconnect();
+            reconnect.call(instance);
           }
         }
 
@@ -1317,7 +1317,7 @@ Tinode.topicType = function(name) {
     'grp': 'grp', 'new': 'grp',
     'usr': 'p2p'
   };
-  var tp = (typeof name === "string") ? name.substring(0, 3) : 'xxx';
+  var tp = (typeof name == "string") ? name.substring(0, 3) : 'xxx';
   return types[tp];
 };
 
@@ -2034,7 +2034,7 @@ Tinode.prototype = {
    * @returns {Boolean} true if topic is online, false otherwise.
    */
   isTopicOnline: function(name) {
-    var me = this.getTopic(TOPIC_ME);
+    var me = this.getMeTopic();
     var cont = me && me.getContact(name);
     return cont && cont.online;
   },
@@ -2150,10 +2150,19 @@ Tinode.prototype = {
  */
 var MetaGetBuilder = function(parent) {
   this.topic = parent;
+  var me = parent._tinode.getMeTopic();
+  this.contact = me && me.getContact(parent.name);
   this.what = {};
 }
 
 MetaGetBuilder.prototype = {
+
+  // Get latest timestamp
+  _get_ims: function() {
+    let cupd = this.contact && this.contact.updated;
+    let tupd = this.topic._lastDescUpdate || 0;
+    return cupd > tupd ? cupd : tupd;
+  },
 
   /**
    * Add query parameters to fetch messages within explicit limits.
@@ -2213,7 +2222,7 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withLaterDesc: function() {
-    return this.withDesc(this.topic._lastDescUpdate);
+    return this.withDesc(this._get_ims());
   },
 
   /**
@@ -2271,7 +2280,9 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withLaterSub: function(limit) {
-    return this.withSub(this.topic._lastSubsUpdate, limit);
+    return this.withSub(
+      this.topic.getType() == "p2p" ? this._get_ims() : this.topic._lastSubsUpdate,
+      limit);
   },
 
   /**
@@ -3804,7 +3815,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             sub.seen.when = new Date(sub.seen.when);
           }
           cont = mergeToCache(this._contacts, topicName, sub);
-          if (Tinode.topicType(topicName) === 'p2p') {
+          if (Tinode.topicType(topicName) == 'p2p') {
             this._cachePutUser(topicName, cont);
           }
 
@@ -3971,6 +3982,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       var oldVal, doUpdate = false;
       var mode = null;
       if (cont) {
+        seq = seq | 0;
         if (what === "recv") {
           oldVal = cont.recv;
           cont.recv = cont.recv ? Math.max(cont.recv, seq) : seq;
@@ -3978,6 +3990,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         } else if (what === "read") {
           oldVal = cont.read;
           cont.read = cont.read ? Math.max(cont.read, seq) : seq;
+          cont.unread = cont.seq - cont.read;
           doUpdate = (oldVal != cont.read);
           if (cont.recv < cont.read) {
             cont.recv = cont.read;
@@ -3986,6 +3999,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         } else if (what === "msg") {
           oldVal = cont.seq;
           cont.seq = cont.seq ? Math.max(cont.seq, seq) : seq;
+          cont.unread = cont.seq - cont.read;
           if (!cont.touched || cont.touched < ts) {
             cont.touched = ts;
           }
@@ -4012,28 +4026,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   getContact: {
     value: function(name) {
       return this._contacts[name];
-    },
-    enumerable: true,
-    configurable: true,
-    writable: true
-  },
-
-  /**
-   * Get the number of unread messages of a given contact.
-   * @memberof Tinode.TopicMe#
-   * @param {string} name - Name of the contact to get unread count for, either a UID (for p2p topics) or a topic name.
-   *
-   * @returns {number} - count of unread messages.
-   */
-  unreadCount: {
-    value: function(name) {
-      var c = this._contacts[name];
-      if (c) {
-        c.seq = ~~c.seq;
-        c.read = ~~c.read;
-        return c.seq - c.read;
-      }
-      return 0;
     },
     enumerable: true,
     configurable: true,
