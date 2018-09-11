@@ -222,7 +222,7 @@ function normalizeArray(arr) {
   if (out.length == 0) {
     // Add single tag with a Unicode Del character, otherwise an ampty array
     // is ambiguos. The Del tag will be stripped by the server.
-    out.push(DEL_CHAR);
+    out.push(Tinode.DEL_CHAR);
   }
   return out;
 }
@@ -3679,7 +3679,7 @@ Topic.prototype = {
 
   // Called by Tinode when meta.sub is recived.
   _processMetaTags: function(tags) {
-    if (tags.length == 1 && tags[0] == DEL_CHAR) {
+    if (tags.length == 1 && tags[0] == Tinode.DEL_CHAR) {
       tags = [];
     }
     this._tags = tags;
