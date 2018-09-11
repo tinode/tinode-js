@@ -3,11 +3,9 @@
   "description": "Tinode SDK",
   "version": "0.15.5",
   "scripts": {
-    "build": "npm run build:tn-prod && npm run build:tn-dev && npm run build:dr-prod && npm run build:dr-dev",
-    "build:tn-prod": "browserify ./src/tinode.js --standalone Tinode --plugin tinyify > ./umd/tinode.prod.js",
-    "build:tn-dev": "browserify ./src/tinode.js --standalone Tinode > ./umd/tinode.dev.js",
-    "build:dr-prod": "browserify ./src/drafty.js --standalone Drafty --plugin tinyify > ./umd/drafty.prod.js",
-    "build:dr-dev": "browserify ./src/drafty.js --standalone Drafty > ./umd/drafty.dev.js",
+    "build": "npm run build:tn-prod && npm run build:tn-dev",
+    "build:tn-prod": "browserify ./src/index.js --standalone Tinode --plugin tinyify > ./umd/tinode.prod.js",
+    "build:tn-dev": "browserify ./src/index.js --standalone Tinode > ./umd/tinode.dev.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -15,12 +13,11 @@
     "url": "git+https://github.com/tinode/tinode-js.git"
   },
   "files": [
+    "src/index.js",
     "src/tinode.js",
     "src/drafty.js",
     "umd/tinode.dev.js",
     "umd/tinode.prod.js",
-    "umd/drafty.dev.js",
-    "umd/drafty.prod.js"
   ],
   "keywords": [
     "instant messenger",

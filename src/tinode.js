@@ -1986,7 +1986,7 @@ Tinode.prototype = {
    * @returns {Tinode.LargeFileHelper} instance of a LargeFileHelper.
    */
   getLargeFileHelper: function() {
-    return token ? new LargeFileHelper(this) : null;
+    return new LargeFileHelper(this);
   },
 
   /**
@@ -4202,7 +4202,7 @@ LargeFileHelper.prototype = {
     var instance = this;
     this.xhr.open("POST", "/v" + PROTOCOL_VERSION + "/file/u/", true);
     this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
-    this.xhr.setRequestHeader("Authorization", "Token " + this._authToken.token);
+    this.xhr.setRequestHeader("X-Tinode-Auth", "Token " + this._authToken.token);
     var result = new Promise((resolve, reject) => {
       this.toResolve = resolve;
       this.toReject = reject;
@@ -4302,7 +4302,7 @@ LargeFileHelper.prototype = {
     // Get data as blob (stored by the browser as a temporary file).
     this.xhr.open("GET", relativeUrl, true);
     this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
-    this.xhr.setRequestHeader("Authorization", "Token " + this._authToken.token);
+    this.xhr.setRequestHeader("X-Tinode-Auth", "Token " + this._authToken.token);
     this.xhr.responseType = "blob";
 
     this.onProgress = onProgress;
