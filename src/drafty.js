@@ -586,9 +586,9 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
     }
   }
   if (refurl instanceof Promise) {
-    refurl.then(
+    ex.data.ref = refurl.then(
       (url) => { ex.data.ref = url; },
-      (err) => { /* catch error, otherwise it will appear in the console. */ }
+      (err) => { /* catch the error, otherwise it will appear in the console. */ }
     );
   }
   content.ent.push(ex);
@@ -601,7 +601,7 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
  * No attempt is made to strip pre-existing html markup.
  * This is potentially unsafe because `content.txt` may contain malicious
  * markup.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {drafy} content - structured representation of rich text.
@@ -649,7 +649,7 @@ Drafty.UNSAFE_toHTML = function(content) {
 /**
  * Callback for applying custom formatting/transformation to a Drafty object.
  * Called once for each syle span.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @callback Formatter
@@ -660,7 +660,7 @@ Drafty.UNSAFE_toHTML = function(content) {
 
 /**
  * Transform Drafty using custom formatting.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {Drafty} content - content to transform.
@@ -712,30 +712,30 @@ Drafty.format = function(content, formatter, context) {
 
 /**
  * Given structured representation of rich text, convert it to plain text.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {Drafty} content - content to convert to plain text.
  */
 Drafty.toPlainText = function(content) {
-  return content.txt;
+  return typeof content == 'string' ? content : content.txt;
 }
 
 /**
  * Returns true if content has no markup and no entities.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {Drafty} content - content to check for presence of markup.
  * @returns true is content is plain text, false otherwise.
  */
 Drafty.isPlainText = function(content) {
-  return !(content.fmt || content.ent);
+  return typeof content == 'string' || !(content.fmt || content.ent);
 }
 
 /**
  * Check if the drafty content has attachments.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {Drafty} content - content to check for attachments.
@@ -755,7 +755,7 @@ Drafty.hasAttachments = function(content) {
 /**
  * Callback for applying custom formatting/transformation to a Drafty object.
  * Called once for each syle span.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @callback AttachmentCallback
@@ -765,7 +765,7 @@ Drafty.hasAttachments = function(content) {
 
 /**
  * Enumerate attachments.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {Drafty} content - drafty object to process for attachments.
@@ -785,7 +785,7 @@ Drafty.attachments = function(content, callback, context) {
 /**
  * Given the entity, get URL which can be used for downloading
  * entity data.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {Object} entity.data to get the URl from.
@@ -802,7 +802,7 @@ Drafty.getDownloadUrl = function(entData) {
 
 /**
  * Check if the entity data is being uploaded to the server.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {Object} entity.data to get the URl from.
@@ -815,7 +815,7 @@ Drafty.isUploading = function(entData) {
 /**
  * Given the entity, get URL which can be used for previewing
  * the entity.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {Object} entity.data to get the URl from.
@@ -828,7 +828,7 @@ Drafty.getPreviewUrl = function(entData) {
 
 /**
  * Get approximate size of the entity.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {Object} entity.data to get the size for.
@@ -841,7 +841,7 @@ Drafty.getEntitySize = function(entData) {
 
 /**
  * Get entity mime type.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {Object} entity.data to get the type for.
@@ -852,7 +852,7 @@ Drafty.getEntityMimeType = function(entData) {
 
 /**
  * Get HTML tag for a given two-letter style name
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {string} style - two-letter style, like ST or LN
@@ -867,7 +867,7 @@ Drafty.tagName = function(style) {
  * For a given data bundle generate an object with HTML attributes,
  * for instance, given {url: "http://www.example.com/"} return
  * {href: "http://www.example.com/"}
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @param {string} style - tw-letter style to generate attributes for.
@@ -885,7 +885,7 @@ Drafty.attrValue = function(style, data) {
 
 /**
  * Drafty MIME type.
- * @memberof Tinode.Drafty#
+ * @memberof Tinode.Drafty
  * @static
  *
  * @returns {string} HTTP Content-Type "text/x-drafty".

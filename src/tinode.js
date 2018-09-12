@@ -1691,19 +1691,20 @@ Tinode.prototype = {
    * @param {String} topic - Name of the topic to publish to.
    * @param {Object} data - Payload to publish.
    * @param {Boolean=} noEcho - If <tt>true</tt>, tell the server not to echo the message to the original session.
-   * @param {String=} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
-   * @param {Array=} attachments - array of strings containing URLs of files attached to the message.
    *
    * @returns {Object} new message which can be sent to the server or otherwise used.
    */
-  createMessage: function(topic, data, noEcho, mimeType, attachments) {
-    var pkt = this.initPacket("pub", topic);
+  createMessage: function(topic, data, noEcho) {
+    let pkt = this.initPacket("pub", topic);
+
+    let dft = typeof data == "string" ? Drafty.parse(data) : data;
+    if (dft && !Drafty.isPlainText(dft)) {
+      pkt.pub.head = {mime: Drafty.getContentType()};
+      data = dft;
+    }
     pkt.pub.noecho = noEcho;
     pkt.pub.content = data;
 
-    if (mimeType || Array.isArray(attachments)) {
-      pkt.pub.head = { mime: mimeType, attachments: attachments };
-    }
     return pkt.pub;
   },
 
@@ -1714,14 +1715,12 @@ Tinode.prototype = {
    * @param {String} topic - Name of the topic to publish to.
    * @param {Object} data - Payload to publish.
    * @param {Boolean=} noEcho - If <tt>true</tt>, tell the server not to echo the message to the original session.
-   * @param {String=} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
-   * @param {Array=} attachments - array of strings containing URLs of files attached to the message.
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publish: function(topic, data, noEcho, mimeType, attachments) {
+  publish: function(topic, data, noEcho) {
     return this.publishMessage(
-      this.createMessage(topic, data, noEcho, mimeType, attachments)
+      this.createMessage(topic, data, noEcho)
     );
   },
 
@@ -2762,63 +2761,69 @@ Topic.prototype = {
   },
 
   /**
-   * Publish data to topic. Wrapper for {@link Tinode#publish}.
+   * Immediately publish data to topic. Wrapper for {@link Tinode#publish}.
    * @memberof Tinode.Topic#
    *
-   * @param {Object} data - Data to publish.
-   * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating session.
-   * @param {String=} mimeType - Mime-type of the data. Default is 'text/plain'.
-   * @param {Array=} attachments - URLs of files attached to the message.
+   * @param {string | Object} data - Data to publish, either plain string or a Drafty object.
+   * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
-  publish: function(data) {
-    // Send data
-    return this.publishMessage(this.createMessage(data));
+  publish: function(data, noEcho) {
+    return this.publishMessage(this.createMessage(data, noEcho));
   },
 
   /**
    * Create a draft of a message without sending it to the server.
    * @memberof Tinode.Topic#
    *
-   * @param {Object} data - Content to wrap in a a draft.
+   * @param {string | Object} data - Content to wrap in a draft.
    * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating
    * session. Otherwise the server will send a copy of the message to sender.
    *
    * @returns {Object} message draft.
    */
-  createMessage: function(data, noEcho, mimeType, attachments) {
-    return this._tinode.createMessage(this.name, data, noEcho, mimeType, attachments);
+  createMessage: function(data, noEcho) {
+    return this._tinode.createMessage(this.name, data, noEcho);
   },
 
-   /**
-    * Publish message created by {@link Tinode.Topic#createMessage}.
-    * @memberof Tinode.Topic#
-    *
-    * @param {Object} pkt - Data to publish.
-    *
-    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
-    */
-   publishMessage: function(pub) {
-     if (!this._subscribed) {
-       return Promise.reject(new Error("Cannot publish on inactive topic"));
-     }
+  /**
+   * Publish message created by {@link Tinode.Topic#createMessage}.
+   * @memberof Tinode.Topic#
+   *
+   * @param {Object} pub - {data} object to publish. Must be created by {@link Tinode.Topic#createMessage}
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
+   */
+  publishMessage: function(pub) {
+    if (!this._subscribed) {
+      return Promise.reject(new Error("Cannot publish on inactive topic"));
+    }
 
-     // Send data
-     pub._sending = true;
-     return this._tinode.publishMessage(pub);
-   },
+    // Update header with attachment records.
+    if (Drafty.hasAttachments(pub.content)) {
+      let attachments = [];
+      Drafty.attachments(pub.content, (data) => { attachments.push(data.ref); });
+      pub.head.attachments = attachments;
+    }
 
- /**
-  * Add message to local message cache but do not send to the server.
-  * The message should be created by {@link Tinode.Topic#createMessage}.
-  * This is probably not the final API.
-  * @memberof Tinode.Topic#
-  *
-  * @param {Object} pkt - Message to use as a draft.
-  * @param {Promise} prom - Message will be sent when this promise is resolved, discarded if rejected.
-  *
-  * @returns {Promise} derived promise.
-  */
+    // Send data
+    pub._sending = true;
+    return this._tinode.publishMessage(pub);
+  },
+
+  /**
+   * Add message to local message cache, send to the server when the promise is resolved.
+   * If promise is null or undefined, the message will be sent immediately.
+   * The message is sent when the
+   * The message should be created by {@link Tinode.Topic#createMessage}.
+   * This is probably not the final API.
+   * @memberof Tinode.Topic#
+   *
+   * @param {Object} pub - Message to use as a draft.
+   * @param {Promise} prom - Message will be sent when this promise is resolved, discarded if rejected.
+   *
+   * @returns {Promise} derived promise.
+   */
   publishDraft: function(pub, prom) {
     if (!prom && !this._subscribed) {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
@@ -2847,6 +2852,7 @@ Topic.prototype = {
         if (pub._cancelled) {
           return {code: 300, text: "cancelled"};
         }
+
         return this.publishMessage(pub).then((ctrl) => {
           pub._sending = false;
           pub.seq = ctrl.params.seq;

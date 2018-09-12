@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Tinode SDK",
-  "version": "0.15.5",
+  "version": "0.15.6-rc1",
   "scripts": {
     "build": "npm run build:tn-prod && npm run build:tn-dev",
     "build:tn-prod": "browserify ./src/index.js --standalone Tinode --plugin tinyify > ./umd/tinode.prod.js",
