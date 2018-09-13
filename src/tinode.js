@@ -993,7 +993,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
   }
 
   // Generates unique message IDs
-  let getNextMessageId = this.getNextMessageId = () => {
+  let getNextUniqueId = this.getNextUniqueId = () => {
     return (this._messageId != 0) ? '' + this._messageId++ : undefined;
   }
 
@@ -1009,7 +1009,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "hi":
         return {
           "hi": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "ver": VERSION,
             "ua": getUserAgent(),
           }
@@ -1018,7 +1018,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "acc":
         return {
           "acc": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "user": null,
             "scheme": null,
             "secret": null,
@@ -1032,7 +1032,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "login":
         return {
           "login": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "scheme": null,
             "secret": null
           }
@@ -1041,7 +1041,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "sub":
         return {
           "sub": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "set": {},
             "get": {}
@@ -1051,7 +1051,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "leave":
         return {
           "leave": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "unsub": false
           }
@@ -1060,7 +1060,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "pub":
         return {
           "pub": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "noecho": false,
             "head": null,
@@ -1071,7 +1071,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "get":
         return {
           "get": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "what": null, // data, sub, desc, space separated list; unknown strings are ignored
             "desc": {},
@@ -1083,7 +1083,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "set":
         return {
           "set": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "desc": {},
             "sub": {},
@@ -1094,7 +1094,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "del":
         return {
           "del": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "what": null,
             "delseq": null,
@@ -1320,6 +1320,18 @@ Tinode.topicType = function(name) {
   var tp = (typeof name == "string") ? name.substring(0, 3) : 'xxx';
   return types[tp];
 };
+
+/**
+ * Check if the topic name is a name of a new topic.
+ * @memberof Tinode
+ * @static
+ *
+ * @param {string} name - topic name to check.
+ * @returns {boolean} true if the name is a name of a new topic.
+ */
+Tinode.isNewGroupTopicName = function(name) {
+  return (typeof name == 'string') && name.substring(0, 3) == TOPIC_NEW;
+},
 
 /**
  * Return information about the current version of this Tinode client library.
@@ -1655,7 +1667,7 @@ Tinode.prototype = {
         pkt.sub.set.sub = setParams.sub;
       }
 
-      if (topicName === TOPIC_NEW && setParams.desc) {
+      if (Tinode.isNewGroupTopicName(topicName) && setParams.desc) {
         // set.desc params are used for new topics only
         pkt.sub.set.desc = setParams.desc
       }
@@ -1917,9 +1929,9 @@ Tinode.prototype = {
   getTopic: function(name) {
     var topic = this.cacheGet("topic", name);
     if (!topic && name) {
-      if (name === TOPIC_ME) {
+      if (name == TOPIC_ME) {
         topic = new TopicMe();
-      } else if (name === TOPIC_FND) {
+      } else if (name == TOPIC_FND) {
         topic = new TopicFnd();
       } else {
         topic = new Topic(name);
@@ -1932,16 +1944,27 @@ Tinode.prototype = {
   },
 
   /**
-   * Instantiate a new unnamed topic. Name will be assigned by the server on {@link Tinode.Topic.subscribe}.
+   * Instantiate a new unnamed topic. An actual name will be assigned by the server
+   * on {@link Tinode.Topic.subscribe}.
    * @memberof Tinode#
    *
    * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
    * @returns {Tinode.Topic} Newly created topic.
    */
   newTopic: function(callbacks) {
-    var topic = new Topic(undefined, callbacks);
+    var topic = new Topic(TOPIC_NEW, callbacks);
     this.attachCacheToTopic(topic);
     return topic;
+  },
+
+  /**
+   * Generate unique name  like 'new123456' suitable for creating a new group topic.
+   * @memberof Tinode#
+   *
+   * @returns {string} name which can be used for creating a new group topic.
+   */
+  newGroupTopicName: function() {
+    return TOPIC_NEW + this.getNextUniqueId();
   },
 
   /**
@@ -4175,7 +4198,7 @@ var LargeFileHelper = function(tinode) {
 
   this._apiKey = tinode._apiKey;
   this._authToken = tinode.getAuthToken();
-  this._msgId = tinode.getNextMessageId();
+  this._msgId = tinode.getNextUniqueId();
   this.xhr = xdreq();
 
   // Promise
