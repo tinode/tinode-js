@@ -1,5 +1,910 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.Tinode = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 /**
+ * @file Basic parser and formatter for very simple text markup. Mostly targeted at
+ * mobile use cases similar to Telegram and WhatsApp.
+ *
+ * Supports:
+ *   *abc* -> <b>abc</b>
+ *   _abc_ -> <i>abc</i>
+ *   ~abc~ -> <del>abc</del>
+ *   `abc` -> <tt>abc</tt>
+ *
+ * Nested formatting is supported, e.g. *abc _def_* -> <b>abc <i>def</i></b>
+ * URLs, @mentions, and #hashtags are extracted and converted into links.
+ * JSON data representation is inspired by Draft.js raw formatting.
+ *
+ * @copyright 2015-2018 Tinode
+ * @summary Minimally rich text representation and formatting for Tinode.
+ * @license Apache 2.0
+ * @version 0.15
+ *
+ * @example
+ * Text:
+ *     this is *bold*, `code` and _italic_, ~strike~
+ *     combined *bold and _italic_*
+ *     an url: https://www.example.com/abc#fragment and another _www.tinode.co_
+ *     this is a @mention and a #hashtag in a string
+ *     second #hashtag
+ *
+ *  Sample JSON representation of the text above:
+ *  {
+ *     "txt": "this is bold, code and italic, strike combined bold and italic an url: https://www.example.com/abc#fragment " +
+ *             "and another www.tinode.co this is a @mention and a #hashtag in a string second #hashtag",
+ *     "fmt": [
+ *         { "at":8, "len":4,"tp":"ST" },{ "at":14, "len":4, "tp":"CO" },{ "at":23, "len":6, "tp":"EM"},
+ *         { "at":31, "len":6, "tp":"DL" },{ "tp":"BR", "len":1, "at":37 },{ "at":56, "len":6, "tp":"EM" },
+ *         { "at":47, "len":15, "tp":"ST" },{ "tp":"BR", "len":1, "at":62 },{ "at":120, "len":13, "tp":"EM" },
+ *         { "at":71, "len":36, "key":0 },{ "at":120, "len":13, "key":1 },{ "tp":"BR", "len":1, "at":133 },
+ *         { "at":144, "len":8, "key":2 },{ "at":159, "len":8, "key":3 },{ "tp":"BR", "len":1, "at":179 },
+ *         { "at":187, "len":8, "key":3 },{ "tp":"BR", "len":1, "at":195 }
+ *     ],
+ *     "ent": [
+ *         { "tp":"LN", "data":{ "url":"https://www.example.com/abc#fragment" } },
+ *         { "tp":"LN", "data":{ "url":"http://www.tinode.co" } },
+ *         { "tp":"MN", "data":{ "val":"mention" } },
+ *         { "tp":"HT", "data":{ "val":"hashtag" } }
+ *     ]
+ *  }
+ */
+
+'use strict';
+
+// Regular expressions for parsing inline formats. Javascript does not support lookbehind,
+// so it's a bit messy.
+const INLINE_STYLES = [
+  // Strong = bold, *bold text*
+  {name: "ST", start: /(?:^|\W)(\*)[^\s*]/, end: /[^\s*](\*)(?=$|\W)/},
+  // Emphesized = italic, _italic text_
+  {name: "EM", start: /(?:^|[\W_])(_)[^\s_]/, end: /[^\s_](_)(?=$|[\W_])/},
+  // Deleted, ~strike this though~
+  {name: "DL", start: /(?:^|\W)(~)[^\s~]/, end: /[^\s~](~)(?=$|\W)/},
+  // Code block `this is monospace`
+  {name: "CO", start: /(?:^|\W)(`)[^`]/, end: /[^`](`)(?=$|\W)/}
+];
+
+// RegExps for entity extraction (RF = reference)
+const ENTITY_TYPES = [
+  // URLs
+  {name: "LN", dataName: "url",
+    pack: function(val) {
+      // Check if the protocol is specified, if not use http
+      if (!/^[a-z]+:\/\//i.test(val)) {
+        val = 'http://' + val;
+      }
+      return {url: val};
+    },
+    re: /(https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,4}\b(?:[-a-zA-Z0-9@:%_\+.~#?&//=]*)/g},
+  // Mentions @user (must be 2 or more characters)
+  {name: "MN", dataName: "val",
+    pack: function(val) { return {val: val.slice(1)}; },
+    re: /\B@(\w\w+)/g},
+  // Hashtags #hashtag, like metion 2 or more characters.
+  {name: "HT", dataName: "val",
+    pack: function(val) { return {val: val.slice(1)}; },
+    re: /\B#(\w\w+)/g}
+];
+
+// HTML tag name suggestions
+const HTML_TAGS = {
+  ST: { name: 'b', isVoid: false },
+  EM: { name: 'i', isVoid: false },
+  DL: { name: 'del', isVoid: false },
+  CO: { name: 'tt', isVoid: false },
+  BR: { name: 'br', isVoid: true },
+  LN: { name: 'a', isVoid: false },
+  MN: { name: 'a', isVoid: false },
+  HT: { name: 'a', isVoid: false },
+  IM: { name: 'img', isVoid: true }
+};
+
+// Convert base64-encoded string into Blob.
+function base64toObjectUrl(b64, contentType) {
+  var bin;
+  try {
+    bin = atob(b64);
+  } catch (err) {
+    console.log("Drafty: failed to decode base64-encoded object", err.message);
+    bin = atob("");
+  }
+  var length = bin.length;
+  var buf = new ArrayBuffer(length);
+  var arr = new Uint8Array(buf);
+  for (var i = 0; i < length; i++) {
+    arr[i] = bin.charCodeAt(i);
+  }
+
+  return URL.createObjectURL(new Blob([buf], {type: contentType}));
+}
+
+// Helpers for converting Drafty to HTML.
+var DECORATORS = {
+  ST: { open: function() { return '<b>'; }, close: function() { return '</b>'; }},
+  EM: { open: function() { return '<i>'; }, close: function() { return '</i>'}},
+  DL: { open: function() { return '<del>'; }, close: function() { return '</del>'}},
+  CO: { open: function() { return '<tt>'; }, close: function() { return '</tt>'}},
+  BR: { open: function() { return ''; }, close: function() { return '<br/>'}},
+  LN: {
+    open: function(data) { return '<a href="' + data.url + '">'; },
+    close: function(data) { return '</a>'; },
+    props: function(data) { return { href: data.url, target: "_blank" }; },
+  },
+  MN: {
+    open: function(data) { return '<a href="#' + data.val + '">'; },
+    close: function(data) { return '</a>'; },
+    props: function(data) { return { name: data.val }; },
+  },
+  HT: {
+    open: function(data) { return '<a href="#' + data.val + '">'; },
+    close: function(data) { return '</a>'; },
+    props: function(data) { return { name: data.val }; },
+  },
+  IM: {
+    open: function(data) {
+      // Don't use data.ref for preview: it's a security risk.
+      var previewUrl = base64toObjectUrl(data.val, data.mime);
+      var downloadUrl = data.ref ? data.ref : previewUrl;
+      var res = (data.name ? '<a href="' + downloadUrl + '" download="' + data.name + '">' : '') +
+        '<img src="' + previewUrl + '"' +
+          (data.width ? ' width="' + data.width + '"' : '') +
+          (data.height ? ' height="' + data.height + '"' : '') + ' border="0" />';
+      console.log("open: " + res);
+      return res;
+    },
+    close: function(data) {
+      return (data.name ? '</a>' : '');
+    },
+    props: function(data) {
+      var url = base64toObjectUrl(data.val, data.mime);
+      return {
+        src: url,
+        title: data.name,
+        'data-width': data.width,
+        'data-height': data.height,
+        'data-name': data.name,
+        'data-size': (data.val.length * 0.75) | 0,
+        'data-mime': data.mime
+      };
+    },
+  }
+};
+
+/**
+ * Th main object which performs all the formatting actions.
+ * @class Drafty
+ * @memberof Tinode
+ * @constructor
+ */
+var Drafty = function() {
+}
+
+// Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
+// a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
+// ('hello ', (b: 'bold ', (i: 'italic')), ' and ', (s: 'more'), ' world');
+//
+// This is needed in order to clear markup, i.e. 'hello *world*' -> 'hello world' and convert
+// ranges from markup-ed offsets to plain text offsets.
+function chunkify(line, start, end, spans) {
+  var chunks = [];
+
+  if (spans.length == 0) {
+    return [];
+  }
+
+  for (var i in spans) {
+    // Get the next chunk from the queue
+    var span = spans[i];
+
+    // Grab the initial unstyled chunk
+    if (span.start > start) {
+      chunks.push({text: line.slice(start, span.start)});
+    }
+
+    // Grab the styled chunk. It may include subchunks.
+    var chunk = {type: span.type};
+    var chld = chunkify(line, span.start + 1, span.end - 1, span.children);
+    if (chld.length > 0) {
+      chunk.children = chld;
+    } else {
+      chunk.text = span.text;
+    }
+    chunks.push(chunk);
+    start = span.end + 1; // '+1' is to skip the formatting character
+  }
+
+  // Grab the remaining unstyled chunk, after the last span
+  if (start < end) {
+    chunks.push({text: line.slice(start, end)});
+  }
+
+  return chunks;
+}
+
+// Inverse of chunkify.
+function forEach(line, start, end, spans, formatter, context) {
+  // Add un-styled range before the styled span starts.
+  // Process ranges calling formatter for each range.
+  var result = [];
+  for (var i = 0; i < spans.length; i++) {
+    var span = spans[i];
+
+    // Add un-styled range before the styled span starts.
+    if (start < span.at) {
+      result.push(formatter.call(context, null, undefined, line.slice(start, span.at)));
+      start = span.at;
+    }
+    // Get all spans which are within current span.
+    var subspans = [];
+    for (var si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
+      subspans.push(spans[si]);
+      i = si;
+    }
+
+    var tag = HTML_TAGS[span.tp] || {};
+    result.push(formatter.call(context, span.tp, span.data,
+      tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context)));
+
+    start = span.at + span.len;
+  }
+
+  // Add the last unformatted range.
+  if (start < end) {
+    result.push(formatter.call(context, null, undefined, line.slice(start, end)));
+  }
+
+  return result;
+}
+
+// Detect starts and ends of formatting spans. Unformatted spans are
+// ignored at this stage.
+function spannify(original, re_start, re_end, type) {
+  var result = [];
+  var index = 0;
+  var line = original.slice(0); // make a copy;
+
+  while (line.length > 0) {
+    // match[0]; // match, like '*abc*'
+    // match[1]; // match captured in parenthesis, like 'abc'
+    // match['index']; // offset where the match started.
+
+    // Find the opening token.
+    var start = re_start.exec(line);
+    if (start == null) {
+      break;
+    }
+
+    // Because javascript RegExp does not support lookbehind, the actual offset may not point
+    // at the markup character. Find it in the matched string.
+    var start_offset = start['index'] + start[0].lastIndexOf(start[1]);
+    // Clip the processed part of the string.
+    line = line.slice(start_offset + 1);
+    // start_offset is an offset within the clipped string. Convert to original index.
+    start_offset += index;
+    // Index now point to the beginning of 'line' within the 'original' string.
+    index = start_offset + 1;
+
+    // Find the matching closing token.
+    var end = re_end ? re_end.exec(line) : null;
+    if (end == null) {
+      break;
+    }
+    var end_offset = end['index'] + end[0].indexOf(end[1]);
+    // Clip the processed part of the string.
+    line = line.slice(end_offset + 1);
+    // Update offsets
+    end_offset += index;
+    // Index now point to the beginning of 'line' within the 'original' string.
+    index = end_offset + 1;
+
+    result.push({
+      text: original.slice(start_offset+1, end_offset),
+      children: [],
+      start: start_offset,
+      end: end_offset,
+      type: type
+    });
+  }
+
+  return result;
+}
+
+// Convert linear array or spans into a tree representation.
+// Keep standalone and nested spans, throw away partially overlapping spans.
+function toTree(spans) {
+  if (spans.length == 0) {
+    return [];
+  }
+
+  var tree = [spans[0]];
+  var last = spans[0];
+  for (var i = 1; i < spans.length; i++) {
+    // Keep spans which start after the end of the previous span or those which
+    // are complete within the previous span.
+
+    if (spans[i].start > last.end) {
+      // Span is completely outside of the previous span.
+      tree.push(spans[i]);
+      last = spans[i];
+    } else if (spans[i].end < last.end) {
+      // Span is fully inside of the previous span. Push to subnode.
+      last.children.push(spans[i]);
+    }
+    // Span could partially overlap, ignoring it as invalid.
+  }
+
+  // Recursively rearrange the subnodes.
+  for (var i in tree) {
+    tree[i].children = toTree(tree[i].children);
+  }
+
+  return tree;
+}
+
+// Get a list of entities from a text.
+function extractEntities(line) {
+  var match;
+  var extracted = [];
+  ENTITY_TYPES.map(function(entity) {
+    while ((match = entity.re.exec(line)) !== null) {
+      extracted.push({
+        offset: match['index'],
+        len: match[0].length,
+        unique: match[0],
+        data: entity.pack(match[0]),
+        type: entity.name});
+    }
+  });
+
+  if (extracted.length == 0) {
+    return extracted;
+  }
+
+  // Remove entities detected inside other entities, like #hashtag in a URL.
+  extracted.sort(function(a,b) {
+    return a.offset - b.offset;
+  });
+
+  var idx = -1;
+  extracted = extracted.filter(function(el) {
+    var result = (el.offset > idx);
+    idx = el.offset + el.len;
+    return result;
+  });
+
+  return extracted;
+}
+
+// Convert the chunks into format suitable for serialization.
+function draftify(chunks, startAt) {
+  var plain = "";
+  var ranges = [];
+  for (var i in chunks) {
+    var chunk = chunks[i];
+    if (!chunk.text) {
+      var drafty = draftify(chunk.children, plain.length + startAt);
+      chunk.text = drafty.txt;
+      ranges = ranges.concat(drafty.fmt);
+    }
+
+    if (chunk.type) {
+      ranges.push({at: plain.length + startAt, len: chunk.text.length, tp: chunk.type});
+    }
+
+    plain += chunk.text;
+  }
+  return {txt: plain, fmt: ranges};
+}
+
+// Splice two strings: insert second string into the first one at the given index
+function splice(src, at, insert) {
+  return src.slice(0, at) + insert + src.slice(at);
+}
+
+/**
+ * Parse plain text into structured representation.
+ * @memberof Tinode.Drafty#
+ * @static
+ *
+ * @param {String} content plain-text content to parse.
+ * @return {Drafty} parsed object or null if the source is not plain text.
+ */
+Drafty.parse = function(content) {
+  // Make sure we are parsing strings only.
+  if (typeof content != "string") {
+    return null;
+  }
+
+  // Split text into lines. It makes further processing easier.
+  var lines = content.split(/\r?\n/);
+
+  // Holds entities referenced from text
+  var entityMap = [];
+  var entityIndex = {};
+
+  // Processing lines one by one, hold intermediate result in blx.
+  var blx = [];
+  lines.map(function(line) {
+    var spans = [];
+    var entities = [];
+
+    // Find formatted spans in the string.
+    // Try to match each style.
+    INLINE_STYLES.map(function(style) {
+      // Each style could be matched multiple times.
+      spans = spans.concat(spannify(line, style.start, style.end, style.name));
+    });
+
+    var block;
+    if (spans.length == 0) {
+      block = {txt: line};
+    } else {
+      // Sort spans by style occurence early -> late
+      spans.sort(function(a,b) {
+        return a.start - b.start;
+      });
+
+      // Convert an array of possibly overlapping spans into a tree
+      spans = toTree(spans);
+
+      // Build a tree representation of the entire string, not
+      // just the formatted parts.
+      var chunks = chunkify(line, 0, line.length, spans);
+
+      var drafty = draftify(chunks, 0);
+
+      block = {txt: drafty.txt, fmt: drafty.fmt};
+    }
+
+    // Extract entities from the cleaned up string.
+    entities = extractEntities(block.txt);
+    if (entities.length > 0) {
+      var ranges = [];
+      for (var i in entities) {
+        // {offset: match['index'], unique: match[0], len: match[0].length, data: ent.packer(), type: ent.name}
+        var entity = entities[i];
+        var index = entityIndex[entity.unique];
+        if (!index) {
+          index = entityMap.length;
+          entityIndex[entity.unique] = index;
+          entityMap.push({tp: entity.type, data: entity.data});
+        }
+        ranges.push({at: entity.offset, len: entity.len, key: index});
+      }
+      block.ent = ranges;
+    }
+
+    blx.push(block);
+  });
+
+  var result = {txt: ""};
+
+  // Merge lines and save line breaks as BR inline formatting.
+  if (blx.length > 0) {
+    result.txt = blx[0].txt;
+    result.fmt = (blx[0].fmt || []).concat(blx[0].ent || []);
+
+    for (var i = 1; i<blx.length; i++) {
+      var block = blx[i];
+      var offset = result.txt.length + 1;
+
+      result.fmt.push({tp: "BR", len: 1, at: offset - 1});
+
+      result.txt += " " + block.txt;
+      if (block.fmt) {
+        result.fmt = result.fmt.concat(block.fmt.map(function(s) {
+          s.at += offset; return s;
+        }));
+      }
+      if (block.ent) {
+        result.fmt = result.fmt.concat(block.ent.map(function(s) {
+          s.at += offset; return s;
+        }));
+      }
+    }
+
+    if (result.fmt.length ==  0) {
+      delete result.fmt;
+    }
+
+    if (entityMap.length > 0) {
+      result.ent = entityMap;
+    }
+  }
+  return result;
+}
+
+/**
+ * Add inline image to Drafty content.
+ * @memberof Tinode.Drafty#
+ * @static
+ *
+ * @param {Drafty} content object to add image to.
+ * @param {integer} at index where the object is inserted. The length of the image is always 1.
+ * @param {string} mime mime-type of the image, e.g. "image/png"
+ * @param {string} base64bits base64-encoded image content (or preview, if large image is attached)
+ * @param {integer} width width of the image
+ * @param {integer} height height of the image
+ * @param {string} fname file name suggestion for downloading the image.
+ * @param {integer} size size of the external file. Treat is as an untrusted hint.
+ * @param {string} refurl reference to the content. Could be null or undefined.
+ */
+Drafty.insertImage = function(content, at, mime, base64bits, width, height, fname, size, refurl) {
+  content = content || {txt: " "};
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: at,
+    len: 1,
+    key: content.ent.length
+  });
+  content.ent.push({
+    tp: "IM",
+    data: {
+      mime: mime,
+      val: base64bits,
+      width: width,
+      height: height,
+      name: fname,
+      ref: refurl,
+      size: size | 0
+    }
+  });
+
+  return content;
+}
+
+/**
+ * Add file to Drafty content. Either as a blob or as a reference.
+ * @memberof Tinode.Drafty#
+ * @static
+ *
+ * @param {Drafty} content object to attach file to.
+ * @param {string} mime mime-type of the file, e.g. "image/png"
+ * @param {string} base64bits base64-encoded file content
+ * @param {string} fname file name suggestion for downloading.
+ * @param {integer} size size of the external file. Treat is as an untrusted hint.
+ * @param {string | Promise} refurl optional reference to the content.
+ */
+Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
+  content = content || {txt: ""};
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: -1,
+    len: 0,
+    key: content.ent.length
+  });
+
+  let ex = {
+    tp: "EX",
+    data: {
+      mime: mime,
+      val: base64bits,
+      name: fname,
+      ref: refurl,
+      size: size | 0
+    }
+  }
+  if (refurl instanceof Promise) {
+    ex.data.ref = refurl.then(
+      (url) => { ex.data.ref = url; },
+      (err) => { /* catch the error, otherwise it will appear in the console. */ }
+    );
+  }
+  content.ent.push(ex);
+
+  return content;
+}
+
+/**
+ * Given the structured representation of rich text, convert it to HTML.
+ * No attempt is made to strip pre-existing html markup.
+ * This is potentially unsafe because `content.txt` may contain malicious
+ * markup.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {drafy} content - structured representation of rich text.
+ *
+ * @return HTML-representation of content.
+ */
+Drafty.UNSAFE_toHTML = function(content) {
+  var {txt, fmt, ent} = content;
+
+  var markup = [];
+  if (fmt) {
+    for (var i in fmt) {
+      var range = fmt[i];
+      var tp = range.tp, data;
+      if (!tp) {
+        var entity = ent[range.key];
+        if (entity) {
+          tp = entity.tp;
+          data = entity.data;
+        }
+      }
+
+      if (DECORATORS[tp]) {
+        // Because we later sort in descending order, closing markup must come first.
+        // Otherwise zero-length objects will not be represented correctly.
+        markup.push({idx: range.at + range.len, what: DECORATORS[tp].close(data)});
+        markup.push({idx: range.at, what: DECORATORS[tp].open(data)});
+      }
+    }
+  }
+
+  markup.sort(function(a, b) {
+    return b.idx - a.idx; // in descending order
+  });
+
+  for (var i in markup) {
+    if (markup[i].what) {
+      txt = splice(txt, markup[i].idx, markup[i].what);
+    }
+  }
+
+  return txt;
+}
+
+/**
+ * Callback for applying custom formatting/transformation to a Drafty object.
+ * Called once for each syle span.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @callback Formatter
+ * @param {string} style style code such as "ST" or "IM".
+ * @param {Object} data entity's data
+ * @param {Object} values possibly styled subspans contained in this style span.
+ */
+
+/**
+ * Transform Drafty using custom formatting.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty} content - content to transform.
+ * @param {Formatter} formatter - callback which transforms individual elements
+ * @param {Object} context - context provided to formatter as 'this'.
+ *
+ * @return {Object} transformed object
+ */
+Drafty.format = function(content, formatter, context) {
+  var {txt, fmt, ent} = content;
+
+  txt = txt || "";
+
+  if (!fmt) {
+    return [txt];
+  }
+
+  var spans = [].concat(fmt);
+
+  // Zero values may have been stripped. Restore them.
+  spans.map(function(s) {
+    s.at = s.at || 0;
+    s.len = s.len || 0;
+  });
+
+  // Soft spans first by start index (asc) then by length (desc).
+  spans.sort(function(a, b) {
+    if (a.at - b.at == 0) {
+      return b.len - a.len; // longer one comes first (<0)
+    }
+    return a.at - b.at;
+  });
+
+  // Denormalize entities into spans. Create a copy of the objects to leave
+  // original Drafty object unchanged.
+  spans = spans.map(function(s) {
+    var data;
+    var tp = s.tp;
+    if (!tp) {
+      s.key = s.key || 0;
+      data = ent[s.key].data;
+      tp = ent[s.key].tp;
+    }
+    return {tp: tp, data: data, at: s.at, len: s.len};
+  });
+
+  return forEach(txt, 0, txt.length, spans, formatter, context);
+}
+
+/**
+ * Given structured representation of rich text, convert it to plain text.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty} content - content to convert to plain text.
+ */
+Drafty.toPlainText = function(content) {
+  return typeof content == 'string' ? content : content.txt;
+}
+
+/**
+ * Returns true if content has no markup and no entities.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty} content - content to check for presence of markup.
+ * @returns true is content is plain text, false otherwise.
+ */
+Drafty.isPlainText = function(content) {
+  return typeof content == 'string' || !(content.fmt || content.ent);
+}
+
+/**
+ * Check if the drafty content has attachments.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty} content - content to check for attachments.
+ * @returns true if there are attachments.
+ */
+Drafty.hasAttachments = function(content) {
+  if (content.ent && content.ent.length > 0) {
+    for (var i in content.ent) {
+      if (content.ent[i].tp == "EX") {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Callback for applying custom formatting/transformation to a Drafty object.
+ * Called once for each syle span.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @callback AttachmentCallback
+ * @param {Object} data attachment data
+ * @param {number} index attachment's index in `content.ent`.
+ */
+
+/**
+ * Enumerate attachments.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty} content - drafty object to process for attachments.
+ * @param {AttachmentCallback} callback - callback to call for each attachment.
+ * @param {Object} content - value of "this" for callback.
+ */
+Drafty.attachments = function(content, callback, context) {
+  if (content.ent && content.ent.length > 0) {
+    for (var i in content.ent) {
+      if (content.ent[i].tp == "EX") {
+        callback.call(context, content.ent[i].data, i);
+      }
+    }
+  }
+}
+
+/**
+ * Given the entity, get URL which can be used for downloading
+ * entity data.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Object} entity.data to get the URl from.
+ */
+Drafty.getDownloadUrl = function(entData) {
+  let url = null;
+  if (entData.val) {
+    url = base64toObjectUrl(entData.val, entData.mime);
+  } else if (typeof entData.ref == 'string') {
+    url = entData.ref;
+  }
+  return url;
+}
+
+/**
+ * Check if the entity data is being uploaded to the server.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Object} entity.data to get the URl from.
+ * @returns {boolean} true if upload is in progress, false otherwise.
+ */
+Drafty.isUploading = function(entData) {
+  return entData.ref instanceof Promise;
+}
+
+/**
+ * Given the entity, get URL which can be used for previewing
+ * the entity.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Object} entity.data to get the URl from.
+ *
+ * @returns {string} url for previewing or null if no such url is available.
+ */
+Drafty.getPreviewUrl = function(entData) {
+  return entData.val ? base64toObjectUrl(entData.val, entData.mime) : null;
+}
+
+/**
+ * Get approximate size of the entity.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Object} entity.data to get the size for.
+ */
+Drafty.getEntitySize = function(entData) {
+  // Either size hint or length of value. The value is base64 encoded,
+  // the actual object size is smaller than the encoded length.
+  return entData.size ? entData.size : entData.val ? (entData.val.length * 0.75) | 0 : 0;
+}
+
+/**
+ * Get entity mime type.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Object} entity.data to get the type for.
+ */
+Drafty.getEntityMimeType = function(entData) {
+  return entData.mime || "text/plain";
+}
+
+/**
+ * Get HTML tag for a given two-letter style name
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {string} style - two-letter style, like ST or LN
+ *
+ * @returns {string} tag name
+ */
+Drafty.tagName = function(style) {
+  return HTML_TAGS[style] ? HTML_TAGS[style].name : undefined;
+}
+
+/**
+ * For a given data bundle generate an object with HTML attributes,
+ * for instance, given {url: "http://www.example.com/"} return
+ * {href: "http://www.example.com/"}
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {string} style - tw-letter style to generate attributes for.
+ * @param {Object} data - data bundle to convert to attributes
+ *
+ * @returns {Object} object with HTML attributes.
+ */
+Drafty.attrValue = function(style, data) {
+  if (data && DECORATORS[style]) {
+    return DECORATORS[style].props(data);
+  }
+
+  return undefined;
+}
+
+/**
+ * Drafty MIME type.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @returns {string} HTTP Content-Type "text/x-drafty".
+ */
+Drafty.getContentType = function() {
+  return "text/x-drafty";
+}
+
+module.exports = Drafty;
+
+},{}],2:[function(require,module,exports){
+var Drafty = require('./drafty.js');
+
+module.exports = require('./tinode.js');
+module.exports.Drafty = Drafty;
+
+},{"./drafty.js":1,"./tinode.js":3}],3:[function(require,module,exports){
+/**
  * @file SDK to connect to Tinode chat server.
  * See <a href="https://github.com/tinode/webapp">
  * https://github.com/tinode/webapp</a> for real-life usage.
@@ -53,8 +958,6 @@ const TOPIC_ME = "me";
 const TOPIC_FND = "fnd";
 const USER_NEW = "new";
 
-// Unicode [del] symbol.
-const DEL_CHAR = "\u2421";
 // Starting value of a locally-generated seqId used for pending messages.
 const LOCAL_SEQID = 0xFFFFFFF;
 
@@ -225,7 +1128,7 @@ function normalizeArray(arr) {
   if (out.length == 0) {
     // Add single tag with a Unicode Del character, otherwise an ampty array
     // is ambiguos. The Del tag will be stripped by the server.
-    out.push(DEL_CHAR);
+    out.push(Tinode.DEL_CHAR);
   }
   return out;
 }
@@ -560,7 +1463,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     var timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 +_BOFF_JITTER * Math.random()));
     // Update iteration counter for future use
     _boffIteration = (_boffIteration >= _BOFF_MAX_ITER ? _boffIteration : _boffIteration + 1);
-    _boffTimer = setTimeout(function() {
+    _boffTimer = setTimeout(() => {
       log("Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
       // Maybe the socket was closed while we waited for the timer?
       if (!_boffClosed) {
@@ -618,7 +1521,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
           }
 
           if (!_boffClosed && autoreconnect) {
-            reconnect();
+            reconnect.call(instance);
           }
         }
 
@@ -996,7 +1899,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
   }
 
   // Generates unique message IDs
-  let getNextMessageId = this.getNextMessageId = () => {
+  let getNextUniqueId = this.getNextUniqueId = () => {
     return (this._messageId != 0) ? '' + this._messageId++ : undefined;
   }
 
@@ -1012,7 +1915,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "hi":
         return {
           "hi": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "ver": VERSION,
             "ua": getUserAgent(),
           }
@@ -1021,7 +1924,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "acc":
         return {
           "acc": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "user": null,
             "scheme": null,
             "secret": null,
@@ -1035,7 +1938,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "login":
         return {
           "login": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "scheme": null,
             "secret": null
           }
@@ -1044,7 +1947,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "sub":
         return {
           "sub": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "set": {},
             "get": {}
@@ -1054,7 +1957,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "leave":
         return {
           "leave": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "unsub": false
           }
@@ -1063,7 +1966,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "pub":
         return {
           "pub": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "noecho": false,
             "head": null,
@@ -1074,7 +1977,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "get":
         return {
           "get": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "what": null, // data, sub, desc, space separated list; unknown strings are ignored
             "desc": {},
@@ -1086,7 +1989,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "set":
         return {
           "set": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "desc": {},
             "sub": {},
@@ -1097,7 +2000,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       case "del":
         return {
           "del": {
-            "id": getNextMessageId(),
+            "id": getNextUniqueId(),
             "topic": topic,
             "what": null,
             "delseq": null,
@@ -1320,9 +2223,21 @@ Tinode.topicType = function(name) {
     'grp': 'grp', 'new': 'grp',
     'usr': 'p2p'
   };
-  var tp = (typeof name === "string") ? name.substring(0, 3) : 'xxx';
+  var tp = (typeof name == "string") ? name.substring(0, 3) : 'xxx';
   return types[tp];
 };
+
+/**
+ * Check if the topic name is a name of a new topic.
+ * @memberof Tinode
+ * @static
+ *
+ * @param {string} name - topic name to check.
+ * @returns {boolean} true if the name is a name of a new topic.
+ */
+Tinode.isNewGroupTopicName = function(name) {
+  return (typeof name == 'string') && name.substring(0, 3) == TOPIC_NEW;
+},
 
 /**
  * Return information about the current version of this Tinode client library.
@@ -1344,6 +2259,8 @@ Tinode.MESSAGE_STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED,
 Tinode.MESSAGE_STATUS_READ =     MESSAGE_STATUS_READ,
 Tinode.MESSAGE_STATUS_TO_ME =    MESSAGE_STATUS_TO_ME,
 
+// Unicode [del] symbol.
+Tinode.DEL_CHAR = "\u2421";
 
 // Public methods;
 Tinode.prototype = {
@@ -1656,7 +2573,7 @@ Tinode.prototype = {
         pkt.sub.set.sub = setParams.sub;
       }
 
-      if (topicName === TOPIC_NEW && setParams.desc) {
+      if (Tinode.isNewGroupTopicName(topicName) && setParams.desc) {
         // set.desc params are used for new topics only
         pkt.sub.set.desc = setParams.desc
       }
@@ -1692,19 +2609,20 @@ Tinode.prototype = {
    * @param {String} topic - Name of the topic to publish to.
    * @param {Object} data - Payload to publish.
    * @param {Boolean=} noEcho - If <tt>true</tt>, tell the server not to echo the message to the original session.
-   * @param {String=} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
-   * @param {Array=} attachments - array of strings containing URLs of files attached to the message.
    *
    * @returns {Object} new message which can be sent to the server or otherwise used.
    */
-  createMessage: function(topic, data, noEcho, mimeType, attachments) {
-    var pkt = this.initPacket("pub", topic);
+  createMessage: function(topic, data, noEcho) {
+    let pkt = this.initPacket("pub", topic);
+
+    let dft = typeof data == "string" ? Drafty.parse(data) : data;
+    if (dft && !Drafty.isPlainText(dft)) {
+      pkt.pub.head = {mime: Drafty.getContentType()};
+      data = dft;
+    }
     pkt.pub.noecho = noEcho;
     pkt.pub.content = data;
 
-    if (mimeType || Array.isArray(attachments)) {
-      pkt.pub.head = { mime: mimeType, attachments: attachments };
-    }
     return pkt.pub;
   },
 
@@ -1715,14 +2633,12 @@ Tinode.prototype = {
    * @param {String} topic - Name of the topic to publish to.
    * @param {Object} data - Payload to publish.
    * @param {Boolean=} noEcho - If <tt>true</tt>, tell the server not to echo the message to the original session.
-   * @param {String=} mimeType - Mime-type of the data. Implicit default is 'text/plain'.
-   * @param {Array=} attachments - array of strings containing URLs of files attached to the message.
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publish: function(topic, data, noEcho, mimeType, attachments) {
+  publish: function(topic, data, noEcho) {
     return this.publishMessage(
-      this.createMessage(topic, data, noEcho, mimeType, attachments)
+      this.createMessage(topic, data, noEcho)
     );
   },
 
@@ -1919,9 +2835,9 @@ Tinode.prototype = {
   getTopic: function(name) {
     var topic = this.cacheGet("topic", name);
     if (!topic && name) {
-      if (name === TOPIC_ME) {
+      if (name == TOPIC_ME) {
         topic = new TopicMe();
-      } else if (name === TOPIC_FND) {
+      } else if (name == TOPIC_FND) {
         topic = new TopicFnd();
       } else {
         topic = new Topic(name);
@@ -1934,16 +2850,27 @@ Tinode.prototype = {
   },
 
   /**
-   * Instantiate a new unnamed topic. Name will be assigned by the server on {@link Tinode.Topic.subscribe}.
+   * Instantiate a new unnamed topic. An actual name will be assigned by the server
+   * on {@link Tinode.Topic.subscribe}.
    * @memberof Tinode#
    *
    * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
    * @returns {Tinode.Topic} Newly created topic.
    */
   newTopic: function(callbacks) {
-    var topic = new Topic(undefined, callbacks);
+    var topic = new Topic(TOPIC_NEW, callbacks);
     this.attachCacheToTopic(topic);
     return topic;
+  },
+
+  /**
+   * Generate unique name  like 'new123456' suitable for creating a new group topic.
+   * @memberof Tinode#
+   *
+   * @returns {string} name which can be used for creating a new group topic.
+   */
+  newGroupTopicName: function() {
+    return TOPIC_NEW + this.getNextUniqueId();
   },
 
   /**
@@ -1987,7 +2914,7 @@ Tinode.prototype = {
    * @returns {Tinode.LargeFileHelper} instance of a LargeFileHelper.
    */
   getLargeFileHelper: function() {
-    return token ? new LargeFileHelper(this) : null;
+    return new LargeFileHelper(this);
   },
 
   /**
@@ -2035,7 +2962,7 @@ Tinode.prototype = {
    * @returns {Boolean} true if topic is online, false otherwise.
    */
   isTopicOnline: function(name) {
-    var me = this.getTopic(TOPIC_ME);
+    var me = this.getMeTopic();
     var cont = me && me.getContact(name);
     return cont && cont.online;
   },
@@ -2151,10 +3078,19 @@ Tinode.prototype = {
  */
 var MetaGetBuilder = function(parent) {
   this.topic = parent;
+  var me = parent._tinode.getMeTopic();
+  this.contact = me && me.getContact(parent.name);
   this.what = {};
 }
 
 MetaGetBuilder.prototype = {
+
+  // Get latest timestamp
+  _get_ims: function() {
+    let cupd = this.contact && this.contact.updated;
+    let tupd = this.topic._lastDescUpdate || 0;
+    return cupd > tupd ? cupd : tupd;
+  },
 
   /**
    * Add query parameters to fetch messages within explicit limits.
@@ -2214,7 +3150,7 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withLaterDesc: function() {
-    return this.withDesc(this.topic._lastDescUpdate);
+    return this.withDesc(this._get_ims());
   },
 
   /**
@@ -2272,7 +3208,9 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withLaterSub: function(limit) {
-    return this.withSub(this.topic._lastSubsUpdate, limit);
+    return this.withSub(
+      this.topic.getType() == "p2p" ? this._get_ims() : this.topic._lastSubsUpdate,
+      limit);
   },
 
   /**
@@ -2752,63 +3690,69 @@ Topic.prototype = {
   },
 
   /**
-   * Publish data to topic. Wrapper for {@link Tinode#publish}.
+   * Immediately publish data to topic. Wrapper for {@link Tinode#publish}.
    * @memberof Tinode.Topic#
    *
-   * @param {Object} data - Data to publish.
-   * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating session.
-   * @param {String=} mimeType - Mime-type of the data. Default is 'text/plain'.
-   * @param {Array=} attachments - URLs of files attached to the message.
+   * @param {string | Object} data - Data to publish, either plain string or a Drafty object.
+   * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
-  publish: function(data) {
-    // Send data
-    return this.publishMessage(this.createMessage(data));
+  publish: function(data, noEcho) {
+    return this.publishMessage(this.createMessage(data, noEcho));
   },
 
   /**
    * Create a draft of a message without sending it to the server.
    * @memberof Tinode.Topic#
    *
-   * @param {Object} data - Content to wrap in a a draft.
+   * @param {string | Object} data - Content to wrap in a draft.
    * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating
    * session. Otherwise the server will send a copy of the message to sender.
    *
    * @returns {Object} message draft.
    */
-  createMessage: function(data, noEcho, mimeType, attachments) {
-    return this._tinode.createMessage(this.name, data, noEcho, mimeType, attachments);
+  createMessage: function(data, noEcho) {
+    return this._tinode.createMessage(this.name, data, noEcho);
   },
 
-   /**
-    * Publish message created by {@link Tinode.Topic#createMessage}.
-    * @memberof Tinode.Topic#
-    *
-    * @param {Object} pkt - Data to publish.
-    *
-    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
-    */
-   publishMessage: function(pub) {
-     if (!this._subscribed) {
-       return Promise.reject(new Error("Cannot publish on inactive topic"));
-     }
+  /**
+   * Publish message created by {@link Tinode.Topic#createMessage}.
+   * @memberof Tinode.Topic#
+   *
+   * @param {Object} pub - {data} object to publish. Must be created by {@link Tinode.Topic#createMessage}
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
+   */
+  publishMessage: function(pub) {
+    if (!this._subscribed) {
+      return Promise.reject(new Error("Cannot publish on inactive topic"));
+    }
 
-     // Send data
-     pub._sending = true;
-     return this._tinode.publishMessage(pub);
-   },
+    // Update header with attachment records.
+    if (Drafty.hasAttachments(pub.content)) {
+      let attachments = [];
+      Drafty.attachments(pub.content, (data) => { attachments.push(data.ref); });
+      pub.head.attachments = attachments;
+    }
 
- /**
-  * Add message to local message cache but do not send to the server.
-  * The message should be created by {@link Tinode.Topic#createMessage}.
-  * This is probably not the final API.
-  * @memberof Tinode.Topic#
-  *
-  * @param {Object} pkt - Message to use as a draft.
-  * @param {Promise} prom - Message will be sent when this promise is resolved, discarded if rejected.
-  *
-  * @returns {Promise} derived promise.
-  */
+    // Send data
+    pub._sending = true;
+    return this._tinode.publishMessage(pub);
+  },
+
+  /**
+   * Add message to local message cache, send to the server when the promise is resolved.
+   * If promise is null or undefined, the message will be sent immediately.
+   * The message is sent when the
+   * The message should be created by {@link Tinode.Topic#createMessage}.
+   * This is probably not the final API.
+   * @memberof Tinode.Topic#
+   *
+   * @param {Object} pub - Message to use as a draft.
+   * @param {Promise} prom - Message will be sent when this promise is resolved, discarded if rejected.
+   *
+   * @returns {Promise} derived promise.
+   */
   publishDraft: function(pub, prom) {
     if (!prom && !this._subscribed) {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
@@ -2837,6 +3781,7 @@ Topic.prototype = {
         if (pub._cancelled) {
           return {code: 300, text: "cancelled"};
         }
+
         return this.publishMessage(pub).then((ctrl) => {
           pub._sending = false;
           pub.seq = ctrl.params.seq;
@@ -3669,7 +4614,7 @@ Topic.prototype = {
 
   // Called by Tinode when meta.sub is recived.
   _processMetaTags: function(tags) {
-    if (tags.length == 1 && tags[0] == DEL_CHAR) {
+    if (tags.length == 1 && tags[0] == Tinode.DEL_CHAR) {
       tags = [];
     }
     this._tags = tags;
@@ -3805,7 +4750,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             sub.seen.when = new Date(sub.seen.when);
           }
           cont = mergeToCache(this._contacts, topicName, sub);
-          if (Tinode.topicType(topicName) === 'p2p') {
+          if (Tinode.topicType(topicName) == 'p2p') {
             this._cachePutUser(topicName, cont);
           }
 
@@ -3858,7 +4803,8 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             break;
           case "msg": // new message received
             cont.touched = new Date();
-            cont.seq = pres.seq;
+            cont.seq = pres.seq | 0;
+            cont.unread = cont.seq - cont.read;
             break;
           case "upd": // desc updated
             // Request updated description
@@ -3875,10 +4821,11 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             cont.seen = {when: new Date(), ua: pres.ua};
             break;
           case "recv": // user's other session marked some messges as received
-            cont.recv = cont.recv ? Math.max(cont.recv, pres.seq) : pres.seq;
+            cont.recv = cont.recv ? Math.max(cont.recv, pres.seq) : (pres.seq | 0);
             break;
           case "read": // user's other session marked some messages as read
-            cont.read = cont.read ? Math.max(cont.read, pres.seq) : pres.seq;
+            cont.read = cont.read ? Math.max(cont.read, pres.seq) : (pres.seq | 0);
+            cont.unread = cont.seq - cont.read;
             break;
           case "gone": // topic deleted or unsubscribed from
             delete this._contacts[pres.src];
@@ -3970,6 +4917,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       var oldVal, doUpdate = false;
       var mode = null;
       if (cont) {
+        seq = seq | 0;
         if (what === "recv") {
           oldVal = cont.recv;
           cont.recv = cont.recv ? Math.max(cont.recv, seq) : seq;
@@ -3977,6 +4925,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         } else if (what === "read") {
           oldVal = cont.read;
           cont.read = cont.read ? Math.max(cont.read, seq) : seq;
+          cont.unread = cont.seq - cont.read;
           doUpdate = (oldVal != cont.read);
           if (cont.recv < cont.read) {
             cont.recv = cont.read;
@@ -3985,6 +4934,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         } else if (what === "msg") {
           oldVal = cont.seq;
           cont.seq = cont.seq ? Math.max(cont.seq, seq) : seq;
+          cont.unread = cont.seq - cont.read;
           if (!cont.touched || cont.touched < ts) {
             cont.touched = ts;
           }
@@ -4011,28 +4961,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   getContact: {
     value: function(name) {
       return this._contacts[name];
-    },
-    enumerable: true,
-    configurable: true,
-    writable: true
-  },
-
-  /**
-   * Get the number of unread messages of a given contact.
-   * @memberof Tinode.TopicMe#
-   * @param {string} name - Name of the contact to get unread count for, either a UID (for p2p topics) or a topic name.
-   *
-   * @returns {number} - count of unread messages.
-   */
-  unreadCount: {
-    value: function(name) {
-      var c = this._contacts[name];
-      if (c) {
-        c.seq = ~~c.seq;
-        c.read = ~~c.read;
-        return c.seq - c.read;
-      }
-      return 0;
     },
     enumerable: true,
     configurable: true,
@@ -4176,7 +5104,7 @@ var LargeFileHelper = function(tinode) {
 
   this._apiKey = tinode._apiKey;
   this._authToken = tinode.getAuthToken();
-  this._msgId = tinode.getNextMessageId();
+  this._msgId = tinode.getNextUniqueId();
   this.xhr = xdreq();
 
   // Promise
@@ -4209,7 +5137,7 @@ LargeFileHelper.prototype = {
     var instance = this;
     this.xhr.open("POST", "/v" + PROTOCOL_VERSION + "/file/u/", true);
     this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
-    this.xhr.setRequestHeader("Authorization", "Token " + this._authToken.token);
+    this.xhr.setRequestHeader("X-Tinode-Auth", "Token " + this._authToken.token);
     var result = new Promise((resolve, reject) => {
       this.toResolve = resolve;
       this.toReject = reject;
@@ -4309,7 +5237,7 @@ LargeFileHelper.prototype = {
     // Get data as blob (stored by the browser as a temporary file).
     this.xhr.open("GET", relativeUrl, true);
     this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
-    this.xhr.setRequestHeader("Authorization", "Token " + this._authToken.token);
+    this.xhr.setRequestHeader("X-Tinode-Auth", "Token " + this._authToken.token);
     this.xhr.responseType = "blob";
 
     this.onProgress = onProgress;
@@ -4443,5 +5371,5 @@ Message.prototype.constructor = Message;
 
 module.exports = Tinode;
 
-},{}]},{},[1])(1)
+},{}]},{},[2])(2)
 });

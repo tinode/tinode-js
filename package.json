@@ -17,7 +17,7 @@
     "src/tinode.js",
     "src/drafty.js",
     "umd/tinode.dev.js",
-    "umd/tinode.prod.js",
+    "umd/tinode.prod.js"
   ],
   "keywords": [
     "instant messenger",
