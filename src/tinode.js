@@ -875,10 +875,12 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
   // Name and version of the browser.
   this._browser = '';
   this._platform = "undefined";
+  this._humanLanguage = 'xx';
   // Underlying OS.
   if (typeof navigator != 'undefined') {
     this._browser = getBrowserInfo(navigator.userAgent);
     this._platform = navigator.platform;
+    this._humanLanguage = navigator.language || 'en-US';
   }
   // Logging to console enabled
   this._loggingEnabled = false;
@@ -898,6 +900,8 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
   this._messageId = Math.floor((Math.random() * 0xFFFF) + 0xFFFF);
   // Information about the server, if connected
   this._serverInfo = null;
+  // Push notification token. Called deviceToken for consistency with the Android SDK.
+  this._deviceToken = null;
 
   // Cache of pending promises
   this._pendingPromises = {};
@@ -1019,6 +1023,8 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
             "id": getNextUniqueId(),
             "ver": VERSION,
             "ua": getUserAgent(),
+            "dev": this._deviceToken,
+            "lang": this._humanLanguage
           }
         };
 
@@ -1550,6 +1556,28 @@ Tinode.prototype = {
           this.onDisconnect(err);
         }
       });
+  },
+
+  /**
+   * Set or refresh the push notifications/device token. If the client is connected,
+   * the deviceToken can be sent to the server.
+   *
+   * @memberof Tinode#
+   * @param {string} dt - token obtained from the provider.
+   * @param {boolean} sendToServer - if true, send dt to server.
+   *
+   * @param true if attempt was made to send the token to the server.
+   */
+  setDeviceToken: function(dt, sendToServer) {
+    let sent = false;
+    if (dt && dt != this._deviceToken) {
+      this._deviceToken = dt;
+      if (sendToServer && this.isConnected() && this.isAuthenticated()) {
+        this.send({"hi": {"dev": dt}});
+        sent = true;
+      }
+    }
+    return sent;
   },
 
   /**
