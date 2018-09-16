@@ -42,9 +42,16 @@
 
 'use strict';
 
+if (typeof require == 'function') {
+  if (typeof Drafty == 'undefined') {
+    var Drafty = require('./drafty.js');
+  }
+  var package_version = require('../version.json').version;
+}
+
 // Global constants
 const PROTOCOL_VERSION = "0";
-const VERSION = "0.15";
+const VERSION = package_version || "0.15";
 const LIBRARY = "tinodejs/" + VERSION;
 
 const TOPIC_NEW = "new";
@@ -1338,10 +1345,21 @@ Tinode.isNewGroupTopicName = function(name) {
  * @memberof Tinode
  * @static
  *
- * @returns {string} current version in the MAJOR.MINOR format, e.g. '0.8'.
+ * @returns {string} semantic version of the library, e.g. '0.15.5-rc1'.
  */
 Tinode.getVersion = function() {
   return VERSION;
+};
+
+/**
+ * Return information about the current name and version of this Tinode library.
+ * @memberof Tinode
+ * @static
+ *
+ * @returns {string} the name of the library and it's version.
+ */
+Tinode.getLibrary = function() {
+  return LIBRARY;
 };
 
 // Exported constants
@@ -4464,3 +4482,4 @@ Message.prototype = {
 Message.prototype.constructor = Message;
 
 module.exports = Tinode;
+module.exports.Drafty = Drafty;
