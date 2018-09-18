@@ -218,7 +218,7 @@ function chunkify(line, start, end, spans) {
   return chunks;
 }
 
-// Inverse of chunkify.
+// Inverse of chunkify. Returns a tree of formatted spans.
 function forEach(line, start, end, spans, formatter, context) {
   // Add un-styled range before the styled span starts.
   // Process ranges calling formatter for each range.
@@ -686,7 +686,7 @@ Drafty.format = function(content, formatter, context) {
     s.len = s.len || 0;
   });
 
-  // Soft spans first by start index (asc) then by length (desc).
+  // Sort spans first by start index (asc) then by length (desc).
   spans.sort(function(a, b) {
     if (a.at - b.at == 0) {
       return b.len - a.len; // longer one comes first (<0)
