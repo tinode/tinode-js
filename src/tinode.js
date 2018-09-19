@@ -1564,7 +1564,7 @@ Tinode.prototype = {
    *
    * @memberof Tinode#
    * @param {string} dt - token obtained from the provider.
-   * @param {boolean} sendToServer - if true, send dt to server.
+   * @param {boolean} sendToServer - if true, send dt to server immediately.
    *
    * @param true if attempt was made to send the token to the server.
    */
