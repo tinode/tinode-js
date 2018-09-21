@@ -3801,6 +3801,15 @@ Topic.prototype = {
 
   // This topic is either deleted or unsubscribed from.
   _gone: function() {
+    this._messages.reset();
+    this._users = {};
+    this.acs = new AccessMode(null);
+    this.private = null;
+    this.public = null;
+    this._maxSeq = 0;
+    this._minSeq = 0;
+    this._subscribed = false;
+
     var me = this._tinode.getMeTopic();
     if (me) {
       me._routePres({
