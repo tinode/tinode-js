@@ -4701,6 +4701,15 @@ Topic.prototype = {
 
   // This topic is either deleted or unsubscribed from.
   _gone: function() {
+    this._messages.reset();
+    this._users = {};
+    this.acs = new AccessMode(null);
+    this.private = null;
+    this.public = null;
+    this._maxSeq = 0;
+    this._minSeq = 0;
+    this._subscribed = false;
+
     var me = this._tinode.getMeTopic();
     if (me) {
       me._routePres({
@@ -5413,7 +5422,7 @@ module.exports = Tinode;
 module.exports.Drafty = Drafty;
 
 },{"../version.json":3,"./drafty.js":1}],3:[function(require,module,exports){
-module.exports={"version": "0.15.6-rc4"}
+module.exports={"version": "0.15.6-rc5"}
 
 },{}]},{},[2])(2)
 });
