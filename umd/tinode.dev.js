@@ -5422,7 +5422,7 @@ module.exports = Tinode;
 module.exports.Drafty = Drafty;
 
 },{"../version.json":3,"./drafty.js":1}],3:[function(require,module,exports){
-module.exports={"version": "0.15.6-rc5"}
+module.exports={"version": "0.15.6"}
 
 },{}]},{},[2])(2)
 });
