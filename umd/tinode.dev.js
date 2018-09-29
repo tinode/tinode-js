@@ -2040,7 +2040,16 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
     pkt = simplify(pkt);
     var msg = JSON.stringify(pkt);
     this.logger("out: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
-    this._connection.sendText(msg);
+    try {
+      this._connection.sendText(msg);
+    } catch (err) {
+      // If sendText throws, wrap the error in a promise or rethrow.
+      if (id) {
+        execPromise(id, 503, null, err.message);
+      } else {
+        throw err;
+      }
+    }
     return promise;
   }
 
@@ -5422,7 +5431,7 @@ module.exports = Tinode;
 module.exports.Drafty = Drafty;
 
 },{"../version.json":3,"./drafty.js":1}],3:[function(require,module,exports){
-module.exports={"version": "0.15.7-rc1"}
+module.exports={"version": "0.15.7-rc2"}
 
 },{}]},{},[2])(2)
 });
