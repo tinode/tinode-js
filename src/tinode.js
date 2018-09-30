@@ -1606,7 +1606,9 @@ Tinode.prototype = {
 
     return this.send(pkt, pkt.login.id)
       .then((ctrl) => {
-        this.loginSuccessful(ctrl);
+        if (scheme != "reset") {
+          this.loginSuccessful(ctrl);
+        }
         return ctrl;
       });
   },
@@ -1636,6 +1638,20 @@ Tinode.prototype = {
    */
   loginToken: function(token, cred) {
     return this.login("token", token, cred);
+  },
+
+  /**
+   * Send a request for resetting an authentication secret.
+   * @memberof Tinode#
+   *
+   * @param {String} scheme - authentication scheme to reset.
+   * @param {String} method - method to use for resetting the secret, such as "email" or "tel".
+   * @param {String} value - value of the credential to use, a specific email address or a phone number.
+   *
+   * @returns {Promise} Promise which will be resolved/rejected on receiving the server reply.
+   */
+  resetAuthSecret: function(scheme, method, value) {
+    return this.login("reset", b64EncodeUnicode(scheme + ":" + method + ":" + value));
   },
 
   /**
