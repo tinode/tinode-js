@@ -747,6 +747,10 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     }
 
     instance.connect = function(host_) {
+      if (_poller && true) {
+        return Promise.resolve();
+      }
+
       if (host_) {
         host = host_;
       }
@@ -1155,6 +1159,9 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
 
   // On successful login save server-provided data.
   this.loginSuccessful = (ctrl) => {
+    if (!ctrl.params || !ctrl.params.user) {
+      return;
+    }
     // This is a response to a successful login,
     // extract UID and security token, save it in Tinode module
     this._myUID = ctrl.params.user;
@@ -1606,9 +1613,7 @@ Tinode.prototype = {
 
     return this.send(pkt, pkt.login.id)
       .then((ctrl) => {
-        if (scheme != "reset") {
-          this.loginSuccessful(ctrl);
-        }
+        this.loginSuccessful(ctrl);
         return ctrl;
       });
   },
@@ -1650,7 +1655,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving the server reply.
    */
-  resetAuthSecret: function(scheme, method, value) {
+  requestResetAuthSecret: function(scheme, method, value) {
     return this.login("reset", b64EncodeUnicode(scheme + ":" + method + ":" + value));
   },
 
