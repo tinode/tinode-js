@@ -1440,13 +1440,14 @@ Tinode.prototype = {
   },
 
   /**
-   * @typedef AccountCreationParams
+   * @typedef AccountParams
    * @memberof Tinode
    * @type Object
    * @property {Tinode.DefAcs=} defacs - Default access parameters for user's <tt>me</tt> topic.
    * @property {Object=} public - Public application-defined data exposed on <tt>me</tt> topic.
    * @property {Object=} private - Private application-defined data accessible on <tt>me</tt> topic.
    * @property {Array} tags - array of string tags for user discovery.
+   * @property {string=} token - authentication token to use.
    */
   /**
    * @typedef DefAcs
@@ -1464,7 +1465,7 @@ Tinode.prototype = {
     * @param {String} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
     * @param {String} secret - Authentication secret, assumed to be already base64 encoded.
     * @param {Boolean=} login - Use new account to authenticate current session
-    * @param {Tinode.AccountCreationParams=} params - User data to pass to the server.
+    * @param {Tinode.AccountParams=} params - User data to pass to the server.
     */
    account: function(uid, scheme, secret, login, params) {
      var pkt = this.initPacket("acc");
@@ -1481,6 +1482,8 @@ Tinode.prototype = {
 
        pkt.acc.tags = params.tags;
        pkt.acc.cred = params.cred;
+
+       pkt.acc.token = params.token;
      }
 
      return this.send(pkt, pkt.acc.id);
@@ -1493,7 +1496,7 @@ Tinode.prototype = {
    * @param {String} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
    * @param {String} secret - Authentication.
    * @param {Boolean=} login - Use new account to authenticate current session
-   * @param {Tinode.AccountCreationParams=} params - User data to pass to the server.
+   * @param {Tinode.AccountParams=} params - User data to pass to the server.
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
@@ -1515,7 +1518,7 @@ Tinode.prototype = {
    *
    * @param {string} username - Login to use for the new account.
    * @param {string} password - User's password.
-   * @param {Tinode.AccountCreationParams=} params - User data to pass to the server.
+   * @param {Tinode.AccountParams=} params - User data to pass to the server.
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
@@ -1534,15 +1537,16 @@ Tinode.prototype = {
    * @param {string} uid - User ID to update.
    * @param {string} username - Login to use for the new account.
    * @param {string} password - User's password.
+   * @param {Tinode.AccountParams=} params - data to pass to the server.
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  updateAccountBasic: function(uid, username, password) {
+  updateAccountBasic: function(uid, username, password, params) {
     // Make sure we are not using 'null' or 'undefined';
     username = username || '';
     password = password || '';
     return this.account(uid, "basic",
-      b64EncodeUnicode(username + ":" + password), false, null);
+      b64EncodeUnicode(username + ":" + password), false, params);
   },
 
   /**
