@@ -898,6 +898,7 @@ Drafty.getContentType = function() {
 module.exports = Drafty;
 
 },{}],2:[function(require,module,exports){
+(function (global){
 /**
  * @file SDK to connect to Tinode chat server.
  * See <a href="https://github.com/tinode/webapp">
@@ -939,15 +940,20 @@ module.exports = Drafty;
  * </script>
  * </body>
  */
-
 'use strict';
 
-if (typeof require == 'function') {
-  if (typeof Drafty == 'undefined') {
+if (typeof require === 'function') {
+  if (typeof Drafty === 'undefined') {
     var Drafty = require('./drafty.js');
   }
   var package_version = require('../version.json').version;
 }
+let WebSocketProvider;
+if (typeof(WebSocket) !== "undefined") {
+  WebSocketProvider = WebSocket;
+}
+initForNonBrowserApp();
+
 
 // Global constants
 const PROTOCOL_VERSION = "0";
@@ -962,14 +968,72 @@ const USER_NEW = "new";
 // Starting value of a locally-generated seqId used for pending messages.
 const LOCAL_SEQID = 0xFFFFFFF;
 
-const MESSAGE_STATUS_NONE     = 0; // Status not assigned.
-const MESSAGE_STATUS_QUEUED   = 1; // Local ID assigned, in progress to be sent.
-const MESSAGE_STATUS_SENDING  = 2; // Transmission started.
-const MESSAGE_STATUS_SENT     = 3; // Delivered to the server.
+const MESSAGE_STATUS_NONE = 0; // Status not assigned.
+const MESSAGE_STATUS_QUEUED = 1; // Local ID assigned, in progress to be sent.
+const MESSAGE_STATUS_SENDING = 2; // Transmission started.
+const MESSAGE_STATUS_SENT = 3; // Delivered to the server.
 const MESSAGE_STATUS_RECEIVED = 4; // Received by the client.
-const MESSAGE_STATUS_READ     = 5; // Read by the user.
-const MESSAGE_STATUS_TO_ME    = 6; // Message from another user.
+const MESSAGE_STATUS_READ = 5; // Read by the user.
+const MESSAGE_STATUS_TO_ME = 6; // Message from another user.
 // Utility functions
+
+// Add brower missing function for non browser app, eg nodeJs
+function initForNonBrowserApp() {
+  // Tinode requirement in native mode because react native doesn't provide Base64 method
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+
+  if (typeof btoa === "undefined") {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+    global.btoa = function(input = '') {
+      let str = input;
+      let output = '';
+
+      for (let block = 0, charCode, i = 0, map = chars; str.charAt(i | 0) || (map = '=', i % 1); output += map.charAt(63 & block >> 8 - i % 1 * 8)) {
+
+        charCode = str.charCodeAt(i += 3 / 4);
+
+        if (charCode > 0xFF) {
+          throw new Error("'btoa' failed: The string to be encoded contains characters outside of the Latin1 range.");
+        }
+
+        block = block << 8 | charCode;
+      }
+
+      return output;
+    };
+  }
+
+  if (typeof atob === "undefined") {
+    global.atob = function(input = '') {
+      let str = input.replace(/=+$/, '');
+      let output = '';
+
+      if (str.length % 4 == 1) {
+        throw new Error("'atob' failed: The string to be decoded is not correctly encoded.");
+      }
+      for (let bc = 0, bs = 0, buffer, i = 0; buffer = str.charAt(i++);
+
+        ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer,
+          bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
+      ) {
+        buffer = chars.indexOf(buffer);
+      }
+
+      return output;
+    };
+  }
+
+  if (typeof window === "undefined") {
+    global.window = {
+      WebSocket: WebSocketProvider,
+      URL: {
+        createObjectURL: function() {
+          throw new Error("Unable to use window.URL in a non browser application");
+        }
+      }
+    }
+  }
+}
 
 // RFC3339 formater of Date
 function rfc3339DateString(d) {
@@ -981,6 +1045,7 @@ function rfc3339DateString(d) {
     sp = sp || 2;
     return '0'.repeat(sp - ('' + val).length) + val;
   }
+
   var millis = d.getUTCMilliseconds();
   return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
     'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) +
@@ -989,12 +1054,12 @@ function rfc3339DateString(d) {
 
 // btoa replacement. Stock btoa fails on on non-Latin1 strings.
 function b64EncodeUnicode(str) {
-    // The encodeURIComponent percent-encodes UTF-8 string,
-    // then the percent encoding is converted into raw bytes which
-    // can be fed into btoa.
-    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
-        function toSolidBytes(match, p1) {
-            return String.fromCharCode('0x' + p1);
+  // The encodeURIComponent percent-encodes UTF-8 string,
+  // then the percent encoding is converted into raw bytes which
+  // can be fed into btoa.
+  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
+    function toSolidBytes(match, p1) {
+      return String.fromCharCode('0x' + p1);
     }));
 }
 
@@ -1032,9 +1097,9 @@ function mergeObj(dst, src, ignore) {
 
   for (var prop in src) {
     if (src.hasOwnProperty(prop) &&
-        (src[prop] || src[prop] === false) &&
-        (!ignore || !ignore[prop]) &&
-        (prop != '_generated')) {
+      (src[prop] || src[prop] === false) &&
+      (!ignore || !ignore[prop]) &&
+      (prop != '_generated')) {
       dst[prop] = mergeObj(dst[prop], src[prop]);
     }
   }
@@ -1072,9 +1137,9 @@ function jsonBuildHelper(key, val) {
     // Convert javascript Date objects to rfc3339 strings
     val = rfc3339DateString(val);
   } else if (val === undefined || val === null || val === false ||
-      (Array.isArray(val) && val.length == 0) ||
-      ((typeof val === "object") && (Object.keys(val).length === 0))) {
-      // strip out empty elements while serializing objects to JSON
+    (Array.isArray(val) && val.length == 0) ||
+    ((typeof val === "object") && (Object.keys(val).length === 0))) {
+    // strip out empty elements while serializing objects to JSON
     return undefined;
   }
 
@@ -1083,7 +1148,7 @@ function jsonBuildHelper(key, val) {
 
 // Strips all values from an object of they evaluate to false or if their name starts with '_'.
 function simplify(obj) {
-	Object.keys(obj).forEach(function(key) {
+  Object.keys(obj).forEach(function(key) {
     if (key[0] == "_") {
       // Strip fields like "obj._key".
       delete obj[key];
@@ -1100,7 +1165,7 @@ function simplify(obj) {
       simplify(obj[key]);
       // Strip empty objects.
       if (Object.getOwnPropertyNames(obj[key]).length == 0) {
-      	delete obj[key];
+        delete obj[key];
       }
     }
   });
@@ -1113,7 +1178,7 @@ function normalizeArray(arr) {
   var out = [];
   if (Array.isArray(arr)) {
     // Trim, throw away very short and empty tags.
-    for (var i =0, l=arr.length; i<l; i++) {
+    for (var i = 0, l = arr.length; i < l; i++) {
       var t = arr[i];
       if (t) {
         t = t.trim().toLowerCase();
@@ -1153,7 +1218,7 @@ function jsonParseHelper(key, val) {
 // Trims very long strings (encoded images) to make logged packets more readable.
 function jsonLoggerHelper(key, val) {
   if (typeof val === 'string' && val.length > 128) {
-    return "<" + val.length + ", bytes: " + val.substring(0, 12) + '...' + val.substring(val.length-12) + ">";
+    return "<" + val.length + ", bytes: " + val.substring(0, 12) + '...' + val.substring(val.length - 12) + ">";
   }
   return jsonBuildHelper(key, val);
 };
@@ -1161,7 +1226,7 @@ function jsonLoggerHelper(key, val) {
 // Parse browser user agent to extract browser name and version.
 function getBrowserInfo(ua) {
   // First test for WebKit based browser.
-  ua = (ua||'').replace(' (KHTML, like Gecko)', '');
+  ua = (ua || '').replace(' (KHTML, like Gecko)', '');
   var m = ua.match(/(AppleWebKit\/[.\d]+)/i);
   var result;
   if (m) {
@@ -1170,7 +1235,7 @@ function getBrowserInfo(ua) {
     var tmp = ua.substr(m.index + m[0].length).split(" ");
     var tokens = [];
     // Split Name/0.0.0 into Name and version 0.0.0
-    for (var i=0;i<tmp.length;i++) {
+    for (var i = 0; i < tmp.length; i++) {
       var m2 = /([\w.]+)[\/]([\.\d]+)/.exec(tmp[i]);
       if (m2) {
         tokens.push([m2[1], m2[2], priority.findIndex(function(e) {
@@ -1190,15 +1255,15 @@ function getBrowserInfo(ua) {
       // Failed to ID the browser. Return the webkit version.
       result = m[1];
     }
-  // Test for MSIE.
+    // Test for MSIE.
   } else if (/trident/i.test(ua)) {
     m = /(?:\brv[ :]+([.\d]+))|(?:\bMSIE ([.\d]+))/g.exec(ua);
     if (m) {
       result = "MSIE/" + (m[1] || m[2]);
     } else {
-      result =  "MSIE/?";
+      result = "MSIE/?";
     }
-  // Test for Firefox.
+    // Test for Firefox.
   } else if (/firefox/i.test(ua)) {
     m = /Firefox\/([.\d]+)/g.exec(ua);
     if (m) {
@@ -1206,7 +1271,7 @@ function getBrowserInfo(ua) {
     } else {
       result = "Firefox/?";
     }
-  // Older Opera.
+    // Older Opera.
   } else if (/presto/i.test(ua)) {
     m = /Opera\/([.\d]+)/g.exec(ua);
     if (m) {
@@ -1338,9 +1403,9 @@ var CBuffer = function(compare) {
      *
      * @returns {Array} array of removed elements (could be zero length).
      */
-     delRange: function(since, before) {
-       return buffer.splice(since, before-since);
-     },
+    delRange: function(since, before) {
+      return buffer.splice(since, before - since);
+    },
 
     /**
      * Return the maximum number of element the buffer can hold
@@ -1422,18 +1487,18 @@ function makeBaseUrl(host, protocol, apiKey) {
 }
 
 /**
-* An abstraction for a websocket or a long polling connection.
-*
-* @class Connection
-* @memberof Tinode
-* @protected
+ * An abstraction for a websocket or a long polling connection.
+ *
+ * @class Connection
+ * @memberof Tinode
+ * @protected
 
-* @param {string} host_ - Host name and port number to connect to.
-* @param {string} apiKey_ - API key generated by keygen
-* @param {string} transport_ - Network transport to use, either `ws`/`wss` for websocket or `lp` for long polling.
-* @param {boolean} secure_ - Use secure WebSocket (wss) if true.
-* @param {boolean} autoreconnect_ - If connection is lost, try to reconnect automatically.
-*/
+ * @param {string} host_ - Host name and port number to connect to.
+ * @param {string} apiKey_ - API key generated by keygen
+ * @param {string} transport_ - Network transport to use, either `ws`/`wss` for websocket or `lp` for long polling.
+ * @param {boolean} secure_ - Use secure WebSocket (wss) if true.
+ * @param {boolean} autoreconnect_ - If connection is lost, try to reconnect automatically.
+ */
 var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
   let host = host_;
   let secure = secure_;
@@ -1461,14 +1526,14 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     // Clear timer
     clearTimeout(_boffTimer);
     // Calculate when to fire the reconnect attempt
-    var timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 +_BOFF_JITTER * Math.random()));
+    var timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 + _BOFF_JITTER * Math.random()));
     // Update iteration counter for future use
     _boffIteration = (_boffIteration >= _BOFF_MAX_ITER ? _boffIteration : _boffIteration + 1);
     _boffTimer = setTimeout(() => {
       log("Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
       // Maybe the socket was closed while we waited for the timer?
       if (!_boffClosed) {
-        this.connect().catch(function(){/* do nothing */});
+        this.connect().catch(function() { /* do nothing */ });
       }
     }, timeout);
   }
@@ -1478,11 +1543,11 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     var _socket = null;
 
     /**
-    * Initiate a new connection
-    * @memberof Tinode.Connection#
-    * @return {Promise} Promise resolved/rejected when the connection call completes,
-        resolution is called without parameters, rejection passes the {Error} as parameter.
-    */
+     * Initiate a new connection
+     * @memberof Tinode.Connection#
+     * @return {Promise} Promise resolved/rejected when the connection call completes,
+     resolution is called without parameters, rejection passes the {Error} as parameter.
+     */
     instance.connect = function(host_) {
       if (_socket && _socket.readyState === 1) {
         return Promise.resolve();
@@ -1497,7 +1562,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
         log("Connecting to: " + url);
 
-        var conn = new WebSocket(url);
+        var conn = new WebSocketProvider(url);
 
         conn.onopen = function(evt) {
           _boffClosed = false;
@@ -1508,7 +1573,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
           resolve();
 
           if (autoreconnect) {
-            window.clearTimeout(_boffTimer);
+            clearTimeout(_boffTimer);
             _boffTimer = null;
             _boffIteration = 0;
           }
@@ -1578,11 +1643,11 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
   // Initialization for long polling.
   function init_lp(instance) {
-    var XDR_UNSENT = 0;   //	Client has been created. open() not called yet.
-    var XDR_OPENED = 1;   //	open() has been called.
-    var XDR_HEADERS_RECEIVED = 2;	// send() has been called, and headers and status are available.
-    var XDR_LOADING = 3;  //	Downloading; responseText holds partial data.
-    var XDR_DONE = 4;	    // The operation is complete.
+    var XDR_UNSENT = 0; //	Client has been created. open() not called yet.
+    var XDR_OPENED = 1; //	open() has been called.
+    var XDR_HEADERS_RECEIVED = 2; // send() has been called, and headers and status are available.
+    var XDR_LOADING = 3; //	Downloading; responseText holds partial data.
+    var XDR_DONE = 4; // The operation is complete.
     // Fully composed endpoint URL, with API key & SID
     var _lpURL = null;
 
@@ -1655,7 +1720,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
         host = host_;
       }
 
-      return new Promise(function(resolve, reject){
+      return new Promise(function(resolve, reject) {
         var url = makeBaseUrl(host, secure ? "https" : "http", apiKey);
         log("Connecting to: " + url);
         _poller = lp_poller(url, resolve, reject);
@@ -1721,17 +1786,17 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
    * @param {string} message - Message to process.
    */
   /**
-  * A callback to pass incoming messages to.
-  * @type {Tinode.Connection.OnMessage}
-  * @memberof Tinode.Connection#
-  */
+   * A callback to pass incoming messages to.
+   * @type {Tinode.Connection.OnMessage}
+   * @memberof Tinode.Connection#
+   */
   this.onMessage = undefined;
 
   /**
-  * A callback for reporting a dropped connection.
-  * @type {function}
-  * @memberof Tinode.Connection#
-  */
+   * A callback for reporting a dropped connection.
+   * @type {function}
+   * @memberof Tinode.Connection#
+   */
   this.onDisconnect = undefined;
 
   /**
@@ -1742,17 +1807,17 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
    */
   this.onOpen = undefined;
 
- /**
-  * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
-  * @callback LoggerCallbackType
-  * @memberof Tinode.Connection
-  * @param {string} event - Event to log.
-  */
   /**
-  * A callback to report logging events.
-  * @memberof Tinode.Connection#
-  * @type {Tinode.Connection.LoggerCallbackType}
-  */
+   * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
+   * @callback LoggerCallbackType
+   * @memberof Tinode.Connection
+   * @param {string} event - Event to log.
+   */
+  /**
+   * A callback to report logging events.
+   * @memberof Tinode.Connection#
+   * @type {Tinode.Connection.LoggerCallbackType}
+   */
   this.logger = undefined;
 };
 
@@ -1766,7 +1831,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
  * @param {boolean} secure_ - Use Secure WebSocket if true.
  */
 var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
-    // Client-provided application name, format <Name>/<version number>
+  // Client-provided application name, format <Name>/<version number>
   if (appname_) {
     this._appName = appname_;
   } else {
@@ -1858,7 +1923,10 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
     topic._cacheGetUser = (uid) => {
       var pub = cacheGet("user", uid);
       if (pub) {
-        return {user: uid, public: mergeObj({}, pub)};
+        return {
+          user: uid,
+          public: mergeObj({}, pub)
+        };
       }
       return undefined;
     };
@@ -2085,7 +2153,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
     // Skip empty response. This happens when LP times out.
     if (!data) return;
 
-    this._inPacketCount ++;
+    this._inPacketCount++;
 
     // Send raw message to listener
     if (this.onRawMessage) {
@@ -2219,7 +2287,12 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
  */
 Tinode.credential = function(meth, val, params, resp) {
   if (typeof meth == 'object') {
-    ({val, params, resp, meth} = meth);
+    ({
+      val,
+      params,
+      resp,
+      meth
+    } = meth);
   }
   if (meth && (val || resp)) {
     return [{
@@ -2242,8 +2315,10 @@ Tinode.credential = function(meth, val, params, resp) {
  */
 Tinode.topicType = function(name) {
   var types = {
-    'me': 'me', 'fnd': 'fnd',
-    'grp': 'grp', 'new': 'grp',
+    'me': 'me',
+    'fnd': 'fnd',
+    'grp': 'grp',
+    'new': 'grp',
     'usr': 'p2p'
   };
   var tp = (typeof name == "string") ? name.substring(0, 3) : 'xxx';
@@ -2260,7 +2335,7 @@ Tinode.topicType = function(name) {
  */
 Tinode.isNewGroupTopicName = function(name) {
   return (typeof name == 'string') && name.substring(0, 3) == TOPIC_NEW;
-},
+};
 
 /**
  * Return information about the current version of this Tinode client library.
@@ -2273,6 +2348,9 @@ Tinode.getVersion = function() {
   return VERSION;
 };
 
+Tinode.setWebSocketProvider = function(provider) {
+  WebSocketProvider = provider;
+};
 /**
  * Return information about the current name and version of this Tinode library.
  * @memberof Tinode
@@ -2285,16 +2363,16 @@ Tinode.getLibrary = function() {
 };
 
 // Exported constants
-Tinode.MESSAGE_STATUS_NONE =     MESSAGE_STATUS_NONE,
-Tinode.MESSAGE_STATUS_QUEUED =   MESSAGE_STATUS_QUEUED,
-Tinode.MESSAGE_STATUS_SENDING =  MESSAGE_STATUS_SENDING,
-Tinode.MESSAGE_STATUS_SENT =     MESSAGE_STATUS_SENT,
-Tinode.MESSAGE_STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED,
-Tinode.MESSAGE_STATUS_READ =     MESSAGE_STATUS_READ,
-Tinode.MESSAGE_STATUS_TO_ME =    MESSAGE_STATUS_TO_ME,
+Tinode.MESSAGE_STATUS_NONE = MESSAGE_STATUS_NONE,
+  Tinode.MESSAGE_STATUS_QUEUED = MESSAGE_STATUS_QUEUED,
+  Tinode.MESSAGE_STATUS_SENDING = MESSAGE_STATUS_SENDING,
+  Tinode.MESSAGE_STATUS_SENT = MESSAGE_STATUS_SENT,
+  Tinode.MESSAGE_STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED,
+  Tinode.MESSAGE_STATUS_READ = MESSAGE_STATUS_READ,
+  Tinode.MESSAGE_STATUS_TO_ME = MESSAGE_STATUS_TO_ME,
 
-// Unicode [del] symbol.
-Tinode.DEL_CHAR = "\u2421";
+  // Unicode [del] symbol.
+  Tinode.DEL_CHAR = "\u2421";
 
 // Public methods;
 Tinode.prototype = {
@@ -2322,19 +2400,19 @@ Tinode.prototype = {
   },
 
   /**
-  * Check for live connection to server
-  * @memberof Tinode#
-  *
-  * @returns {Boolean} true if there is a live connection, false otherwise.
-  */
+   * Check for live connection to server
+   * @memberof Tinode#
+   *
+   * @returns {Boolean} true if there is a live connection, false otherwise.
+   */
   isConnected: function() {
     return this._connection && this._connection.isConnected();
   },
   /**
-  * Check if connection is authenticated (last login was successful).
-  * @memberof Tinode#
-  * @returns {boolean} true if authenticated, false otherwise.
-  */
+   * Check if connection is authenticated (last login was successful).
+   * @memberof Tinode#
+   * @returns {boolean} true if authenticated, false otherwise.
+   */
   isAuthenticated: function() {
     return this._authenticated;
   },
@@ -2357,37 +2435,37 @@ Tinode.prototype = {
    * @property {string=} anon - Access mode for <tt>me</tt>  anonymous users.
    */
 
-   /**
-    * Create or update an account.
-    * @memberof Tinode#
-    *
-    * @param {String} uid - User id to update
-    * @param {String} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
-    * @param {String} secret - Authentication secret, assumed to be already base64 encoded.
-    * @param {Boolean=} login - Use new account to authenticate current session
-    * @param {Tinode.AccountParams=} params - User data to pass to the server.
-    */
-   account: function(uid, scheme, secret, login, params) {
-     var pkt = this.initPacket("acc");
-     pkt.acc.user = uid;
-     pkt.acc.scheme = scheme;
-     pkt.acc.secret = secret;
-     // Log in to the new account using selected scheme
-     pkt.acc.login = login;
+  /**
+   * Create or update an account.
+   * @memberof Tinode#
+   *
+   * @param {String} uid - User id to update
+   * @param {String} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
+   * @param {String} secret - Authentication secret, assumed to be already base64 encoded.
+   * @param {Boolean=} login - Use new account to authenticate current session
+   * @param {Tinode.AccountParams=} params - User data to pass to the server.
+   */
+  account: function(uid, scheme, secret, login, params) {
+    var pkt = this.initPacket("acc");
+    pkt.acc.user = uid;
+    pkt.acc.scheme = scheme;
+    pkt.acc.secret = secret;
+    // Log in to the new account using selected scheme
+    pkt.acc.login = login;
 
-     if (params) {
-       pkt.acc.desc.defacs = params.defacs;
-       pkt.acc.desc.public = params.public;
-       pkt.acc.desc.private = params.private;
+    if (params) {
+      pkt.acc.desc.defacs = params.defacs;
+      pkt.acc.desc.public = params.public;
+      pkt.acc.desc.private = params.private;
 
-       pkt.acc.tags = params.tags;
-       pkt.acc.cred = params.cred;
+      pkt.acc.tags = params.tags;
+      pkt.acc.cred = params.cred;
 
-       pkt.acc.token = params.token;
-     }
+      pkt.acc.token = params.token;
+    }
 
-     return this.send(pkt, pkt.acc.id);
-   },
+    return this.send(pkt, pkt.acc.id);
+  },
 
   /**
    * Create a new user. Wrapper for {@link Tinode#account}.
@@ -2493,7 +2571,11 @@ Tinode.prototype = {
     if (dt && dt != this._deviceToken) {
       this._deviceToken = dt;
       if (sendToServer && this.isConnected() && this.isAuthenticated()) {
-        this.send({"hi": {"dev": dt}});
+        this.send({
+          "hi": {
+            "dev": dt
+          }
+        });
         sent = true;
       }
     }
@@ -2601,13 +2683,13 @@ Tinode.prototype = {
    * @property {Tinode.SetDesc=} desc - Topic initialization parameters when creating a new topic or a new subscription.
    * @property {Tinode.SetSub=} sub - Subscription initialization parameters.
    */
- /**
-  * @typedef SetDesc
-  * @memberof Tinode
-  * @property {Tinode.DefAcs=} defacs - Default access mode.
-  * @property {Object=} public - Free-form topic description, publically accessible.
-  * @property {Object=} private - Free-form topic descriptionaccessible only to the owner.
-  */
+  /**
+   * @typedef SetDesc
+   * @memberof Tinode
+   * @property {Tinode.DefAcs=} defacs - Default access mode.
+   * @property {Object=} public - Free-form topic description, publically accessible.
+   * @property {Object=} private - Free-form topic descriptionaccessible only to the owner.
+   */
   /**
    * @typedef SetSub
    * @memberof Tinode
@@ -2691,7 +2773,9 @@ Tinode.prototype = {
 
     let dft = typeof data == "string" ? Drafty.parse(data) : data;
     if (dft && !Drafty.isPlainText(dft)) {
-      pkt.pub.head = {mime: Drafty.getContentType()};
+      pkt.pub.head = {
+        mime: Drafty.getContentType()
+      };
       data = dft;
     }
     pkt.pub.noecho = noEcho;
@@ -2730,7 +2814,9 @@ Tinode.prototype = {
     pub.seq = undefined;
     pub.from = undefined;
     pub.ts = undefined;
-    return this.send({pub: pub}, pub.id);
+    return this.send({
+      pub: pub
+    }, pub.id);
   },
 
   /**
@@ -2750,14 +2836,14 @@ Tinode.prototype = {
    * @property {Number=} limit - Maximum number of results to return. Ignored when querying topic description.
    */
 
-   /**
-    * @typedef GetDataType
-    * @type Object
-    * @memberof Tinode
-    * @property {Number=} since - Load messages with seq id equal or greater than this value.
-    * @property {Number=} before - Load messages with seq id lower than this number.
-    * @property {Number=} limit - Maximum number of results to return.
-    */
+  /**
+   * @typedef GetDataType
+   * @type Object
+   * @memberof Tinode
+   * @property {Number=} since - Load messages with seq id equal or greater than this value.
+   * @property {Number=} before - Load messages with seq id lower than this number.
+   * @property {Number=} limit - Maximum number of results to return.
+   */
 
   /**
    * Request topic metadata
@@ -2789,7 +2875,7 @@ Tinode.prototype = {
     var what = [];
 
     if (params) {
-      ["desc", "sub", "tags"].map(function(key){
+      ["desc", "sub", "tags"].map(function(key) {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];
@@ -3058,7 +3144,7 @@ Tinode.prototype = {
   },
 
   // Callbacks:
-   /**
+  /**
    * Callback to report when the websocket is opened. The callback has no parameters.
    * @memberof Tinode#
    * @type {Tinode.onWebsocketOpen}
@@ -3176,7 +3262,11 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withData: function(since, before, limit) {
-    this.what["data"] = {since: since, before: before, limit: limit};
+    this.what["data"] = {
+      since: since,
+      before: before,
+      limit: limit
+    };
     return this;
   },
 
@@ -3213,7 +3303,9 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withDesc: function(ims) {
-    this.what["desc"] = {ims: ims};
+    this.what["desc"] = {
+      ims: ims
+    };
     return this;
   },
 
@@ -3238,7 +3330,10 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withSub: function(ims, limit, userOrTopic) {
-    var opts = {ims: ims, limit: limit};
+    var opts = {
+      ims: ims,
+      limit: limit
+    };
     if (this.topic.getType() == 'me') {
       opts.topic = userOrTopic;
     } else {
@@ -3309,7 +3404,10 @@ MetaGetBuilder.prototype = {
    */
   withDel: function(since, limit) {
     if (since || limit) {
-      this.what["del"] = {since: since, limit: limit};
+      this.what["del"] = {
+        since: since,
+        limit: limit
+      };
     }
     return this;
   },
@@ -3372,28 +3470,28 @@ var AccessMode = function(acs) {
   }
 };
 
-AccessMode._NONE    = 0x00;
-AccessMode._JOIN    = 0x01;
-AccessMode._READ    = 0x02;
-AccessMode._WRITE   = 0x04;
-AccessMode._PRES    = 0x08;
+AccessMode._NONE = 0x00;
+AccessMode._JOIN = 0x01;
+AccessMode._READ = 0x02;
+AccessMode._WRITE = 0x04;
+AccessMode._PRES = 0x08;
 AccessMode._APPROVE = 0x10;
-AccessMode._SHARE   = 0x20;
-AccessMode._DELETE  = 0x40;
-AccessMode._OWNER   = 0x80;
+AccessMode._SHARE = 0x20;
+AccessMode._DELETE = 0x40;
+AccessMode._OWNER = 0x80;
 
 AccessMode._BITMASK = AccessMode._JOIN | AccessMode._READ | AccessMode._WRITE | AccessMode._PRES |
   AccessMode._APPROVE | AccessMode._SHARE | AccessMode._DELETE | AccessMode._OWNER;
-AccessMode._INVALID  = 0x100000;
+AccessMode._INVALID = 0x100000;
 
 /**
-* Parse string into an access mode value.
-* @memberof Tinode.AccessMode
-* @static
-*
-* @param {string | number} mode - either a String representation of the access mode to parse or a set of bits to assign.
-* @returns {number} - Access mode as a numeric value.
-*/
+ * Parse string into an access mode value.
+ * @memberof Tinode.AccessMode
+ * @static
+ *
+ * @param {string | number} mode - either a String representation of the access mode to parse or a set of bits to assign.
+ * @returns {number} - Access mode as a numeric value.
+ */
 AccessMode.decode = function(str) {
   if (!str) {
     return null;
@@ -3416,7 +3514,7 @@ AccessMode.decode = function(str) {
 
   var m0 = AccessMode._NONE;
 
-  for (var i=0; i<str.length; i++) {
+  for (var i = 0; i < str.length; i++) {
     var c = str.charAt(i).toUpperCase();
     var bit = bitmask[c];
     if (!bit) {
@@ -3429,14 +3527,14 @@ AccessMode.decode = function(str) {
 };
 
 /**
-* Convert numeric representation of the access mode into a string.
-*
-* @memberof Tinode.AccessMode
-* @static
-*
-* @param {number} val - access mode value to convert to a string.
-* @returns {string} - Access mode as a string.
-*/
+ * Convert numeric representation of the access mode into a string.
+ *
+ * @memberof Tinode.AccessMode
+ * @static
+ *
+ * @param {number} val - access mode value to convert to a string.
+ * @returns {string} - Access mode as a string.
+ */
 AccessMode.encode = function(val) {
   if (val === null || val === AccessMode._INVALID) {
     return null;
@@ -3444,9 +3542,9 @@ AccessMode.encode = function(val) {
     return 'N';
   }
 
-  var bitmask = ['J','R','W','P','A','S','D','O'];
+  var bitmask = ['J', 'R', 'W', 'P', 'A', 'S', 'D', 'O'];
   var res = "";
-  for (var i=0; i<bitmask.length; i++) {
+  for (var i = 0; i < bitmask.length; i++) {
     if ((val & (1 << i)) != 0) {
       res = res + bitmask[i];
     }
@@ -3455,18 +3553,18 @@ AccessMode.encode = function(val) {
 };
 
 /**
-* Update numeric representation of access mode with the new value. The value
-* is one of the following:
-*  - a string starting with '+' or '-' then the bits to add or remove, e.g. '+R-W' or '-PS'.
-*  - a new value of access mode
-*
-* @memberof Tinode.AccessMode
-* @static
-*
-* @param {number} val - access mode value to update.
-* @param {string} upd - update to apply to val.
-* @returns {number} - updated access mode.
-*/
+ * Update numeric representation of access mode with the new value. The value
+ * is one of the following:
+ *  - a string starting with '+' or '-' then the bits to add or remove, e.g. '+R-W' or '-PS'.
+ *  - a new value of access mode
+ *
+ * @memberof Tinode.AccessMode
+ * @static
+ *
+ * @param {number} val - access mode value to update.
+ * @param {string} upd - update to apply to val.
+ * @returns {number} - updated access mode.
+ */
 AccessMode.update = function(val, upd) {
   if (!upd || typeof upd != 'string') {
     return val;
@@ -3479,9 +3577,9 @@ AccessMode.update = function(val, upd) {
     var parts = upd.split(/([-+])/);
     // Starting iteration from 1 because String.split() creates an array with the first empty element.
     // Iterating by 2 because we parse pairs +/- then data.
-    for (var i = 1; i < parts.length-1; i += 2) {
+    for (var i = 1; i < parts.length - 1; i += 2) {
       action = parts[i];
-      var m0 = AccessMode.decode(parts[i+1]);
+      var m0 = AccessMode.decode(parts[i + 1]);
       if (m0 == AccessMode._INVALID) {
         return val;
       }
@@ -3519,7 +3617,10 @@ AccessMode.prototype = {
    * @param {string | number} m - either a string representation of the access mode or a set of bits.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  setMode: function(m) { this.mode = AccessMode.decode(m); return this; },
+  setMode: function(m) {
+    this.mode = AccessMode.decode(m);
+    return this;
+  },
   /**
    * Update 'mode' value.
    * @memberof Tinode.AccessMode
@@ -3527,14 +3628,19 @@ AccessMode.prototype = {
    * @param {string} u - string representation of the changes to apply to access mode.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  updateMode: function(u) { this.mode = AccessMode.update(this.mode, u); return this; },
+  updateMode: function(u) {
+    this.mode = AccessMode.update(this.mode, u);
+    return this;
+  },
   /**
    * Get 'mode' value as a string.
    * @memberof Tinode.AccessMode
    *
    * @returns {string} - <b>mode</b> value.
    */
-  getMode: function() { return AccessMode.encode(this.mode); },
+  getMode: function() {
+    return AccessMode.encode(this.mode);
+  },
 
   /**
    * Assign 'given' value.
@@ -3543,7 +3649,10 @@ AccessMode.prototype = {
    * @param {string | number} g - either a string representation of the access mode or a set of bits.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  setGiven: function(g) { this.given = AccessMode.decode(g); return this; },
+  setGiven: function(g) {
+    this.given = AccessMode.decode(g);
+    return this;
+  },
   /**
    * Update 'given' value.
    * @memberof Tinode.AccessMode
@@ -3551,14 +3660,19 @@ AccessMode.prototype = {
    * @param {string} u - string representation of the changes to apply to access mode.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  updateGiven: function(u) { this.given = AccessMode.update(this.given, u); return this; },
+  updateGiven: function(u) {
+    this.given = AccessMode.update(this.given, u);
+    return this;
+  },
   /**
    * Get 'given' value as a string.
    * @memberof Tinode.AccessMode
    *
    * @returns {string} - <b>given</b> value.
    */
-  getGiven: function() { return AccessMode.encode(this.given);},
+  getGiven: function() {
+    return AccessMode.encode(this.given);
+  },
 
   /**
    * Assign 'want' value.
@@ -3567,7 +3681,10 @@ AccessMode.prototype = {
    * @param {string | number} w - either a string representation of the access mode or a set of bits.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  setWant: function(w) { this.want = AccessMode.decode(w); return this; },
+  setWant: function(w) {
+    this.want = AccessMode.decode(w);
+    return this;
+  },
   /**
    * Update 'want' value.
    * @memberof Tinode.AccessMode
@@ -3575,14 +3692,19 @@ AccessMode.prototype = {
    * @param {string} u - string representation of the changes to apply to access mode.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  updateWant: function(u) { this.want = AccessMode.update(this.want, u); return this; },
+  updateWant: function(u) {
+    this.want = AccessMode.update(this.want, u);
+    return this;
+  },
   /**
    * Get 'want' value as a string.
    * @memberof Tinode.AccessMode
    *
    * @returns {string} - <b>given</b> value.
    */
-  getWant: function() { return AccessMode.encode(this.want); },
+  getWant: function() {
+    return AccessMode.encode(this.want);
+  },
 
   updateAll: function(val) {
     if (val) {
@@ -3593,16 +3715,36 @@ AccessMode.prototype = {
     return this;
   },
 
-  isOwner:    function() { return ((this.mode & AccessMode._OWNER) != 0); },
-  isMuted:    function() { return ((this.mode & AccessMode._PRES) == 0); },
-  isPresencer:function() { return ((this.mode & AccessMode._PRES) != 0); },
-  isJoiner:   function() { return ((this.mode & AccessMode._JOIN) != 0); },
-  isReader:   function() { return ((this.mode & AccessMode._READ) != 0); },
-  isWriter:   function() { return ((this.mode & AccessMode._WRITE) != 0); },
-  isApprover: function() { return ((this.mode & AccessMode._APPROVE) != 0); },
-  isAdmin:    function() { return this.isOwner() || this.isApprover() },
-  isSharer:   function() { return ((this.mode & AccessMode._SHARE) != 0); },
-  isDeleter:  function() { return ((this.mode & AccessMode._DELETE) != 0); }
+  isOwner: function() {
+    return ((this.mode & AccessMode._OWNER) != 0);
+  },
+  isMuted: function() {
+    return ((this.mode & AccessMode._PRES) == 0);
+  },
+  isPresencer: function() {
+    return ((this.mode & AccessMode._PRES) != 0);
+  },
+  isJoiner: function() {
+    return ((this.mode & AccessMode._JOIN) != 0);
+  },
+  isReader: function() {
+    return ((this.mode & AccessMode._READ) != 0);
+  },
+  isWriter: function() {
+    return ((this.mode & AccessMode._WRITE) != 0);
+  },
+  isApprover: function() {
+    return ((this.mode & AccessMode._APPROVE) != 0);
+  },
+  isAdmin: function() {
+    return this.isOwner() || this.isApprover()
+  },
+  isSharer: function() {
+    return ((this.mode & AccessMode._SHARE) != 0);
+  },
+  isDeleter: function() {
+    return ((this.mode & AccessMode._DELETE) != 0);
+  }
 };
 
 /**
@@ -3664,7 +3806,9 @@ var Topic = function(name, callbacks) {
   // User discovery tags
   this._tags = [];
   // Message cache, sorted by message seq values, from old to new.
-  this._messages = CBuffer(function(a,b) { return a.seq - b.seq; });
+  this._messages = CBuffer(function(a, b) {
+    return a.seq - b.seq;
+  });
   // Boolean, true if the topic is currently live
   this._subscribed = false;
   // Timestap when topic meta-desc update was recived.
@@ -3805,7 +3949,9 @@ Topic.prototype = {
     // Update header with attachment records.
     if (Drafty.hasAttachments(pub.content)) {
       let attachments = [];
-      Drafty.attachments(pub.content, (data) => { attachments.push(data.ref); });
+      Drafty.attachments(pub.content, (data) => {
+        attachments.push(data.ref);
+      });
       pub.head.attachments = attachments;
     }
 
@@ -3851,9 +3997,12 @@ Topic.prototype = {
     // If promise is provided, send the queued message when it's resolved.
     // If no promise is provided, create a resolved one and send immediately.
     prom = (prom || Promise.resolve()).then(
-      (/* argument ignored */) => {
+      ( /* argument ignored */ ) => {
         if (pub._cancelled) {
-          return {code: 300, text: "cancelled"};
+          return {
+            code: 300,
+            text: "cancelled"
+          };
         }
 
         return this.publishMessage(pub).then((ctrl) => {
@@ -4007,7 +4156,12 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   invite: function(uid, mode) {
-    return this.setMeta({sub: {user: uid, mode: mode}});
+    return this.setMeta({
+      sub: {
+        user: uid,
+        mode: mode
+      }
+    });
   },
 
   /**
@@ -4027,12 +4181,12 @@ Topic.prototype = {
     // Sort ranges in accending order by low, the descending by hi.
     ranges.sort(function(r1, r2) {
       if (r1.low < r2.low) {
-    		return true;
-    	}
+        return true;
+      }
       if (r1.low == r2.low) {
-    		return !r2.hi || (r1.hi >= r2.hi);
-    	}
-    	return false;
+        return !r2.hi || (r1.hi >= r2.hi);
+      }
+      return false;
     });
 
     // Remove pending messages from ranges possibly clipping some ranges.
@@ -4042,7 +4196,10 @@ Topic.prototype = {
           out.push(r);
         } else {
           // Clip hi to max allowed value.
-          out.push({low: r.low, hi: this._maxSeq+1});
+          out.push({
+            low: r.low,
+            hi: this._maxSeq + 1
+          });
         }
       }
       return out;
@@ -4053,7 +4210,11 @@ Topic.prototype = {
     if (ranges.length > 0) {
       result = this._tinode.delMessages(this.name, tosend, hard);
     } else {
-      result = Promise.resolve({params: {del: 0}});
+      result = Promise.resolve({
+        params: {
+          del: 0
+        }
+      });
     }
     // Update local cache.
     return result.then((ctrl) => {
@@ -4086,7 +4247,11 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   delMessagesAll: function(hardDel) {
-    return this.delMessages([{low: 1, hi: this._maxSeq+1, _all: true}], hardDel);
+    return this.delMessages([{
+      low: 1,
+      hi: this._maxSeq + 1,
+      _all: true
+    }], hardDel);
   },
 
   /**
@@ -4105,12 +4270,16 @@ Topic.prototype = {
     var ranges = list.reduce((out, id) => {
       if (out.length == 0) {
         // First element.
-        out.push({low: id});
+        out.push({
+          low: id
+        });
       } else {
-        let prev = out[out.length-1];
+        let prev = out[out.length - 1];
         if ((!prev.hi && (id != prev.low + 1)) || (id > prev.hi)) {
           // New range.
-          out.push({low: id});
+          out.push({
+            low: id
+          });
         } else {
           // Expand existing range.
           prev.hi = prev.hi ? Math.max(prev.hi, id + 1) : id + 1;
@@ -4283,8 +4452,12 @@ Topic.prototype = {
   messages: function(callback, sinceId, beforeId, context) {
     var cb = (callback || this.onData);
     if (cb) {
-      let startIdx = typeof sinceId == 'number' ? this._messages.find({seq: sinceId}) : undefined;
-      let beforeIdx = typeof beforeId == 'number' ? this._messages.find({seq: beforeId}, true) : undefined;
+      let startIdx = typeof sinceId == 'number' ? this._messages.find({
+        seq: sinceId
+      }) : undefined;
+      let beforeIdx = typeof beforeId == 'number' ? this._messages.find({
+        seq: beforeId
+      }, true) : undefined;
       if (startIdx != -1 && beforeIdx != -1) {
         this._messages.forEach(cb, startIdx, beforeIdx, context);
       }
@@ -4345,7 +4518,7 @@ Topic.prototype = {
    */
   msgHasMoreMessages: function(newer) {
     return newer ? this.seq > this._maxSeq :
-    // _minSeq cound be more than 1, but earlier messages could have been deleted.
+      // _minSeq cound be more than 1, but earlier messages could have been deleted.
       (this._minSeq > 1 && !this._noEarlierMsgs);
   },
 
@@ -4367,8 +4540,10 @@ Topic.prototype = {
    * @returns {Message} removed message or undefined if such message was not found.
    */
   flushMessage: function(seqId) {
-    let idx = this._messages.find({seq: seqId});
-    return idx >=0 ? this._messages.delAt(idx) : undefined;
+    let idx = this._messages.find({
+      seq: seqId
+    });
+    return idx >= 0 ? this._messages.delAt(idx) : undefined;
   },
 
   /**
@@ -4383,8 +4558,12 @@ Topic.prototype = {
   flushMessageRange: function(fromId, untilId) {
     // start: find exact match.
     // end: find insertion point (nearest == true).
-    let since = this._messages.find({seq: fromId});
-    return since >= 0 ? this._messages.delRange(since, this._messages.find({seq: untilId}, true)) : [];
+    let since = this._messages.find({
+      seq: fromId
+    });
+    return since >= 0 ? this._messages.delRange(since, this._messages.find({
+      seq: untilId
+    }, true)) : [];
   },
 
   /**
@@ -4396,8 +4575,10 @@ Topic.prototype = {
    * @returns {boolean} true if message was cancelled, false otherwise.
    */
   cancelSend: function(seqId) {
-    let idx = this._messages.find({seq: seqId});
-    if (idx >=0) {
+    let idx = this._messages.find({
+      seq: seqId
+    });
+    if (idx >= 0) {
       let msg = this._messages.getAt(idx);
       let status = this.msgStatus(msg);
       if (status == MESSAGE_STATUS_QUEUED) {
@@ -4436,7 +4617,7 @@ Topic.prototype = {
    * @returns {Tinode.DefAcs} - access mode, such as {auth: `RWP`, anon: `N`}.
    */
   getDefaultAccess: function() {
-      return this.defacs;
+    return this.defacs;
   },
 
   /**
@@ -4557,7 +4738,10 @@ Topic.prototype = {
           if (acs && acs.mode != AccessMode._NONE) {
             user = this._cacheGetUser(uid);
             if (!user) {
-              user = {user: uid, acs: acs};
+              user = {
+                user: uid,
+                acs: acs
+              };
               this.getMeta(this.startMetaQuery().withOneSub(undefined, uid).build());
             } else {
               user.acs = acs;
@@ -4582,7 +4766,8 @@ Topic.prototype = {
             this._processMetaSub([{
               user: uid,
               deleted: new Date(),
-              _generated: true}]);
+              _generated: true
+            }]);
           }
         }
         break;
@@ -4641,7 +4826,7 @@ Topic.prototype = {
     }
 
     if (this.onMetaDesc) {
-        this.onMetaDesc(this);
+      this.onMetaDesc(this);
     }
   },
 
@@ -4809,7 +4994,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   // Override the original Topic._processMetaSub
   _processMetaSub: {
     value: function(subs) {
-      var updateCount  = 0;
+      var updateCount = 0;
       for (var idx in subs) {
         var sub = subs[idx];
         var topicName = sub.topic;
@@ -4849,7 +5034,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           delete this._contacts[topicName];
         }
 
-        updateCount ++;
+        updateCount++;
 
         if (this.onMetaSub) {
           this.onMetaSub(cont);
@@ -4880,7 +5065,9 @@ TopicMe.prototype = Object.create(Topic.prototype, {
               if (cont.seen) {
                 cont.seen.when = new Date();
               } else {
-                cont.seen = {when: new Date()};
+                cont.seen = {
+                  when: new Date()
+                };
               }
             }
             break;
@@ -4901,7 +5088,10 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             }
             break;
           case "ua": // user agent changed
-            cont.seen = {when: new Date(), ua: pres.ua};
+            cont.seen = {
+              when: new Date(),
+              ua: pres.ua
+            };
             break;
           case "recv": // user's other session marked some messges as received
             cont.recv = cont.recv ? Math.max(cont.recv, pres.seq) : (pres.seq | 0);
@@ -4937,7 +5127,11 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           // Using .withOneSub (not .withLaterOneSub) to make sure IfModifiedSince is not set.
           this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
           // Create a dummy entry to catch online status update.
-          this._contacts[pres.src] = {topic: pres.src, online: false, acs: acs};
+          this._contacts[pres.src] = {
+            topic: pres.src,
+            online: false,
+            acs: acs
+          };
         }
       }
       if (this.onPres) {
@@ -5101,7 +5295,7 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
         }
 
         sub = mergeToCache(this._contacts, indexBy, sub);
-        updateCount ++;
+        updateCount++;
 
         if (this.onMetaSub) {
           this.onMetaSub(sub);
@@ -5240,7 +5434,7 @@ LargeFileHelper.prototype = {
       var pkt;
       try {
         pkt = JSON.parse(this.response, jsonParseHelper);
-      } catch(err) {
+      } catch (err) {
         instance._tinode.logger("Invalid server response in LargeFileHelper", this.response);
       }
 
@@ -5342,7 +5536,9 @@ LargeFileHelper.prototype = {
     this.xhr.onload = function() {
       if (this.status == 200) {
         var link = document.createElement("a");
-        link.href = window.URL.createObjectURL(new Blob([this.response], { type: mimetype }));
+        link.href = window.URL.createObjectURL(new Blob([this.response], {
+          type: mimetype
+        }));
         link.style.display = "none";
         link.setAttribute("download", filename);
         document.body.appendChild(link);
@@ -5361,7 +5557,7 @@ LargeFileHelper.prototype = {
           try {
             var pkt = JSON.parse(this.result, jsonParseHelper);
             instance.toReject(new Error(pkt.ctrl.text + " (" + pkt.ctrl.code + ")"));
-          } catch(err) {
+          } catch (err) {
             instance._tinode.logger("Invalid server response in LargeFileHelper", this.result);
             instance.toReject(err);
           }
@@ -5428,13 +5624,13 @@ var Message = function(topic_, content_) {
   this.content = content_;
 }
 
-Message.STATUS_NONE     = MESSAGE_STATUS_NONE;
-Message.STATUS_QUEUED   = MESSAGE_STATUS_QUEUED;
-Message.STATUS_SENDING  = MESSAGE_STATUS_SENDING;
-Message.STATUS_SENT     = MESSAGE_STATUS_SENT;
+Message.STATUS_NONE = MESSAGE_STATUS_NONE;
+Message.STATUS_QUEUED = MESSAGE_STATUS_QUEUED;
+Message.STATUS_SENDING = MESSAGE_STATUS_SENDING;
+Message.STATUS_SENT = MESSAGE_STATUS_SENT;
 Message.STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED;
-Message.STATUS_READ     = MESSAGE_STATUS_READ;
-Message.STATUS_TO_ME    = MESSAGE_STATUS_TO_ME;
+Message.STATUS_READ = MESSAGE_STATUS_READ;
+Message.STATUS_TO_ME = MESSAGE_STATUS_TO_ME;
 
 Message.prototype = {
   /**
@@ -5454,7 +5650,7 @@ Message.prototype.constructor = Message;
 
 module.exports = Tinode;
 module.exports.Drafty = Drafty;
-
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"../version.json":3,"./drafty.js":1}],3:[function(require,module,exports){
 module.exports={"version": "0.15.7-rc4"}
 
