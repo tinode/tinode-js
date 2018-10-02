@@ -3,9 +3,9 @@
   "description": "Tinode SDK",
   "version": "0.15.7-rc4",
   "scripts": {
-    "build": "npm run vers && npm run build:tn-prod && npm run build:tn-dev",
-    "build:tn-prod": "browserify ./src/tinode.js --standalone Tinode --plugin tinyify -t babelify > ./umd/tinode.prod.js",
-    "build:tn-dev": "browserify ./src/tinode.js --standalone Tinode > ./umd/tinode.dev.js",
+    "build": "npm run vers && npm run build:prod && npm run build:dev",
+    "build:prod": "browserify ./src/tinode.js --standalone Tinode -t [ babelify --presets [ @babel/preset-env ] ] --plugin tinyify > ./umd/tinode.prod.js",
+    "build:dev": "browserify ./src/tinode.js --standalone Tinode > ./umd/tinode.dev.js",
     "build:docs": "jsdoc ./src -t ./node_modules/minami -d ../tinode.github.io/js-api",
     "vers": "echo \"{\\\"version\\\": \\\"`node -p -e \"require('./package.json').version\"`\\\"}\" > version.json",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -41,8 +41,5 @@
     "jsdoc": "^3.5.5",
     "minami": "^1.2.3",
     "tinyify": "^2.4.3"
-  },
-  "dependencies": {
-    "babel-core": "^6.26.3"
   }
 }
