@@ -1447,9 +1447,17 @@ Tinode.getVersion = function() {
   return VERSION;
 };
 
+/**
+ * To use for non browser app, allow to specify WebSocket provider
+ * @param provider webSocket provider ex: for nodeJS require('ws')
+ * @memberof Tinode
+ * @static
+ *
+ */
 Tinode.setWebSocketProvider = function(provider) {
   WebSocketProvider = provider;
 };
+
 /**
  * Return information about the current name and version of this Tinode library.
  * @memberof Tinode
