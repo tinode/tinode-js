@@ -3,7 +3,8 @@
   "description": "Tinode SDK",
   "version": "0.15.7-rc4",
   "scripts": {
-    "build": "npm run vers && npm run build:prod && npm run build:dev",
+    "format": "js-beautify -r src/tinode.js ",
+    "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
     "build:prod": "browserify ./src/tinode.js --standalone Tinode -t [ babelify --presets [ @babel/preset-env ] ] --plugin tinyify > ./umd/tinode.prod.js",
     "build:dev": "browserify ./src/tinode.js --standalone Tinode > ./umd/tinode.dev.js",
     "build:docs": "jsdoc ./src -t ./node_modules/minami -d ../tinode.github.io/js-api",
@@ -38,6 +39,7 @@
     "@babel/core": "^7.1.2",
     "@babel/preset-env": "^7.1.0",
     "babelify": "^10.0.0",
+    "js-beautify": "^1.8.6",
     "jsdoc": "^3.5.5",
     "minami": "^1.2.3",
     "tinyify": "^2.4.3"

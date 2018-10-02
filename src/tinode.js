@@ -41,14 +41,14 @@
  */
 'use strict';
 
-if (typeof require === 'function') {
-  if (typeof Drafty === 'undefined') {
+if (typeof require == 'function') {
+  if (typeof Drafty == 'undefined') {
     var Drafty = require('./drafty.js');
   }
   var package_version = require('../version.json').version;
 }
 let WebSocketProvider;
-if (typeof(WebSocket) !== "undefined") {
+if (typeof(WebSocket) != "undefined") {
   WebSocketProvider = WebSocket;
 }
 initForNonBrowserApp();
@@ -81,9 +81,9 @@ function initForNonBrowserApp() {
   // Tinode requirement in native mode because react native doesn't provide Base64 method
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
 
-  if (typeof btoa === "undefined") {
+  if (typeof btoa == "undefined") {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-    global.btoa = function (input = '') {
+    global.btoa = function(input = '') {
       let str = input;
       let output = '';
 
@@ -102,8 +102,8 @@ function initForNonBrowserApp() {
     };
   }
 
-  if (typeof atob === "undefined") {
-    global.atob = function (input = '') {
+  if (typeof atob == "undefined") {
+    global.atob = function(input = '') {
       let str = input.replace(/=+$/, '');
       let output = '';
 
@@ -112,8 +112,8 @@ function initForNonBrowserApp() {
       }
       for (let bc = 0, bs = 0, buffer, i = 0; buffer = str.charAt(i++);
 
-           ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer,
-           bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
+        ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer,
+          bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
       ) {
         buffer = chars.indexOf(buffer);
       }
@@ -122,11 +122,11 @@ function initForNonBrowserApp() {
     };
   }
 
-  if (typeof window === "undefined") {
+  if (typeof window == "undefined") {
     global.window = {
       WebSocket: WebSocketProvider,
       URL: {
-        createObjectURL: function () {
+        createObjectURL: function() {
           throw new Error("Unable to use window.URL in a non browser application");
         }
       }
@@ -247,7 +247,7 @@ function jsonBuildHelper(key, val) {
 
 // Strips all values from an object of they evaluate to false or if their name starts with '_'.
 function simplify(obj) {
-  Object.keys(obj).forEach(function (key) {
+  Object.keys(obj).forEach(function(key) {
     if (key[0] == "_") {
       // Strip fields like "obj._key".
       delete obj[key];
@@ -286,7 +286,7 @@ function normalizeArray(arr) {
         }
       }
     }
-    out.sort().filter(function (item, pos, ary) {
+    out.sort().filter(function(item, pos, ary) {
       return !pos || item != ary[pos - 1];
     });
   }
@@ -337,13 +337,13 @@ function getBrowserInfo(ua) {
     for (var i = 0; i < tmp.length; i++) {
       var m2 = /([\w.]+)[\/]([\.\d]+)/.exec(tmp[i]);
       if (m2) {
-        tokens.push([m2[1], m2[2], priority.findIndex(function (e) {
+        tokens.push([m2[1], m2[2], priority.findIndex(function(e) {
           return (e == m2[1].toLowerCase());
         })]);
       }
     }
     // Sort by priority: more interesting is earlier than less interesting.
-    tokens.sort(function (a, b) {
+    tokens.sort(function(a, b) {
       var diff = a[2] - b[2];
       return diff != 0 ? diff : b[0].length - a[0].length;
     });
@@ -407,10 +407,10 @@ function getBrowserInfo(ua) {
  *
  * @param {function} compare custom comparator of objects. Returns -1 if a < b, 0 if a == b, 1 otherwise.
  */
-var CBuffer = function (compare) {
+var CBuffer = function(compare) {
   var buffer = [];
 
-  compare = compare || function (a, b) {
+  compare = compare || function(a, b) {
     return a === b ? 0 : a < b ? -1 : 1;
   };
 
@@ -457,7 +457,7 @@ var CBuffer = function (compare) {
      * @param {number} at - Position to fetch from.
      * @returns {Object} Element at the given position or <tt>undefined</tt>
      */
-    getAt: function (at) {
+    getAt: function(at) {
       return buffer[at];
     },
 
@@ -467,7 +467,7 @@ var CBuffer = function (compare) {
      *
      * @param {...Object|Array} - One or more objects to insert.
      */
-    put: function () {
+    put: function() {
       var insert;
       // inspect arguments: if array, insert its elements, if one or more non-array arguments, insert them one by one
       if (arguments.length == 1 && Array.isArray(arguments[0])) {
@@ -486,7 +486,7 @@ var CBuffer = function (compare) {
      * @param {number} at - Position to delete at.
      * @returns {Object} Element at the given position or <tt>undefined</tt>
      */
-    delAt: function (at) {
+    delAt: function(at) {
       var r = buffer.splice(at, 1);
       if (r && r.length > 0) {
         return r[0];
@@ -502,7 +502,7 @@ var CBuffer = function (compare) {
      *
      * @returns {Array} array of removed elements (could be zero length).
      */
-    delRange: function (since, before) {
+    delRange: function(since, before) {
       return buffer.splice(since, before - since);
     },
 
@@ -511,7 +511,7 @@ var CBuffer = function (compare) {
      * @memberof Tinode.CBuffer#
      * @return {number} The size of the buffer.
      */
-    size: function () {
+    size: function() {
       return buffer.length;
     },
 
@@ -520,7 +520,7 @@ var CBuffer = function (compare) {
      * @memberof Tinode.CBuffer#
      * @param {number} newSize - New size of the buffer.
      */
-    reset: function (newSize) {
+    reset: function(newSize) {
       buffer = [];
     },
 
@@ -541,7 +541,7 @@ var CBuffer = function (compare) {
      * @param {integer} beforeIdx - Optional index to stop iterating before (exclusive).
      * @param {Object} context - calling context (i.e. value of 'this' in callback)
      */
-    forEach: function (callback, startIdx, beforeIdx, context) {
+    forEach: function(callback, startIdx, beforeIdx, context) {
       startIdx = startIdx | 0;
       beforeIdx = beforeIdx || buffer.length;
       for (var i = startIdx; i < beforeIdx; i++) {
@@ -557,7 +557,7 @@ var CBuffer = function (compare) {
      * @param {boolean=} nearest - when true and exact match is not found, return the nearest element (insertion point).
      * @returns {number} index of the element in the buffer or -1.
      */
-    find: function (elem, nearest) {
+    find: function(elem, nearest) {
       return findNearest(elem, buffer, !nearest);
     }
   }
@@ -598,7 +598,7 @@ function makeBaseUrl(host, protocol, apiKey) {
  * @param {boolean} secure_ - Use secure WebSocket (wss) if true.
  * @param {boolean} autoreconnect_ - If connection is lost, try to reconnect automatically.
  */
-var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) {
+var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
   let host = host_;
   let secure = secure_;
   let apiKey = apiKey_;
@@ -632,8 +632,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
       log("Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
       // Maybe the socket was closed while we waited for the timer?
       if (!_boffClosed) {
-        this.connect().catch(function () { /* do nothing */
-        });
+        this.connect().catch(function() { /* do nothing */ });
       }
     }, timeout);
   }
@@ -648,7 +647,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
      * @return {Promise} Promise resolved/rejected when the connection call completes,
      resolution is called without parameters, rejection passes the {Error} as parameter.
      */
-    instance.connect = function (host_) {
+    instance.connect = function(host_) {
       if (_socket && _socket.readyState === 1) {
         return Promise.resolve();
       }
@@ -657,14 +656,14 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
         host = host_;
       }
 
-      return new Promise(function (resolve, reject) {
+      return new Promise(function(resolve, reject) {
         var url = makeBaseUrl(host, secure ? "wss" : "ws", apiKey);
 
         log("Connecting to: " + url);
 
         var conn = new WebSocketProvider(url);
 
-        conn.onopen = function (evt) {
+        conn.onopen = function(evt) {
           _boffClosed = false;
 
           if (instance.onOpen) {
@@ -679,7 +678,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
           }
         }
 
-        conn.onclose = function (evt) {
+        conn.onclose = function(evt) {
           _socket = null;
 
           if (instance.onDisconnect) {
@@ -691,11 +690,11 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
           }
         }
 
-        conn.onerror = function (err) {
+        conn.onerror = function(err) {
           reject(err);
         }
 
-        conn.onmessage = function (evt) {
+        conn.onmessage = function(evt) {
           if (instance.onMessage) {
             instance.onMessage(evt.data);
           }
@@ -708,7 +707,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
      * Terminate the network connection
      * @memberof Tinode.Connection#
      */
-    instance.disconnect = function () {
+    instance.disconnect = function() {
       if (_socket) {
         _boffClosed = true;
         _socket.close();
@@ -723,7 +722,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
      * @param {string} msg - String to send.
      * @throws Throws an exception if the underlying connection is not live.
      */
-    instance.sendText = function (msg) {
+    instance.sendText = function(msg) {
       if (_socket && (_socket.readyState == _socket.OPEN)) {
         _socket.send(msg);
       } else {
@@ -736,7 +735,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
      * @memberof Tinode.Connection#
      * @returns {boolean} true if connection is live, false otherwise
      */
-    instance.isConnected = function () {
+    instance.isConnected = function() {
       return (_socket && (_socket.readyState === 1));
     }
   }
@@ -756,7 +755,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
 
     function lp_sender(url_) {
       var sender = xdreq();
-      sender.onreadystatechange = function (evt) {
+      sender.onreadystatechange = function(evt) {
         if (sender.readyState == XDR_DONE && sender.status >= 400) {
           // Some sort of error response
           throw new Error("LP sender failed, " + sender.status);
@@ -770,7 +769,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
     function lp_poller(url_, resolve, reject) {
       var poller = xdreq();
 
-      poller.onreadystatechange = function (evt) {
+      poller.onreadystatechange = function(evt) {
 
         if (poller.readyState == XDR_DONE) {
           if (poller.status == 201) { // 201 == HTTP.Created, get SID
@@ -811,7 +810,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
       return poller;
     }
 
-    instance.connect = function (host_) {
+    instance.connect = function(host_) {
       if (_poller && true) {
         return Promise.resolve();
       }
@@ -820,17 +819,17 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
         host = host_;
       }
 
-      return new Promise(function (resolve, reject) {
+      return new Promise(function(resolve, reject) {
         var url = makeBaseUrl(host, secure ? "https" : "http", apiKey);
         log("Connecting to: " + url);
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null)
-      }).catch(function () {
+      }).catch(function() {
         // Do nothing
       });
     };
 
-    instance.disconnect = function () {
+    instance.disconnect = function() {
       if (_sender) {
         _sender.abort();
         _sender = null;
@@ -846,7 +845,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
       _lpURL = null;
     }
 
-    instance.sendText = function (msg) {
+    instance.sendText = function(msg) {
       _sender = lp_sender(_lpURL);
       if (_sender && (_sender.readyState == 1)) { // 1 == OPENED
         _sender.send(msg);
@@ -855,7 +854,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
       }
     };
 
-    instance.isConnected = function () {
+    instance.isConnected = function() {
       return (_poller && true);
     }
   }
@@ -930,7 +929,7 @@ var Connection = function (host_, apiKey_, transport_, secure_, autoreconnect_) 
  * @param {string} transport_ - See {@link Tinode.Connection#transport}.
  * @param {boolean} secure_ - Use Secure WebSocket if true.
  */
-var Tinode = function (appname_, host_, apiKey_, transport_, secure_) {
+var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
   // Client-provided application name, format <Name>/<version number>
   if (appname_) {
     this._appName = appname_;
@@ -1385,7 +1384,7 @@ var Tinode = function (appname_, host_, apiKey_, transport_, secure_) {
  *
  * @returns {Array} array with a single credentail or null if no valid credentials were given.
  */
-Tinode.credential = function (meth, val, params, resp) {
+Tinode.credential = function(meth, val, params, resp) {
   if (typeof meth == 'object') {
     ({
       val,
@@ -1413,7 +1412,7 @@ Tinode.credential = function (meth, val, params, resp) {
  * @param {string} name - Name of the topic to test.
  * @returns {string} One of <tt>'me'</tt>, <tt>'grp'</tt>, <tt>'p2p'</tt> or <tt>undefined</tt>.
  */
-Tinode.topicType = function (name) {
+Tinode.topicType = function(name) {
   var types = {
     'me': 'me',
     'fnd': 'fnd',
@@ -1433,7 +1432,7 @@ Tinode.topicType = function (name) {
  * @param {string} name - topic name to check.
  * @returns {boolean} true if the name is a name of a new topic.
  */
-Tinode.isNewGroupTopicName = function (name) {
+Tinode.isNewGroupTopicName = function(name) {
   return (typeof name == 'string') && name.substring(0, 3) == TOPIC_NEW;
 };
 
@@ -1444,11 +1443,11 @@ Tinode.isNewGroupTopicName = function (name) {
  *
  * @returns {string} semantic version of the library, e.g. '0.15.5-rc1'.
  */
-Tinode.getVersion = function () {
+Tinode.getVersion = function() {
   return VERSION;
 };
 
-Tinode.setWebSocketProvider = function (provider) {
+Tinode.setWebSocketProvider = function(provider) {
   WebSocketProvider = provider;
 };
 /**
@@ -1458,7 +1457,7 @@ Tinode.setWebSocketProvider = function (provider) {
  *
  * @returns {string} the name of the library and it's version.
  */
-Tinode.getLibrary = function () {
+Tinode.getLibrary = function() {
   return LIBRARY;
 };
 
@@ -1485,7 +1484,7 @@ Tinode.prototype = {
    * @return {Promise} Promise resolved/rejected when the connection call completes:
    * <tt>resolve()</tt> is called without parameters, <tt>reject()</tt> receives the <tt>Error</tt> as a single parameter.
    */
-  connect: function (host_) {
+  connect: function(host_) {
     return this._connection.connect(host_);
   },
 
@@ -1493,7 +1492,7 @@ Tinode.prototype = {
    * Disconnect from the server.
    * @memberof Tinode#
    */
-  disconnect: function () {
+  disconnect: function() {
     if (this._connection) {
       this._connection.disconnect();
     }
@@ -1505,7 +1504,7 @@ Tinode.prototype = {
    *
    * @returns {Boolean} true if there is a live connection, false otherwise.
    */
-  isConnected: function () {
+  isConnected: function() {
     return this._connection && this._connection.isConnected();
   },
   /**
@@ -1513,7 +1512,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    * @returns {boolean} true if authenticated, false otherwise.
    */
-  isAuthenticated: function () {
+  isAuthenticated: function() {
     return this._authenticated;
   },
 
@@ -1545,7 +1544,7 @@ Tinode.prototype = {
    * @param {Boolean=} login - Use new account to authenticate current session
    * @param {Tinode.AccountParams=} params - User data to pass to the server.
    */
-  account: function (uid, scheme, secret, login, params) {
+  account: function(uid, scheme, secret, login, params) {
     var pkt = this.initPacket("acc");
     pkt.acc.user = uid;
     pkt.acc.scheme = scheme;
@@ -1578,7 +1577,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  createAccount: function (scheme, secret, login, params) {
+  createAccount: function(scheme, secret, login, params) {
     var promise = this.account(USER_NEW, scheme, secret, login, params);
     if (login) {
       promise = promise.then((ctrl) => {
@@ -1600,7 +1599,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  createAccountBasic: function (username, password, params) {
+  createAccountBasic: function(username, password, params) {
     // Make sure we are not using 'null' or 'undefined';
     username = username || '';
     password = password || '';
@@ -1619,7 +1618,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  updateAccountBasic: function (uid, username, password, params) {
+  updateAccountBasic: function(uid, username, password, params) {
     // Make sure we are not using 'null' or 'undefined';
     username = username || '';
     password = password || '';
@@ -1633,7 +1632,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  hello: function () {
+  hello: function() {
     var pkt = this.initPacket("hi");
 
     return this.send(pkt, pkt.hi.id)
@@ -1666,7 +1665,7 @@ Tinode.prototype = {
    *
    * @param true if attempt was made to send the token to the server.
    */
-  setDeviceToken: function (dt, sendToServer) {
+  setDeviceToken: function(dt, sendToServer) {
     let sent = false;
     if (dt && dt != this._deviceToken) {
       this._deviceToken = dt;
@@ -1691,7 +1690,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  login: function (scheme, secret, cred) {
+  login: function(scheme, secret, cred) {
     var pkt = this.initPacket("login");
     pkt.login.scheme = scheme;
     pkt.login.secret = secret;
@@ -1712,7 +1711,7 @@ Tinode.prototype = {
    * @param {String} password  - Password.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  loginBasic: function (uname, password, cred) {
+  loginBasic: function(uname, password, cred) {
     return this.login("basic", b64EncodeUnicode(uname + ":" + password), cred)
       .then((ctrl) => {
         this._login = uname;
@@ -1727,7 +1726,7 @@ Tinode.prototype = {
    * @param {String} token - Token received in response to earlier login.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  loginToken: function (token, cred) {
+  loginToken: function(token, cred) {
     return this.login("token", token, cred);
   },
 
@@ -1741,7 +1740,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving the server reply.
    */
-  requestResetAuthSecret: function (scheme, method, value) {
+  requestResetAuthSecret: function(scheme, method, value) {
     return this.login("reset", b64EncodeUnicode(scheme + ":" + method + ":" + value));
   },
 
@@ -1758,7 +1757,7 @@ Tinode.prototype = {
    *
    * @returns {Tinode.AuthToken} authentication token.
    */
-  getAuthToken: function () {
+  getAuthToken: function() {
     if (this._authToken && (this._authToken.expires.getTime() > Date.now())) {
       return this._authToken;
     } else {
@@ -1773,7 +1772,7 @@ Tinode.prototype = {
    *
    * @param {Tinode.AuthToken} token - authentication token.
    */
-  setAuthToken: function (token) {
+  setAuthToken: function(token) {
     this._authToken = token;
   },
 
@@ -1816,7 +1815,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  subscribe: function (topicName, getParams, setParams) {
+  subscribe: function(topicName, getParams, setParams) {
     var pkt = this.initPacket("sub", topicName)
     if (!topicName) {
       topicName = TOPIC_NEW;
@@ -1851,7 +1850,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  leave: function (topic, unsub) {
+  leave: function(topic, unsub) {
     var pkt = this.initPacket("leave", topic);
     pkt.leave.unsub = unsub;
 
@@ -1868,7 +1867,7 @@ Tinode.prototype = {
    *
    * @returns {Object} new message which can be sent to the server or otherwise used.
    */
-  createMessage: function (topic, data, noEcho) {
+  createMessage: function(topic, data, noEcho) {
     let pkt = this.initPacket("pub", topic);
 
     let dft = typeof data == "string" ? Drafty.parse(data) : data;
@@ -1894,7 +1893,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publish: function (topic, data, noEcho) {
+  publish: function(topic, data, noEcho) {
     return this.publishMessage(
       this.createMessage(topic, data, noEcho)
     );
@@ -1908,7 +1907,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publishMessage: function (pub) {
+  publishMessage: function(pub) {
     // Make a shallow copy. Needed in order to clear locally-assigned temp values;
     pub = Object.assign({}, pub);
     pub.seq = undefined;
@@ -1954,7 +1953,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  getMeta: function (topic, params) {
+  getMeta: function(topic, params) {
     var pkt = this.initPacket("get", topic);
 
     pkt.get = mergeObj(pkt.get, params);
@@ -1970,12 +1969,12 @@ Tinode.prototype = {
    * @param {Tinode.SetParams} params - topic metadata to update.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  setMeta: function (topic, params) {
+  setMeta: function(topic, params) {
     var pkt = this.initPacket("set", topic);
     var what = [];
 
     if (params) {
-      ["desc", "sub", "tags"].map(function (key) {
+      ["desc", "sub", "tags"].map(function(key) {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];
@@ -2009,7 +2008,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delMessages: function (topic, ranges, hard) {
+  delMessages: function(topic, ranges, hard) {
     var pkt = this.initPacket("del", topic);
 
     pkt.del.what = "msg";
@@ -2026,7 +2025,7 @@ Tinode.prototype = {
    * @param {String} topic - Name of the topic to delete
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delTopic: function (topic) {
+  delTopic: function(topic) {
     var pkt = this.initPacket("del", topic);
     pkt.del.what = "topic";
 
@@ -2044,7 +2043,7 @@ Tinode.prototype = {
    * @param {String} user - User ID to remove.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delSubscription: function (topic, user) {
+  delSubscription: function(topic, user) {
     var pkt = this.initPacket("del", topic);
     pkt.del.what = "sub";
     pkt.del.user = user;
@@ -2060,7 +2059,7 @@ Tinode.prototype = {
    * @param {String} what - Action being aknowledged, either "read" or "recv".
    * @param {Number} seq - Maximum id of the message being acknowledged.
    */
-  note: function (topic, what, seq) {
+  note: function(topic, what, seq) {
     if (seq <= 0 || seq >= LOCAL_SEQID) {
       throw new Error("Invalid message id " + seq);
     }
@@ -2078,7 +2077,7 @@ Tinode.prototype = {
    *
    * @param {String} topic - Name of the topic to broadcast to.
    */
-  noteKeyPress: function (topic) {
+  noteKeyPress: function(topic) {
     var pkt = this.initPacket("note", topic);
     pkt.note.what = "kp";
     this.send(pkt);
@@ -2092,7 +2091,7 @@ Tinode.prototype = {
    * @param {String} topic - Name of the topic to get.
    * @returns {Tinode.Topic} Requested or newly created topic or <tt>undefined</tt> if topic name is invalid.
    */
-  getTopic: function (name) {
+  getTopic: function(name) {
     var topic = this.cacheGet("topic", name);
     if (!topic && name) {
       if (name == TOPIC_ME) {
@@ -2117,7 +2116,7 @@ Tinode.prototype = {
    * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
    * @returns {Tinode.Topic} Newly created topic.
    */
-  newTopic: function (callbacks) {
+  newTopic: function(callbacks) {
     var topic = new Topic(TOPIC_NEW, callbacks);
     this.attachCacheToTopic(topic);
     return topic;
@@ -2129,7 +2128,7 @@ Tinode.prototype = {
    *
    * @returns {string} name which can be used for creating a new group topic.
    */
-  newGroupTopicName: function () {
+  newGroupTopicName: function() {
     return TOPIC_NEW + this.getNextUniqueId();
   },
 
@@ -2141,7 +2140,7 @@ Tinode.prototype = {
    * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
    * @returns {Tinode.Topic} Newly created topic.
    */
-  newTopicWith: function (peer, callbacks) {
+  newTopicWith: function(peer, callbacks) {
     var topic = new Topic(peer, callbacks);
     this.attachCacheToTopic(topic);
     return topic;
@@ -2153,7 +2152,7 @@ Tinode.prototype = {
    *
    * @returns {Tinode.TopicMe} Instance of 'me' topic.
    */
-  getMeTopic: function () {
+  getMeTopic: function() {
     return this.getTopic(TOPIC_ME);
   },
 
@@ -2163,7 +2162,7 @@ Tinode.prototype = {
    *
    * @returns {Tinode.Topic} Instance of 'fnd' topic.
    */
-  getFndTopic: function () {
+  getFndTopic: function() {
     return this.getTopic(TOPIC_FND);
   },
 
@@ -2173,7 +2172,7 @@ Tinode.prototype = {
    *
    * @returns {Tinode.LargeFileHelper} instance of a LargeFileHelper.
    */
-  getLargeFileHelper: function () {
+  getLargeFileHelper: function() {
     return new LargeFileHelper(this);
   },
 
@@ -2182,7 +2181,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    * @returns {string} UID of the current user or <tt>undefined</tt> if the session is not yet authenticated or if there is no session.
    */
-  getCurrentUserID: function () {
+  getCurrentUserID: function() {
     return this._myUID;
   },
 
@@ -2191,7 +2190,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    * @returns {string} login last used successfully or <tt>undefined</tt>.
    */
-  getCurrentLogin: function () {
+  getCurrentLogin: function() {
     return this._login;
   },
 
@@ -2200,7 +2199,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    * @returns {Object} build and version of the server or <tt>null</tt> if there is no connection or if the first server response has not been received yet.
    */
-  getServerInfo: function () {
+  getServerInfo: function() {
     return this._serverInfo;
   },
 
@@ -2209,7 +2208,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    * @param {boolean} enabled - Set to <tt>true</tt> to enable logging to console.
    */
-  enableLogging: function (enabled, trimLongStrings) {
+  enableLogging: function(enabled, trimLongStrings) {
     this._loggingEnabled = enabled;
     this._trimLongStrings = trimLongStrings;
   },
@@ -2221,7 +2220,7 @@ Tinode.prototype = {
    * @param {String} name - Name of the topic to test.
    * @returns {Boolean} true if topic is online, false otherwise.
    */
-  isTopicOnline: function (name) {
+  isTopicOnline: function(name) {
     var me = this.getMeTopic();
     var cont = me && me.getContact(name);
     return cont && cont.online;
@@ -2235,7 +2234,7 @@ Tinode.prototype = {
    * @param {Boolean} status - Turn aknowledgemens on or off.
    * @deprecated
    */
-  wantAkn: function (status) {
+  wantAkn: function(status) {
     if (status) {
       this._messageId = Math.floor((Math.random() * 0xFFFFFF) + 0xFFFFFF);
     } else {
@@ -2336,7 +2335,7 @@ Tinode.prototype = {
  *
  * @param {Tinode.Topic} parent topic which instantiated this builder.
  */
-var MetaGetBuilder = function (parent) {
+var MetaGetBuilder = function(parent) {
   this.topic = parent;
   var me = parent._tinode.getMeTopic();
   this.contact = me && me.getContact(parent.name);
@@ -2346,7 +2345,7 @@ var MetaGetBuilder = function (parent) {
 MetaGetBuilder.prototype = {
 
   // Get latest timestamp
-  _get_ims: function () {
+  _get_ims: function() {
     let cupd = this.contact && this.contact.updated;
     let tupd = this.topic._lastDescUpdate || 0;
     return cupd > tupd ? cupd : tupd;
@@ -2361,7 +2360,7 @@ MetaGetBuilder.prototype = {
    * @param {Number=} limit number of messages to fetch
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withData: function (since, before, limit) {
+  withData: function(since, before, limit) {
     this.what["data"] = {
       since: since,
       before: before,
@@ -2378,7 +2377,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withLaterData: function (limit) {
+  withLaterData: function(limit) {
     return this.withData(this.topic._maxSeq > 0 ? this.topic._maxSeq + 1 : undefined, undefined, limit);
   },
 
@@ -2390,7 +2389,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withEarlierData: function (limit) {
+  withEarlierData: function(limit) {
     return this.withData(undefined, this.topic._minSeq > 0 ? this.topic._minSeq : undefined, limit);
   },
 
@@ -2402,7 +2401,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withDesc: function (ims) {
+  withDesc: function(ims) {
     this.what["desc"] = {
       ims: ims
     };
@@ -2415,7 +2414,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withLaterDesc: function () {
+  withLaterDesc: function() {
     return this.withDesc(this._get_ims());
   },
 
@@ -2429,7 +2428,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withSub: function (ims, limit, userOrTopic) {
+  withSub: function(ims, limit, userOrTopic) {
     var opts = {
       ims: ims,
       limit: limit
@@ -2452,7 +2451,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withOneSub: function (ims, userOrTopic) {
+  withOneSub: function(ims, userOrTopic) {
     return this.withSub(ims, undefined, userOrTopic);
   },
 
@@ -2464,7 +2463,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withLaterOneSub: function (userOrTopic) {
+  withLaterOneSub: function(userOrTopic) {
     return this.withOneSub(this.topic._lastSubsUpdate, userOrTopic);
   },
 
@@ -2476,7 +2475,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withLaterSub: function (limit) {
+  withLaterSub: function(limit) {
     return this.withSub(
       this.topic.getType() == "p2p" ? this._get_ims() : this.topic._lastSubsUpdate,
       limit);
@@ -2488,7 +2487,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withTags: function () {
+  withTags: function() {
     this.what["tags"] = true;
     return this;
   },
@@ -2502,7 +2501,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withDel: function (since, limit) {
+  withDel: function(since, limit) {
     if (since || limit) {
       this.what["del"] = {
         since: since,
@@ -2520,7 +2519,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withLaterDel: function (limit) {
+  withLaterDel: function(limit) {
     // Specify 'since' only if we have already received some messages. If
     // we have no locally cached messages then we don't care if any messages were deleted.
     return this.withDel(this.topic._maxSeq > 0 ? this.topic._maxDel + 1 : undefined, limit);
@@ -2532,11 +2531,11 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.GetQuery} Get query
    */
-  build: function () {
+  build: function() {
     var params = {};
     var what = [];
     var instance = this;
-    ["data", "sub", "desc", "tags", "del"].map(function (key) {
+    ["data", "sub", "desc", "tags", "del"].map(function(key) {
       if (instance.what.hasOwnProperty(key)) {
         what.push(key);
         if (Object.getOwnPropertyNames(instance.what[key]).length > 0) {
@@ -2561,7 +2560,7 @@ MetaGetBuilder.prototype = {
  *
  * @param {AccessMode|Object=} acs AccessMode to copy or access mode object received from the server.
  */
-var AccessMode = function (acs) {
+var AccessMode = function(acs) {
   if (acs) {
     this.given = typeof acs.given == 'number' ? acs.given : AccessMode.decode(acs.given);
     this.want = typeof acs.want == 'number' ? acs.want : AccessMode.decode(acs.want);
@@ -2592,7 +2591,7 @@ AccessMode._INVALID = 0x100000;
  * @param {string | number} mode - either a String representation of the access mode to parse or a set of bits to assign.
  * @returns {number} - Access mode as a numeric value.
  */
-AccessMode.decode = function (str) {
+AccessMode.decode = function(str) {
   if (!str) {
     return null;
   } else if (typeof str == 'number') {
@@ -2635,7 +2634,7 @@ AccessMode.decode = function (str) {
  * @param {number} val - access mode value to convert to a string.
  * @returns {string} - Access mode as a string.
  */
-AccessMode.encode = function (val) {
+AccessMode.encode = function(val) {
   if (val === null || val === AccessMode._INVALID) {
     return null;
   } else if (val === AccessMode._NONE) {
@@ -2665,7 +2664,7 @@ AccessMode.encode = function (val) {
  * @param {string} upd - update to apply to val.
  * @returns {number} - updated access mode.
  */
-AccessMode.update = function (val, upd) {
+AccessMode.update = function(val, upd) {
   if (!upd || typeof upd != 'string') {
     return val;
   }
@@ -2717,7 +2716,7 @@ AccessMode.prototype = {
    * @param {string | number} m - either a string representation of the access mode or a set of bits.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  setMode: function (m) {
+  setMode: function(m) {
     this.mode = AccessMode.decode(m);
     return this;
   },
@@ -2728,7 +2727,7 @@ AccessMode.prototype = {
    * @param {string} u - string representation of the changes to apply to access mode.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  updateMode: function (u) {
+  updateMode: function(u) {
     this.mode = AccessMode.update(this.mode, u);
     return this;
   },
@@ -2738,7 +2737,7 @@ AccessMode.prototype = {
    *
    * @returns {string} - <b>mode</b> value.
    */
-  getMode: function () {
+  getMode: function() {
     return AccessMode.encode(this.mode);
   },
 
@@ -2749,7 +2748,7 @@ AccessMode.prototype = {
    * @param {string | number} g - either a string representation of the access mode or a set of bits.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  setGiven: function (g) {
+  setGiven: function(g) {
     this.given = AccessMode.decode(g);
     return this;
   },
@@ -2760,7 +2759,7 @@ AccessMode.prototype = {
    * @param {string} u - string representation of the changes to apply to access mode.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  updateGiven: function (u) {
+  updateGiven: function(u) {
     this.given = AccessMode.update(this.given, u);
     return this;
   },
@@ -2770,7 +2769,7 @@ AccessMode.prototype = {
    *
    * @returns {string} - <b>given</b> value.
    */
-  getGiven: function () {
+  getGiven: function() {
     return AccessMode.encode(this.given);
   },
 
@@ -2781,7 +2780,7 @@ AccessMode.prototype = {
    * @param {string | number} w - either a string representation of the access mode or a set of bits.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  setWant: function (w) {
+  setWant: function(w) {
     this.want = AccessMode.decode(w);
     return this;
   },
@@ -2792,7 +2791,7 @@ AccessMode.prototype = {
    * @param {string} u - string representation of the changes to apply to access mode.
    * @returns {AccessMode} - <b>this</b> AccessMode.
    */
-  updateWant: function (u) {
+  updateWant: function(u) {
     this.want = AccessMode.update(this.want, u);
     return this;
   },
@@ -2802,11 +2801,11 @@ AccessMode.prototype = {
    *
    * @returns {string} - <b>given</b> value.
    */
-  getWant: function () {
+  getWant: function() {
     return AccessMode.encode(this.want);
   },
 
-  updateAll: function (val) {
+  updateAll: function(val) {
     if (val) {
       this.updateGiven(val.given);
       this.updateWant(val.want);
@@ -2815,34 +2814,34 @@ AccessMode.prototype = {
     return this;
   },
 
-  isOwner: function () {
+  isOwner: function() {
     return ((this.mode & AccessMode._OWNER) != 0);
   },
-  isMuted: function () {
+  isMuted: function() {
     return ((this.mode & AccessMode._PRES) == 0);
   },
-  isPresencer: function () {
+  isPresencer: function() {
     return ((this.mode & AccessMode._PRES) != 0);
   },
-  isJoiner: function () {
+  isJoiner: function() {
     return ((this.mode & AccessMode._JOIN) != 0);
   },
-  isReader: function () {
+  isReader: function() {
     return ((this.mode & AccessMode._READ) != 0);
   },
-  isWriter: function () {
+  isWriter: function() {
     return ((this.mode & AccessMode._WRITE) != 0);
   },
-  isApprover: function () {
+  isApprover: function() {
     return ((this.mode & AccessMode._APPROVE) != 0);
   },
-  isAdmin: function () {
+  isAdmin: function() {
     return this.isOwner() || this.isApprover()
   },
-  isSharer: function () {
+  isSharer: function() {
     return ((this.mode & AccessMode._SHARE) != 0);
   },
-  isDeleter: function () {
+  isDeleter: function() {
     return ((this.mode & AccessMode._DELETE) != 0);
   }
 };
@@ -2868,7 +2867,7 @@ AccessMode.prototype = {
  * @param {callback} callbacks.onDeleteTopic - Called after the topic is deleted.
  * @param {callback} callbacls.onAllMessagesReceived - Called when all requested {data} messages have been recived.
  */
-var Topic = function (name, callbacks) {
+var Topic = function(name, callbacks) {
   // Parent Tinode object.
   this._tinode = null;
 
@@ -2906,7 +2905,7 @@ var Topic = function (name, callbacks) {
   // User discovery tags
   this._tags = [];
   // Message cache, sorted by message seq values, from old to new.
-  this._messages = CBuffer(function (a, b) {
+  this._messages = CBuffer(function(a, b) {
     return a.seq - b.seq;
   });
   // Boolean, true if the topic is currently live
@@ -2942,7 +2941,7 @@ Topic.prototype = {
    * @memberof Tinode.Topic#
    * @returns {boolean} True is topic is attached/subscribed, false otherwise.
    */
-  isSubscribed: function () {
+  isSubscribed: function() {
     return this._subscribed;
   },
 
@@ -2954,7 +2953,7 @@ Topic.prototype = {
    * @param {Tinode.SetParams=} setParams - set parameters.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
-  subscribe: function (getParams, setParams) {
+  subscribe: function(getParams, setParams) {
     // If the topic is already subscribed, return resolved promise
     if (this._subscribed) {
       return Promise.resolve(this);
@@ -3015,7 +3014,7 @@ Topic.prototype = {
    * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
-  publish: function (data, noEcho) {
+  publish: function(data, noEcho) {
     return this.publishMessage(this.createMessage(data, noEcho));
   },
 
@@ -3029,7 +3028,7 @@ Topic.prototype = {
    *
    * @returns {Object} message draft.
    */
-  createMessage: function (data, noEcho) {
+  createMessage: function(data, noEcho) {
     return this._tinode.createMessage(this.name, data, noEcho);
   },
 
@@ -3041,7 +3040,7 @@ Topic.prototype = {
    *
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
-  publishMessage: function (pub) {
+  publishMessage: function(pub) {
     if (!this._subscribed) {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
     }
@@ -3073,7 +3072,7 @@ Topic.prototype = {
    *
    * @returns {Promise} derived promise.
    */
-  publishDraft: function (pub, prom) {
+  publishDraft: function(pub, prom) {
     if (!prom && !this._subscribed) {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
     }
@@ -3097,7 +3096,7 @@ Topic.prototype = {
     // If promise is provided, send the queued message when it's resolved.
     // If no promise is provided, create a resolved one and send immediately.
     prom = (prom || Promise.resolve()).then(
-      (/* argument ignored */) => {
+      ( /* argument ignored */ ) => {
         if (pub._cancelled) {
           return {
             code: 300,
@@ -3132,7 +3131,7 @@ Topic.prototype = {
    * @param {Boolean=} unsub - If true, unsubscribe, otherwise just leave.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
-  leave: function (unsub) {
+  leave: function(unsub) {
     // It's possible to unsubscribe (unsub==true) from inactive topic.
     if (!this._subscribed && !unsub) {
       return Promise.reject(new Error("Cannot leave inactive topic"));
@@ -3156,7 +3155,7 @@ Topic.prototype = {
    *
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
-  getMeta: function (params) {
+  getMeta: function(params) {
     if (!this._subscribed) {
       return Promise.reject(new Error("Cannot query inactive topic"));
     }
@@ -3171,7 +3170,7 @@ Topic.prototype = {
    * @param {integer} limit number of messages to get.
    * @param {boolean} forward if true, request newer messages.
    */
-  getMessagesPage: function (limit, forward) {
+  getMessagesPage: function(limit, forward) {
     var query = this.startMetaQuery();
     if (forward) {
       query.withLaterData(limit);
@@ -3196,7 +3195,7 @@ Topic.prototype = {
    * @param {Tinode.SetParams} params parameters to update.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
-  setMeta: function (params) {
+  setMeta: function(params) {
     if (!this._subscribed) {
       return Promise.reject(new Error("Cannot update inactive topic"));
     }
@@ -3255,7 +3254,7 @@ Topic.prototype = {
    *
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
-  invite: function (uid, mode) {
+  invite: function(uid, mode) {
     return this.setMeta({
       sub: {
         user: uid,
@@ -3273,13 +3272,13 @@ Topic.prototype = {
    * @param {Boolean=} hard - Hard or soft delete
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
-  delMessages: function (ranges, hard) {
+  delMessages: function(ranges, hard) {
     if (!this._subscribed) {
       return Promise.reject(new Error("Cannot delete messages in inactive topic"));
     }
 
     // Sort ranges in accending order by low, the descending by hi.
-    ranges.sort(function (r1, r2) {
+    ranges.sort(function(r1, r2) {
       if (r1.low < r2.low) {
         return true;
       }
@@ -3346,7 +3345,7 @@ Topic.prototype = {
    *
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
-  delMessagesAll: function (hardDel) {
+  delMessagesAll: function(hardDel) {
     return this.delMessages([{
       low: 1,
       hi: this._maxSeq + 1,
@@ -3363,7 +3362,7 @@ Topic.prototype = {
    *
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
-  delMessagesList: function (list, hardDel) {
+  delMessagesList: function(list, hardDel) {
     // Sort the list in ascending order
     list.sort((a, b) => a - b);
     // Convert the array of IDs to ranges.
@@ -3397,9 +3396,9 @@ Topic.prototype = {
    *
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
-  delTopic: function () {
+  delTopic: function() {
     var topic = this;
-    return this._tinode.delTopic(this.name).then(function (ctrl) {
+    return this._tinode.delTopic(this.name).then(function(ctrl) {
       topic._resetSub();
       topic._gone();
       return ctrl;
@@ -3413,7 +3412,7 @@ Topic.prototype = {
    * @param {String} user - ID of the user to remove subscription for.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
-  delSubscription: function (user) {
+  delSubscription: function(user) {
     if (!this._subscribed) {
       return Promise.reject(new Error("Cannot delete subscription in inactive topic"));
     }
@@ -3436,7 +3435,7 @@ Topic.prototype = {
    * @param {String} what - what notification to send: <tt>recv</tt>, <tt>read</tt>.
    * @param {Number} seq - ID or the message read or received.
    */
-  note: function (what, seq) {
+  note: function(what, seq) {
     var user = this._users[this._tinode.getCurrentUserID()];
     if (user) {
       if (!user[what] || user[what] < seq) {
@@ -3464,7 +3463,7 @@ Topic.prototype = {
    *
    * @param {Number} seq - ID of the message to aknowledge.
    */
-  noteRecv: function (seq) {
+  noteRecv: function(seq) {
     this.note("recv", seq);
   },
 
@@ -3474,7 +3473,7 @@ Topic.prototype = {
    *
    * @param {Number} seq - ID of the message to aknowledge.
    */
-  noteRead: function (seq) {
+  noteRead: function(seq) {
     this.note("read", seq);
   },
 
@@ -3482,7 +3481,7 @@ Topic.prototype = {
    * Send a key-press notification. Wrapper for {@link Tinode#noteKeyPress}.
    * @memberof Tinode.Topic#
    */
-  noteKeyPress: function () {
+  noteKeyPress: function() {
     if (this._subscribed) {
       this._tinode.noteKeyPress(this.name);
     } else {
@@ -3496,7 +3495,7 @@ Topic.prototype = {
    *
    * @param {String} uid - ID of the user to fetch.
    */
-  userDesc: function (uid) {
+  userDesc: function(uid) {
     // TODO(gene): handle asynchronous requests
 
     var user = this._cacheGetUser(uid);
@@ -3512,7 +3511,7 @@ Topic.prototype = {
    * @param {Function} callback - Callback which will receive subscribers one by one.
    * @param {Object=} context - Value of `this` inside the `callback`.
    */
-  subscribers: function (callback, context) {
+  subscribers: function(callback, context) {
     var cb = (callback || this.onMetaSub);
     if (cb) {
       for (var idx in this._users) {
@@ -3525,7 +3524,7 @@ Topic.prototype = {
    * Get a copy of cached tags.
    * @memberof Tinode.Topic#
    */
-  tags: function () {
+  tags: function() {
     // Return a copy.
     return this._tags.slice(0);
   },
@@ -3536,7 +3535,7 @@ Topic.prototype = {
    *
    * @param {String} uid - id of the user to query for
    */
-  subscriber: function (uid) {
+  subscriber: function(uid) {
     return this._users[uid];
   },
 
@@ -3549,7 +3548,7 @@ Topic.prototype = {
    * @param {integer} beforeId - Optional seqId to stop iterating before (exclusive).
    * @param {Object} context - Value of `this` inside the `callback`.
    */
-  messages: function (callback, sinceId, beforeId, context) {
+  messages: function(callback, sinceId, beforeId, context) {
     var cb = (callback || this.onData);
     if (cb) {
       let startIdx = typeof sinceId == 'number' ? this._messages.find({
@@ -3572,7 +3571,7 @@ Topic.prototype = {
    * @param {String} what - what notification to send: <tt>recv</tt>, <tt>read</tt>.
    * @param {Number} seq - ID or the message read or received.
    */
-  msgReceiptCount: function (what, seq) {
+  msgReceiptCount: function(what, seq) {
     var count = 0;
     var me = this._tinode.getCurrentUserID();
     if (seq > 0) {
@@ -3594,7 +3593,7 @@ Topic.prototype = {
    * @param {Number} seq - Message id to check.
    * @returns {Number} Number of subscribers who claim to have received the message.
    */
-  msgReadCount: function (seq) {
+  msgReadCount: function(seq) {
     return this.msgReceiptCount("read", seq);
   },
 
@@ -3606,7 +3605,7 @@ Topic.prototype = {
    * @param {number} seq - Message id to check.
    * @returns {number} Number of subscribers who claim to have received the message.
    */
-  msgRecvCount: function (seq) {
+  msgRecvCount: function(seq) {
     return this.msgReceiptCount("recv", seq);
   },
 
@@ -3616,7 +3615,7 @@ Topic.prototype = {
    *
    * @param {boolean} newer check for newer messages
    */
-  msgHasMoreMessages: function (newer) {
+  msgHasMoreMessages: function(newer) {
     return newer ? this.seq > this._maxSeq :
       // _minSeq cound be more than 1, but earlier messages could have been deleted.
       (this._minSeq > 1 && !this._noEarlierMsgs);
@@ -3628,7 +3627,7 @@ Topic.prototype = {
    *
    * @param {integer} seqId id of the message to check
    */
-  isNewMessage: function (seqId) {
+  isNewMessage: function(seqId) {
     return this._maxSeq <= seqId;
   },
 
@@ -3639,7 +3638,7 @@ Topic.prototype = {
    * @param {integer} seqId id of the message to remove from cache.
    * @returns {Message} removed message or undefined if such message was not found.
    */
-  flushMessage: function (seqId) {
+  flushMessage: function(seqId) {
     let idx = this._messages.find({
       seq: seqId
     });
@@ -3655,7 +3654,7 @@ Topic.prototype = {
    *
    * @returns {Message[]} array of removed messages (could be empty).
    */
-  flushMessageRange: function (fromId, untilId) {
+  flushMessageRange: function(fromId, untilId) {
     // start: find exact match.
     // end: find insertion point (nearest == true).
     let since = this._messages.find({
@@ -3674,7 +3673,7 @@ Topic.prototype = {
    *
    * @returns {boolean} true if message was cancelled, false otherwise.
    */
-  cancelSend: function (seqId) {
+  cancelSend: function(seqId) {
     let idx = this._messages.find({
       seq: seqId
     });
@@ -3696,7 +3695,7 @@ Topic.prototype = {
    *
    * @returns {String} One of 'me', 'p2p', 'grp', 'fnd' or <tt>undefined</tt>.
    */
-  getType: function () {
+  getType: function() {
     return Tinode.topicType(this.name);
   },
 
@@ -3706,7 +3705,7 @@ Topic.prototype = {
    *
    * @returns {Tinode.AccessMode} - user's access mode
    */
-  getAccessMode: function () {
+  getAccessMode: function() {
     return this.acs;
   },
 
@@ -3716,7 +3715,7 @@ Topic.prototype = {
    *
    * @returns {Tinode.DefAcs} - access mode, such as {auth: `RWP`, anon: `N`}.
    */
-  getDefaultAccess: function () {
+  getDefaultAccess: function() {
     return this.defacs;
   },
 
@@ -3727,7 +3726,7 @@ Topic.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} query attached to the current topic.
    */
-  startMetaQuery: function () {
+  startMetaQuery: function() {
     return new MetaGetBuilder(this);
   },
 
@@ -3739,7 +3738,7 @@ Topic.prototype = {
    * @param {Message} msg message to check for status.
    * @returns message status constant.
    */
-  msgStatus: function (msg) {
+  msgStatus: function(msg) {
     var status = MESSAGE_STATUS_NONE;
     if (msg.from == this._tinode.getCurrentUserID()) {
       if (msg._sending) {
@@ -3760,7 +3759,7 @@ Topic.prototype = {
   },
 
   // Process data message
-  _routeData: function (data) {
+  _routeData: function(data) {
     // Maybe this is an empty message to indicate there are no actual messages.
     if (data.content) {
       if (!this.touched || this.touched < data.ts) {
@@ -3791,7 +3790,7 @@ Topic.prototype = {
   },
 
   // Process metadata message
-  _routeMeta: function (meta) {
+  _routeMeta: function(meta) {
     if (meta.desc) {
       this._lastDescUpdate = meta.ts;
       this._processMetaDesc(meta.desc);
@@ -3812,7 +3811,7 @@ Topic.prototype = {
   },
 
   // Process presence change message
-  _routePres: function (pres) {
+  _routePres: function(pres) {
     var user;
     switch (pres.what) {
       case "del":
@@ -3881,7 +3880,7 @@ Topic.prototype = {
   },
 
   // Process {info} message
-  _routeInfo: function (info) {
+  _routeInfo: function(info) {
     if (info.what !== "kp") {
       var user = this._users[info.from];
       if (user) {
@@ -3895,7 +3894,7 @@ Topic.prototype = {
 
   // Called by Tinode when meta.desc packet is received.
   // Called by 'me' topic on contact update (fromMe is true).
-  _processMetaDesc: function (desc, fromMe) {
+  _processMetaDesc: function(desc, fromMe) {
     // Copy parameters from desc object to this topic.
     mergeObj(this, desc);
 
@@ -3932,7 +3931,7 @@ Topic.prototype = {
 
   // Called by Tinode when meta.sub is recived or in response to received
   // {ctrl} after setMeta-sub.
-  _processMetaSub: function (subs) {
+  _processMetaSub: function(subs) {
     var updatedDesc = undefined;
     for (var idx in subs) {
       var sub = subs[idx];
@@ -3972,7 +3971,7 @@ Topic.prototype = {
   },
 
   // Called by Tinode when meta.sub is recived.
-  _processMetaTags: function (tags) {
+  _processMetaTags: function(tags) {
     if (tags.length == 1 && tags[0] == Tinode.DEL_CHAR) {
       tags = [];
     }
@@ -3983,13 +3982,13 @@ Topic.prototype = {
   },
 
   // Delete cached messages and update cached transaction IDs
-  _processDelMessages: function (clear, delseq) {
+  _processDelMessages: function(clear, delseq) {
     this._maxDel = Math.max(clear, this._maxDel);
     this.clear = Math.max(clear, this.clear);
     var topic = this;
     var count = 0;
     if (Array.isArray(delseq)) {
-      delseq.map(function (range) {
+      delseq.map(function(range) {
         if (!range.hi) {
           count++;
           topic.flushMessage(range.low);
@@ -4007,19 +4006,19 @@ Topic.prototype = {
   },
 
   // Topic is informed that the entire response to {get what=data} has been received.
-  _allMessagesReceived: function (count) {
+  _allMessagesReceived: function(count) {
     if (this.onAllMessagesReceived) {
       this.onAllMessagesReceived(count);
     }
   },
 
   // Reset subscribed state
-  _resetSub: function () {
+  _resetSub: function() {
     this._subscribed = false;
   },
 
   // This topic is either deleted or unsubscribed from.
-  _gone: function () {
+  _gone: function() {
     this._messages.reset();
     this._users = {};
     this.acs = new AccessMode(null);
@@ -4045,7 +4044,7 @@ Topic.prototype = {
 
   // Update global user cache and local subscribers cache.
   // Don't call this method for non-subscribers.
-  _updateCachedUser: function (uid, obj, requestUpdate) {
+  _updateCachedUser: function(uid, obj, requestUpdate) {
     // Fetch user object from the global cache.
     // This is a clone of the stored object
     var cached = this._cacheGetUser(uid);
@@ -4065,7 +4064,7 @@ Topic.prototype = {
   },
 
   // Get local seqId for a queued message.
-  _getQueuedSeqId: function () {
+  _getQueuedSeqId: function() {
     return this._queuedSeqId++;
   }
 };
@@ -4078,7 +4077,7 @@ Topic.prototype = {
  *
  * @param {TopicMe.Callbacks} callbacks - Callbacks to receive various events.
  */
-var TopicMe = function (callbacks) {
+var TopicMe = function(callbacks) {
   Topic.call(this, TOPIC_ME, callbacks);
   // List of contacts (topic_name -> Contact object)
   this._contacts = {};
@@ -4093,7 +4092,7 @@ var TopicMe = function (callbacks) {
 TopicMe.prototype = Object.create(Topic.prototype, {
   // Override the original Topic._processMetaSub
   _processMetaSub: {
-    value: function (subs) {
+    value: function(subs) {
       var updateCount = 0;
       for (var idx in subs) {
         var sub = subs[idx];
@@ -4152,7 +4151,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
 
   // Process presence change message
   _routePres: {
-    value: function (pres) {
+    value: function(pres) {
       var cont = this._contacts[pres.src];
       if (cont) {
         switch (pres.what) {
@@ -4249,7 +4248,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    * @throws {Error} Always throws an error.
    */
   publish: {
-    value: function () {
+    value: function() {
       return Promise.reject(new Error("Publishing to 'me' is not supported"));
     },
     enumerable: true,
@@ -4265,7 +4264,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    * @param {Object=} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
    */
   contacts: {
-    value: function (callback, context) {
+    value: function(callback, context) {
       var cb = (callback || this.onMetaSub);
       if (cb) {
         for (var idx in this._contacts) {
@@ -4289,7 +4288,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    * @param {Date} ts - Timestamp of the update.
    */
   setMsgReadRecv: {
-    value: function (contactName, what, seq, ts) {
+    value: function(contactName, what, seq, ts) {
       var cont = this._contacts[contactName];
       var oldVal, doUpdate = false;
       var mode = null;
@@ -4336,7 +4335,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    * @returns {Tinode.Contact} - Contact or `undefined`.
    */
   getContact: {
-    value: function (name) {
+    value: function(name) {
       return this._contacts[name];
     },
     enumerable: true,
@@ -4352,7 +4351,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    * @returns {string} - access mode, such as `RWP`.
    */
   getAccessMode: {
-    value: function (name) {
+    value: function(name) {
       var cont = this._contacts[name];
       return cont ? cont.acs : null;
     },
@@ -4371,7 +4370,7 @@ TopicMe.prototype.constructor = TopicMe;
  *
  * @param {TopicFnd.Callbacks} callbacks - Callbacks to receive various events.
  */
-var TopicFnd = function (callbacks) {
+var TopicFnd = function(callbacks) {
   Topic.call(this, TOPIC_FND, callbacks);
   // List of users and topics uid or topic_name -> Contact object)
   this._contacts = {};
@@ -4381,7 +4380,7 @@ var TopicFnd = function (callbacks) {
 TopicFnd.prototype = Object.create(Topic.prototype, {
   // Override the original Topic._processMetaSub
   _processMetaSub: {
-    value: function (subs) {
+    value: function(subs) {
       var updateCount = Object.getOwnPropertyNames(this._contacts).length;
       // Reset contact list.
       this._contacts = {};
@@ -4417,7 +4416,7 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
    * @throws {Error} Always throws an error.
    */
   publish: {
-    value: function () {
+    value: function() {
       return Promise.reject(new Error("Publishing to 'fnd' is not supported"));
     },
     enumerable: true,
@@ -4430,9 +4429,9 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
    * @memberof Tinode.TopicFnd#
    */
   setMeta: {
-    value: function (params) {
+    value: function(params) {
       var instance = this;
-      return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(function () {
+      return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(function() {
         if (Object.keys(instance._contacts).length > 0) {
           instance._contacts = {};
           if (instance.onSubsUpdated) {
@@ -4454,7 +4453,7 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
    * @param {Object} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
    */
   contacts: {
-    value: function (callback, context) {
+    value: function(callback, context) {
       var cb = (callback || this.onMetaSub);
       if (cb) {
         for (var idx in this._contacts) {
@@ -4476,7 +4475,7 @@ TopicFnd.prototype.constructor = TopicFnd;
  *
  * @param {Tinode} tinode - the main Tinode object.
  */
-var LargeFileHelper = function (tinode) {
+var LargeFileHelper = function(tinode) {
   this._tinode = tinode;
 
   this._apiKey = tinode._apiKey;
@@ -4507,7 +4506,7 @@ LargeFileHelper.prototype = {
    *
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
-  upload: function (file, onProgress, onSuccess, onFailure) {
+  upload: function(file, onProgress, onSuccess, onFailure) {
     if (!this._authToken) {
       throw new Error("Must authenticate first");
     }
@@ -4524,13 +4523,13 @@ LargeFileHelper.prototype = {
     this.onSuccess = onSuccess;
     this.onFailure = onFailure;
 
-    this.xhr.upload.onprogress = function (e) {
+    this.xhr.upload.onprogress = function(e) {
       if (e.lengthComputable && instance.onProgress) {
         instance.onProgress(e.loaded / e.total);
       }
     }
 
-    this.xhr.onload = function () {
+    this.xhr.onload = function() {
       var pkt;
       try {
         pkt = JSON.parse(this.response, jsonParseHelper);
@@ -4557,7 +4556,7 @@ LargeFileHelper.prototype = {
       }
     };
 
-    this.xhr.onerror = function (e) {
+    this.xhr.onerror = function(e) {
       if (instance.toReject) {
         instance.toReject(new Error("failed"));
       }
@@ -4566,7 +4565,7 @@ LargeFileHelper.prototype = {
       }
     };
 
-    this.xhr.onabort = function (e) {
+    this.xhr.onabort = function(e) {
       if (instance.toReject) {
         instance.toReject(new Error("upload cancelled by user"));
       }
@@ -4602,7 +4601,7 @@ LargeFileHelper.prototype = {
    *
    * @returns {Promise} resolved/rejected when the download is completed/failed.
    */
-  download: function (relativeUrl, filename, mimetype, onProgress) {
+  download: function(relativeUrl, filename, mimetype, onProgress) {
     if ((/^(?:(?:[a-z]+:)?\/\/)/i.test(relativeUrl))) {
       // As a security measure refuse to download from an absolute URL.
       throw new Error("The URL '" + relativeUrl + "' must be relative, not absolute");
@@ -4618,7 +4617,7 @@ LargeFileHelper.prototype = {
     this.xhr.responseType = "blob";
 
     this.onProgress = onProgress;
-    this.xhr.onprogress = function (e) {
+    this.xhr.onprogress = function(e) {
       if (instance.onProgress) {
         // Passing e.loaded instead of e.loaded/e.total because e.total
         // is always 0 with gzip compression enabled by the server.
@@ -4633,7 +4632,7 @@ LargeFileHelper.prototype = {
 
     // The blob needs to be saved as file. There is no known way to
     // save the blob as file other than to fake a click on an <a href... download=...>.
-    this.xhr.onload = function () {
+    this.xhr.onload = function() {
       if (this.status == 200) {
         var link = document.createElement("a");
         link.href = window.URL.createObjectURL(new Blob([this.response], {
@@ -4653,7 +4652,7 @@ LargeFileHelper.prototype = {
         // Need to convert this.response to JSON. The blob can only be accessed by the
         // FileReader.
         var reader = new FileReader();
-        reader.onload = function () {
+        reader.onload = function() {
           try {
             var pkt = JSON.parse(this.result, jsonParseHelper);
             instance.toReject(new Error(pkt.ctrl.text + " (" + pkt.ctrl.code + ")"));
@@ -4666,13 +4665,13 @@ LargeFileHelper.prototype = {
       }
     };
 
-    this.xhr.onerror = function (e) {
+    this.xhr.onerror = function(e) {
       if (instance.toReject) {
         instance.toReject(new Error("failed"));
       }
     };
 
-    this.xhr.onabort = function () {
+    this.xhr.onabort = function() {
       if (instance.toReject) {
         instance.toReject(null);
       }
@@ -4693,7 +4692,7 @@ LargeFileHelper.prototype = {
    * Try to cancel an ongoing upload or download.
    * @memberof Tinode.LargeFileHelper#
    */
-  cancel: function () {
+  cancel: function() {
     if (this.xhr && this.xhr.readyState < 4) {
       this.xhr.abort();
     }
@@ -4705,7 +4704,7 @@ LargeFileHelper.prototype = {
    *
    * @returns {string} unique id
    */
-  getId: function () {
+  getId: function() {
     return this._msgId;
   }
 };
@@ -4718,7 +4717,7 @@ LargeFileHelper.prototype = {
  * @param {string} topic_ - name of the topic the message belongs to.
  * @param {string | Drafty} content_ - message contant.
  */
-var Message = function (topic_, content_) {
+var Message = function(topic_, content_) {
   this.status = Message.STATUS_NONE;
   this.topic = topic_;
   this.content = content_;
@@ -4736,13 +4735,13 @@ Message.prototype = {
   /**
    * Convert message object to {pub} packet.
    */
-  toJSON: function () {
+  toJSON: function() {
 
   },
   /**
    * Parse JSON into message.
    */
-  fromJSON: function (json) {
+  fromJSON: function(json) {
 
   }
 }
