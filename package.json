@@ -41,5 +41,8 @@
     "jsdoc": "^3.5.5",
     "minami": "^1.2.3",
     "tinyify": "^2.4.3"
+  },
+  "dependencies": {
+    "babel-core": "^6.26.3"
   }
 }
