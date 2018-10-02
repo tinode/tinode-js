@@ -26,8 +26,7 @@ or while developing as
 ## Node JS compatibility
 
 To use tinode-sdk as a Node JS dependency, you have to provide a WebSocket provider:
-
-    
-        Tinode.setWebSocketProvider(require('ws'));
-        this.tinode  = new Tinode(...);
-
+```
+  Tinode.setWebSocketProvider(require('ws'));
+  this.tinode  = new Tinode(...);
+```
