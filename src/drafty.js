@@ -13,7 +13,7 @@
  * JSON data representation is inspired by Draft.js raw formatting.
  *
  * @copyright 2015-2018 Tinode
- * @summary Javascript bindings for Tinode.
+ * @summary Minimally rich text representation and formatting for Tinode.
  * @license Apache 2.0
  * @version 0.15
  *
@@ -173,728 +173,725 @@ var DECORATORS = {
  * @memberof Tinode
  * @constructor
  */
-var Drafty = (function() {
+var Drafty = function() {
+}
 
-  // Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
-  // a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
-  // ('hello ', (b: 'bold ', (i: 'italic')), ' and ', (s: 'more'), ' world');
-  //
-  // This is needed in order to clear markup, i.e. 'hello *world*' -> 'hello world' and convert
-  // ranges from markup-ed offsets to plain text offsets.
-  function chunkify(line, start, end, spans) {
-    var chunks = [];
+// Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
+// a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
+// ('hello ', (b: 'bold ', (i: 'italic')), ' and ', (s: 'more'), ' world');
+//
+// This is needed in order to clear markup, i.e. 'hello *world*' -> 'hello world' and convert
+// ranges from markup-ed offsets to plain text offsets.
+function chunkify(line, start, end, spans) {
+  var chunks = [];
 
-    if (spans.length == 0) {
-      return [];
-    }
-
-    for (var i in spans) {
-      // Get the next chunk from the queue
-      var span = spans[i];
-
-      // Grab the initial unstyled chunk
-      if (span.start > start) {
-        chunks.push({text: line.slice(start, span.start)});
-      }
-
-      // Grab the styled chunk. It may include subchunks.
-      var chunk = {type: span.type};
-      var chld = chunkify(line, span.start + 1, span.end - 1, span.children);
-      if (chld.length > 0) {
-        chunk.children = chld;
-      } else {
-        chunk.text = span.text;
-      }
-      chunks.push(chunk);
-      start = span.end + 1; // '+1' is to skip the formatting character
-    }
-
-    // Grab the remaining unstyled chunk, after the last span
-    if (start < end) {
-      chunks.push({text: line.slice(start, end)});
-    }
-
-    return chunks;
+  if (spans.length == 0) {
+    return [];
   }
 
-  // Same as chunkify but used for formatting.
-  function forEach(line, start, end, spans, formatter, context) {
+  for (var i in spans) {
+    // Get the next chunk from the queue
+    var span = spans[i];
+
+    // Grab the initial unstyled chunk
+    if (span.start > start) {
+      chunks.push({text: line.slice(start, span.start)});
+    }
+
+    // Grab the styled chunk. It may include subchunks.
+    var chunk = {type: span.type};
+    var chld = chunkify(line, span.start + 1, span.end - 1, span.children);
+    if (chld.length > 0) {
+      chunk.children = chld;
+    } else {
+      chunk.text = span.text;
+    }
+    chunks.push(chunk);
+    start = span.end + 1; // '+1' is to skip the formatting character
+  }
+
+  // Grab the remaining unstyled chunk, after the last span
+  if (start < end) {
+    chunks.push({text: line.slice(start, end)});
+  }
+
+  return chunks;
+}
+
+// Inverse of chunkify. Returns a tree of formatted spans.
+function forEach(line, start, end, spans, formatter, context) {
+  // Add un-styled range before the styled span starts.
+  // Process ranges calling formatter for each range.
+  var result = [];
+  for (var i = 0; i < spans.length; i++) {
+    var span = spans[i];
+
     // Add un-styled range before the styled span starts.
-    // Process ranges calling formatter for each range.
-    var result = [];
-    for (var i = 0; i < spans.length; i++) {
-      var span = spans[i];
-
-      // Add un-styled range before the styled span starts.
-      if (start < span.at) {
-        result.push(formatter.call(context, null, undefined, line.slice(start, span.at)));
-        start = span.at;
-      }
-      // Get all spans which are within current span.
-      var subspans = [];
-      for (var si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
-        subspans.push(spans[si]);
-        i = si;
-      }
-
-      var tag = HTML_TAGS[span.tp] || {};
-      result.push(formatter.call(context, span.tp, span.data,
-        tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context)));
-
-      start = span.at + span.len;
+    if (start < span.at) {
+      result.push(formatter.call(context, null, undefined, line.slice(start, span.at)));
+      start = span.at;
+    }
+    // Get all spans which are within current span.
+    var subspans = [];
+    for (var si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
+      subspans.push(spans[si]);
+      i = si;
     }
 
-    // Add the last unformatted range.
-    if (start < end) {
-      result.push(formatter.call(context, null, undefined, line.slice(start, end)));
-    }
+    var tag = HTML_TAGS[span.tp] || {};
+    result.push(formatter.call(context, span.tp, span.data,
+      tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context)));
 
-    return result;
+    start = span.at + span.len;
   }
 
-  // Detect starts and ends of formatting spans. Unformatted spans are
-  // ignored at this stage.
-  function spannify(original, re_start, re_end, type) {
-    var result = [];
-    var index = 0;
-    var line = original.slice(0); // make a copy;
-
-    while (line.length > 0) {
-      // match[0]; // match, like '*abc*'
-      // match[1]; // match captured in parenthesis, like 'abc'
-      // match['index']; // offset where the match started.
-
-      // Find the opening token.
-      var start = re_start.exec(line);
-      if (start == null) {
-        break;
-      }
-
-      // Because javascript RegExp does not support lookbehind, the actual offset may not point
-      // at the markup character. Find it in the matched string.
-      var start_offset = start['index'] + start[0].lastIndexOf(start[1]);
-      // Clip the processed part of the string.
-      line = line.slice(start_offset + 1);
-      // start_offset is an offset within the clipped string. Convert to original index.
-      start_offset += index;
-      // Index now point to the beginning of 'line' within the 'original' string.
-      index = start_offset + 1;
-
-      // Find the matching closing token.
-      var end = re_end ? re_end.exec(line) : null;
-      if (end == null) {
-        break;
-      }
-      var end_offset = end['index'] + end[0].indexOf(end[1]);
-      // Clip the processed part of the string.
-      line = line.slice(end_offset + 1);
-      // Update offsets
-      end_offset += index;
-      // Index now point to the beginning of 'line' within the 'original' string.
-      index = end_offset + 1;
-
-      result.push({
-        text: original.slice(start_offset+1, end_offset),
-        children: [],
-        start: start_offset,
-        end: end_offset,
-        type: type
-      });
-    }
-
-    return result;
+  // Add the last unformatted range.
+  if (start < end) {
+    result.push(formatter.call(context, null, undefined, line.slice(start, end)));
   }
 
-  // Convert linear array or spans into a tree representation.
-  // Keep standalone and nested spans, throw away partially overlapping spans.
-  function toTree(spans) {
-    if (spans.length == 0) {
-      return [];
+  return result;
+}
+
+// Detect starts and ends of formatting spans. Unformatted spans are
+// ignored at this stage.
+function spannify(original, re_start, re_end, type) {
+  var result = [];
+  var index = 0;
+  var line = original.slice(0); // make a copy;
+
+  while (line.length > 0) {
+    // match[0]; // match, like '*abc*'
+    // match[1]; // match captured in parenthesis, like 'abc'
+    // match['index']; // offset where the match started.
+
+    // Find the opening token.
+    var start = re_start.exec(line);
+    if (start == null) {
+      break;
     }
 
-    var tree = [spans[0]];
-    var last = spans[0];
-    for (var i = 1; i < spans.length; i++) {
-      // Keep spans which start after the end of the previous span or those which
-      // are complete within the previous span.
+    // Because javascript RegExp does not support lookbehind, the actual offset may not point
+    // at the markup character. Find it in the matched string.
+    var start_offset = start['index'] + start[0].lastIndexOf(start[1]);
+    // Clip the processed part of the string.
+    line = line.slice(start_offset + 1);
+    // start_offset is an offset within the clipped string. Convert to original index.
+    start_offset += index;
+    // Index now point to the beginning of 'line' within the 'original' string.
+    index = start_offset + 1;
 
-      if (spans[i].start > last.end) {
-        // Span is completely outside of the previous span.
-        tree.push(spans[i]);
-        last = spans[i];
-      } else if (spans[i].end < last.end) {
-        // Span is fully inside of the previous span. Push to subnode.
-        last.children.push(spans[i]);
-      }
-      // Span could partially overlap, ignoring it as invalid.
+    // Find the matching closing token.
+    var end = re_end ? re_end.exec(line) : null;
+    if (end == null) {
+      break;
     }
+    var end_offset = end['index'] + end[0].indexOf(end[1]);
+    // Clip the processed part of the string.
+    line = line.slice(end_offset + 1);
+    // Update offsets
+    end_offset += index;
+    // Index now point to the beginning of 'line' within the 'original' string.
+    index = end_offset + 1;
 
-    // Recursively rearrange the subnodes.
-    for (var i in tree) {
-      tree[i].children = toTree(tree[i].children);
-    }
-
-    return tree;
+    result.push({
+      text: original.slice(start_offset+1, end_offset),
+      children: [],
+      start: start_offset,
+      end: end_offset,
+      type: type
+    });
   }
 
-  // Get a list of entities from a text.
-  function extractEntities(line) {
-    var match;
-    var extracted = [];
-    ENTITY_TYPES.map(function(entity) {
-      while ((match = entity.re.exec(line)) !== null) {
-        extracted.push({
-          offset: match['index'],
-          len: match[0].length,
-          unique: match[0],
-          data: entity.pack(match[0]),
-          type: entity.name});
-      }
-    });
+  return result;
+}
 
-    if (extracted.length == 0) {
-      return extracted;
+// Convert linear array or spans into a tree representation.
+// Keep standalone and nested spans, throw away partially overlapping spans.
+function toTree(spans) {
+  if (spans.length == 0) {
+    return [];
+  }
+
+  var tree = [spans[0]];
+  var last = spans[0];
+  for (var i = 1; i < spans.length; i++) {
+    // Keep spans which start after the end of the previous span or those which
+    // are complete within the previous span.
+
+    if (spans[i].start > last.end) {
+      // Span is completely outside of the previous span.
+      tree.push(spans[i]);
+      last = spans[i];
+    } else if (spans[i].end < last.end) {
+      // Span is fully inside of the previous span. Push to subnode.
+      last.children.push(spans[i]);
     }
+    // Span could partially overlap, ignoring it as invalid.
+  }
 
-    // Remove entities detected inside other entities, like #hashtag in a URL.
-    extracted.sort(function(a,b) {
-      return a.offset - b.offset;
-    });
+  // Recursively rearrange the subnodes.
+  for (var i in tree) {
+    tree[i].children = toTree(tree[i].children);
+  }
 
-    var idx = -1;
-    extracted = extracted.filter(function(el) {
-      var result = (el.offset > idx);
-      idx = el.offset + el.len;
-      return result;
-    });
+  return tree;
+}
 
+// Get a list of entities from a text.
+function extractEntities(line) {
+  var match;
+  var extracted = [];
+  ENTITY_TYPES.map(function(entity) {
+    while ((match = entity.re.exec(line)) !== null) {
+      extracted.push({
+        offset: match['index'],
+        len: match[0].length,
+        unique: match[0],
+        data: entity.pack(match[0]),
+        type: entity.name});
+    }
+  });
+
+  if (extracted.length == 0) {
     return extracted;
   }
 
-  // Convert the chunks into format suitable for serialization.
-  function draftify(chunks, startAt) {
-    var plain = "";
-    var ranges = [];
-    for (var i in chunks) {
-      var chunk = chunks[i];
-      if (!chunk.text) {
-        var drafty = draftify(chunk.children, plain.length + startAt);
-        chunk.text = drafty.txt;
-        ranges = ranges.concat(drafty.fmt);
-      }
+  // Remove entities detected inside other entities, like #hashtag in a URL.
+  extracted.sort(function(a,b) {
+    return a.offset - b.offset;
+  });
 
-      if (chunk.type) {
-        ranges.push({at: plain.length + startAt, len: chunk.text.length, tp: chunk.type});
-      }
+  var idx = -1;
+  extracted = extracted.filter(function(el) {
+    var result = (el.offset > idx);
+    idx = el.offset + el.len;
+    return result;
+  });
 
-      plain += chunk.text;
+  return extracted;
+}
+
+// Convert the chunks into format suitable for serialization.
+function draftify(chunks, startAt) {
+  var plain = "";
+  var ranges = [];
+  for (var i in chunks) {
+    var chunk = chunks[i];
+    if (!chunk.text) {
+      var drafty = draftify(chunk.children, plain.length + startAt);
+      chunk.text = drafty.txt;
+      ranges = ranges.concat(drafty.fmt);
     }
-    return {txt: plain, fmt: ranges};
+
+    if (chunk.type) {
+      ranges.push({at: plain.length + startAt, len: chunk.text.length, tp: chunk.type});
+    }
+
+    plain += chunk.text;
+  }
+  return {txt: plain, fmt: ranges};
+}
+
+// Splice two strings: insert second string into the first one at the given index
+function splice(src, at, insert) {
+  return src.slice(0, at) + insert + src.slice(at);
+}
+
+/**
+ * Parse plain text into structured representation.
+ * @memberof Tinode.Drafty#
+ * @static
+ *
+ * @param {String} content plain-text content to parse.
+ * @return {Drafty} parsed object or null if the source is not plain text.
+ */
+Drafty.parse = function(content) {
+  // Make sure we are parsing strings only.
+  if (typeof content != "string") {
+    return null;
   }
 
-  // Splice two strings: insert second string into the first one at the given index
-  function splice(src, at, insert) {
-    return src.slice(0, at) + insert + src.slice(at);
+  // Split text into lines. It makes further processing easier.
+  var lines = content.split(/\r?\n/);
+
+  // Holds entities referenced from text
+  var entityMap = [];
+  var entityIndex = {};
+
+  // Processing lines one by one, hold intermediate result in blx.
+  var blx = [];
+  lines.map(function(line) {
+    var spans = [];
+    var entities = [];
+
+    // Find formatted spans in the string.
+    // Try to match each style.
+    INLINE_STYLES.map(function(style) {
+      // Each style could be matched multiple times.
+      spans = spans.concat(spannify(line, style.start, style.end, style.name));
+    });
+
+    var block;
+    if (spans.length == 0) {
+      block = {txt: line};
+    } else {
+      // Sort spans by style occurence early -> late
+      spans.sort(function(a,b) {
+        return a.start - b.start;
+      });
+
+      // Convert an array of possibly overlapping spans into a tree
+      spans = toTree(spans);
+
+      // Build a tree representation of the entire string, not
+      // just the formatted parts.
+      var chunks = chunkify(line, 0, line.length, spans);
+
+      var drafty = draftify(chunks, 0);
+
+      block = {txt: drafty.txt, fmt: drafty.fmt};
+    }
+
+    // Extract entities from the cleaned up string.
+    entities = extractEntities(block.txt);
+    if (entities.length > 0) {
+      var ranges = [];
+      for (var i in entities) {
+        // {offset: match['index'], unique: match[0], len: match[0].length, data: ent.packer(), type: ent.name}
+        var entity = entities[i];
+        var index = entityIndex[entity.unique];
+        if (!index) {
+          index = entityMap.length;
+          entityIndex[entity.unique] = index;
+          entityMap.push({tp: entity.type, data: entity.data});
+        }
+        ranges.push({at: entity.offset, len: entity.len, key: index});
+      }
+      block.ent = ranges;
+    }
+
+    blx.push(block);
+  });
+
+  var result = {txt: ""};
+
+  // Merge lines and save line breaks as BR inline formatting.
+  if (blx.length > 0) {
+    result.txt = blx[0].txt;
+    result.fmt = (blx[0].fmt || []).concat(blx[0].ent || []);
+
+    for (var i = 1; i<blx.length; i++) {
+      var block = blx[i];
+      var offset = result.txt.length + 1;
+
+      result.fmt.push({tp: "BR", len: 1, at: offset - 1});
+
+      result.txt += " " + block.txt;
+      if (block.fmt) {
+        result.fmt = result.fmt.concat(block.fmt.map(function(s) {
+          s.at += offset; return s;
+        }));
+      }
+      if (block.ent) {
+        result.fmt = result.fmt.concat(block.ent.map(function(s) {
+          s.at += offset; return s;
+        }));
+      }
+    }
+
+    if (result.fmt.length ==  0) {
+      delete result.fmt;
+    }
+
+    if (entityMap.length > 0) {
+      result.ent = entityMap;
+    }
+  }
+  return result;
+}
+
+/**
+ * Add inline image to Drafty content.
+ * @memberof Tinode.Drafty#
+ * @static
+ *
+ * @param {Drafty} content object to add image to.
+ * @param {integer} at index where the object is inserted. The length of the image is always 1.
+ * @param {string} mime mime-type of the image, e.g. "image/png"
+ * @param {string} base64bits base64-encoded image content (or preview, if large image is attached)
+ * @param {integer} width width of the image
+ * @param {integer} height height of the image
+ * @param {string} fname file name suggestion for downloading the image.
+ * @param {integer} size size of the external file. Treat is as an untrusted hint.
+ * @param {string} refurl reference to the content. Could be null or undefined.
+ */
+Drafty.insertImage = function(content, at, mime, base64bits, width, height, fname, size, refurl) {
+  content = content || {txt: " "};
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: at,
+    len: 1,
+    key: content.ent.length
+  });
+  content.ent.push({
+    tp: "IM",
+    data: {
+      mime: mime,
+      val: base64bits,
+      width: width,
+      height: height,
+      name: fname,
+      ref: refurl,
+      size: size | 0
+    }
+  });
+
+  return content;
+}
+
+/**
+ * Add file to Drafty content. Either as a blob or as a reference.
+ * @memberof Tinode.Drafty#
+ * @static
+ *
+ * @param {Drafty} content object to attach file to.
+ * @param {string} mime mime-type of the file, e.g. "image/png"
+ * @param {string} base64bits base64-encoded file content
+ * @param {string} fname file name suggestion for downloading.
+ * @param {integer} size size of the external file. Treat is as an untrusted hint.
+ * @param {string | Promise} refurl optional reference to the content.
+ */
+Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
+  content = content || {txt: ""};
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: -1,
+    len: 0,
+    key: content.ent.length
+  });
+
+  let ex = {
+    tp: "EX",
+    data: {
+      mime: mime,
+      val: base64bits,
+      name: fname,
+      ref: refurl,
+      size: size | 0
+    }
+  }
+  if (refurl instanceof Promise) {
+    ex.data.ref = refurl.then(
+      (url) => { ex.data.ref = url; },
+      (err) => { /* catch the error, otherwise it will appear in the console. */ }
+    );
+  }
+  content.ent.push(ex);
+
+  return content;
+}
+
+/**
+ * Given the structured representation of rich text, convert it to HTML.
+ * No attempt is made to strip pre-existing html markup.
+ * This is potentially unsafe because `content.txt` may contain malicious
+ * markup.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {drafy} content - structured representation of rich text.
+ *
+ * @return HTML-representation of content.
+ */
+Drafty.UNSAFE_toHTML = function(content) {
+  var {txt, fmt, ent} = content;
+
+  var markup = [];
+  if (fmt) {
+    for (var i in fmt) {
+      var range = fmt[i];
+      var tp = range.tp, data;
+      if (!tp) {
+        var entity = ent[range.key];
+        if (entity) {
+          tp = entity.tp;
+          data = entity.data;
+        }
+      }
+
+      if (DECORATORS[tp]) {
+        // Because we later sort in descending order, closing markup must come first.
+        // Otherwise zero-length objects will not be represented correctly.
+        markup.push({idx: range.at + range.len, what: DECORATORS[tp].close(data)});
+        markup.push({idx: range.at, what: DECORATORS[tp].open(data)});
+      }
+    }
   }
 
-  return {
+  markup.sort(function(a, b) {
+    return b.idx - a.idx; // in descending order
+  });
 
-    /**
-     * Parse plain text into structured representation.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {String} content plain-text content to parse.
-     * @return {Drafty} parsed object or null if the source is not plain text.
-     */
-    parse: function(content) {
-      // Make sure we are parsing strings only.
-      if (typeof content != "string") {
-        return null;
-      }
-
-      // Split text into lines. It makes further processing easier.
-      var lines = content.split(/\r?\n/);
-
-      // Holds entities referenced from text
-      var entityMap = [];
-      var entityIndex = {};
-
-      // Processing lines one by one, hold intermediate result in blx.
-      var blx = [];
-      lines.map(function(line) {
-        var spans = [];
-        var entities = [];
-
-        // Find formatted spans in the string.
-        // Try to match each style.
-        INLINE_STYLES.map(function(style) {
-          // Each style could be matched multiple times.
-          spans = spans.concat(spannify(line, style.start, style.end, style.name));
-        });
-
-        var block;
-        if (spans.length == 0) {
-          block = {txt: line};
-        } else {
-          // Sort spans by style occurence early -> late
-          spans.sort(function(a,b) {
-            return a.start - b.start;
-          });
-
-          // Convert an array of possibly overlapping spans into a tree
-          spans = toTree(spans);
-
-          // Build a tree representation of the entire string, not
-          // just the formatted parts.
-          var chunks = chunkify(line, 0, line.length, spans);
-
-          var drafty = draftify(chunks, 0);
-
-          block = {txt: drafty.txt, fmt: drafty.fmt};
-        }
-
-        // Extract entities from the cleaned up string.
-        entities = extractEntities(block.txt);
-        if (entities.length > 0) {
-          var ranges = [];
-          for (var i in entities) {
-            // {offset: match['index'], unique: match[0], len: match[0].length, data: ent.packer(), type: ent.name}
-            var entity = entities[i];
-            var index = entityIndex[entity.unique];
-            if (!index) {
-              index = entityMap.length;
-              entityIndex[entity.unique] = index;
-              entityMap.push({tp: entity.type, data: entity.data});
-            }
-            ranges.push({at: entity.offset, len: entity.len, key: index});
-          }
-          block.ent = ranges;
-        }
-
-        blx.push(block);
-      });
-
-      var result = {txt: ""};
-
-      // Merge lines and save line breaks as BR inline formatting.
-      if (blx.length > 0) {
-        result.txt = blx[0].txt;
-        result.fmt = (blx[0].fmt || []).concat(blx[0].ent || []);
-
-        for (var i = 1; i<blx.length; i++) {
-          var block = blx[i];
-          var offset = result.txt.length + 1;
-
-          result.fmt.push({tp: "BR", len: 1, at: offset - 1});
-
-          result.txt += " " + block.txt;
-          if (block.fmt) {
-            result.fmt = result.fmt.concat(block.fmt.map(function(s) {
-              s.at += offset; return s;
-            }));
-          }
-          if (block.ent) {
-            result.fmt = result.fmt.concat(block.ent.map(function(s) {
-              s.at += offset; return s;
-            }));
-          }
-        }
-
-        if (result.fmt.length ==  0) {
-          delete result.fmt;
-        }
-
-        if (entityMap.length > 0) {
-          result.ent = entityMap;
-        }
-      }
-      return result;
-    },
-
-    /**
-     * Add inline image to Drafty content.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Drafty} content object to add image to.
-     * @param {integer} at index where the object is inserted. The length of the image is always 1.
-     * @param {string} mime mime-type of the image, e.g. "image/png"
-     * @param {string} base64bits base64-encoded image content (or preview, if large image is attached)
-     * @param {integer} width width of the image
-     * @param {integer} height height of the image
-     * @param {string} fname file name suggestion for downloading the image.
-     * @param {integer} size size of the external file. Treat is as an untrusted hint.
-     * @param {string} refurl reference to the content. Could be null or undefined.
-     */
-    insertImage: function(content, at, mime, base64bits, width, height, fname, size, refurl) {
-      content = content || {txt: " "};
-      content.ent = content.ent || [];
-      content.fmt = content.fmt || [];
-
-      content.fmt.push({
-        at: at,
-        len: 1,
-        key: content.ent.length
-      });
-      content.ent.push({
-        tp: "IM",
-        data: {
-          mime: mime,
-          val: base64bits,
-          width: width,
-          height: height,
-          name: fname,
-          ref: refurl,
-          size: size | 0
-        }
-      });
-
-      return content;
-    },
-
-    /**
-     * Add file to Drafty content. Either as a blob or as a reference.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Drafty} content object to attach file to.
-     * @param {string} mime mime-type of the file, e.g. "image/png"
-     * @param {string} base64bits base64-encoded file content
-     * @param {string} fname file name suggestion for downloading.
-     * @param {integer} size size of the external file. Treat is as an untrusted hint.
-     * @param {string | Promise} refurl optional reference to the content.
-     */
-    attachFile: function(content, mime, base64bits, fname, size, refurl) {
-      content = content || {txt: ""};
-      content.ent = content.ent || [];
-      content.fmt = content.fmt || [];
-
-      content.fmt.push({
-        at: -1,
-        len: 0,
-        key: content.ent.length
-      });
-
-      let ex = {
-        tp: "EX",
-        data: {
-          mime: mime,
-          val: base64bits,
-          name: fname,
-          ref: refurl,
-          size: size | 0
-        }
-      }
-      if (refurl instanceof Promise) {
-        refurl.then(
-          (url) => { ex.data.ref = url; },
-          (err) => { /* catch error, otherwise it will appear in the console. */ }
-        );
-      }
-      content.ent.push(ex);
-
-      return content;
-    },
-
-    /**
-     * Given the structured representation of rich text, convert it to HTML.
-     * No attempt is made to strip pre-existing html markup.
-     * This is potentially unsafe because `content.txt` may contain malicious
-     * markup.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {drafy} content - structured representation of rich text.
-     *
-     * @return HTML-representation of content.
-     */
-    UNSAFE_toHTML: function(content) {
-      var {txt, fmt, ent} = content;
-
-      var markup = [];
-      if (fmt) {
-        for (var i in fmt) {
-          var range = fmt[i];
-          var tp = range.tp, data;
-          if (!tp) {
-            var entity = ent[range.key];
-            if (entity) {
-              tp = entity.tp;
-              data = entity.data;
-            }
-          }
-
-          if (DECORATORS[tp]) {
-            // Because we later sort in descending order, closing markup must come first.
-            // Otherwise zero-length objects will not be represented correctly.
-            markup.push({idx: range.at + range.len, what: DECORATORS[tp].close(data)});
-            markup.push({idx: range.at, what: DECORATORS[tp].open(data)});
-          }
-        }
-      }
-
-      markup.sort(function(a, b) {
-        return b.idx - a.idx; // in descending order
-      });
-
-      for (var i in markup) {
-        if (markup[i].what) {
-          txt = splice(txt, markup[i].idx, markup[i].what);
-        }
-      }
-
-      return txt;
-    },
-
-    /**
-     * Callback for applying custom formatting/transformation to a Drafty object.
-     * Called once for each syle span.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @callback Formatter
-     * @param {string} style style code such as "ST" or "IM".
-     * @param {Object} data entity's data
-     * @param {Object} values possibly styled subspans contained in this style span.
-     */
-
-    /**
-     * Transform Drafty using custom formatting.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Drafty} content - content to transform.
-     * @param {Formatter} formatter - callback which transforms individual elements
-     * @param {Object} context - context provided to formatter as 'this'.
-     *
-     * @return {Object} transformed object
-     */
-    format: function(content, formatter, context) {
-      var {txt, fmt, ent} = content;
-
-      txt = txt || "";
-
-      if (!fmt) {
-        return [txt];
-      }
-
-      var spans = [].concat(fmt);
-
-      // Zero values may have been stripped. Restore them.
-      spans.map(function(s) {
-        s.at = s.at || 0;
-        s.len = s.len || 0;
-      });
-
-      // Soft spans first by start index (asc) then by length (desc).
-      spans.sort(function(a, b) {
-        if (a.at - b.at == 0) {
-          return b.len - a.len; // longer one comes first (<0)
-        }
-        return a.at - b.at;
-      });
-
-      // Denormalize entities into spans. Create a copy of the objects to leave
-      // original Drafty object unchanged.
-      spans = spans.map(function(s) {
-        var data;
-        var tp = s.tp;
-        if (!tp) {
-          s.key = s.key || 0;
-          data = ent[s.key].data;
-          tp = ent[s.key].tp;
-        }
-        return {tp: tp, data: data, at: s.at, len: s.len};
-      });
-
-      return forEach(txt, 0, txt.length, spans, formatter, context);
-    },
-
-    /**
-     * Given structured representation of rich text, convert it to plain text.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Drafty} content - content to convert to plain text.
-     */
-    toPlainText: function(content) {
-      return content.txt;
-    },
-
-    /**
-     * Returns true if content has no markup and no entities.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Drafty} content - content to check for presence of markup.
-     * @returns true is content is plain text, false otherwise.
-     */
-    isPlainText: function(content) {
-      return !(content.fmt || content.ent);
-    },
-
-    /**
-     * Check if the drafty content has attachments.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Drafty} content - content to check for attachments.
-     * @returns true if there are attachments.
-     */
-    hasAttachments: function(content) {
-      if (content.ent && content.ent.length > 0) {
-        for (var i in content.ent) {
-          if (content.ent[i].tp == "EX") {
-            return true;
-          }
-        }
-      }
-      return false;
-    },
-
-    /**
-     * Callback for applying custom formatting/transformation to a Drafty object.
-     * Called once for each syle span.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @callback AttachmentCallback
-     * @param {Object} data attachment data
-     * @param {number} index attachment's index in `content.ent`.
-     */
-
-    /**
-     * Enumerate attachments.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Drafty} content - drafty object to process for attachments.
-     * @param {AttachmentCallback} callback - callback to call for each attachment.
-     * @param {Object} content - value of "this" for callback.
-     */
-    attachments: function(content, callback, context) {
-      if (content.ent && content.ent.length > 0) {
-        for (var i in content.ent) {
-          if (content.ent[i].tp == "EX") {
-            callback.call(context, content.ent[i].data, i);
-          }
-        }
-      }
-    },
-
-    /**
-     * Given the entity, get URL which can be used for downloading
-     * entity data.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Object} entity.data to get the URl from.
-     */
-    getDownloadUrl: function(entData) {
-      let url = null;
-      if (entData.val) {
-        url = base64toObjectUrl(entData.val, entData.mime);
-      } else if (typeof entData.ref == 'string') {
-        url = entData.ref;
-      }
-      return url;
-    },
-
-    /**
-     * Check if the entity data is being uploaded to the server.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Object} entity.data to get the URl from.
-     * @returns {boolean} true if upload is in progress, false otherwise.
-     */
-    isUploading: function(entData) {
-      return entData.ref instanceof Promise;
-    },
-
-    /**
-     * Given the entity, get URL which can be used for previewing
-     * the entity.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Object} entity.data to get the URl from.
-     *
-     * @returns {string} url for previewing or null if no such url is available.
-     */
-    getPreviewUrl: function(entData) {
-      return entData.val ? base64toObjectUrl(entData.val, entData.mime) : null;
-    },
-
-    /**
-     * Get approximate size of the entity.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Object} entity.data to get the size for.
-     */
-    getEntitySize: function(entData) {
-      // Either size hint or length of value. The value is base64 encoded,
-      // the actual object size is smaller than the encoded length.
-      return entData.size ? entData.size : entData.val ? (entData.val.length * 0.75) | 0 : 0;
-    },
-
-    /**
-     * Get entity mime type.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {Object} entity.data to get the type for.
-     */
-    getEntityMimeType: function(entData) {
-      return entData.mime || "text/plain";
-    },
-
-    /**
-     * Get HTML tag for a given two-letter style name
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {string} style - two-letter style, like ST or LN
-     *
-     * @returns {string} tag name
-     */
-    tagName: function(style) {
-      return HTML_TAGS[style] ? HTML_TAGS[style].name : undefined;
-    },
-
-    /**
-     * For a given data bundle generate an object with HTML attributes,
-     * for instance, given {url: "http://www.example.com/"} return
-     * {href: "http://www.example.com/"}
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @param {string} style - tw-letter style to generate attributes for.
-     * @param {Object} data - data bundle to convert to attributes
-     *
-     * @returns {Object} object with HTML attributes.
-     */
-    attrValue: function(style, data) {
-      if (data && DECORATORS[style]) {
-        return DECORATORS[style].props(data);
-      }
-
-      return undefined;
-    },
-
-    /**
-     * Drafty MIME type.
-     * @memberof Tinode.Drafty#
-     * @static
-     *
-     * @returns {string} HTTP Content-Type "text/x-drafty".
-     */
-    getContentType: function() {
-      return "text/x-drafty";
+  for (var i in markup) {
+    if (markup[i].what) {
+      txt = splice(txt, markup[i].idx, markup[i].what);
     }
-  };
-});
+  }
 
-module.exports = Drafty();
+  return txt;
+}
+
+/**
+ * Callback for applying custom formatting/transformation to a Drafty object.
+ * Called once for each syle span.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @callback Formatter
+ * @param {string} style style code such as "ST" or "IM".
+ * @param {Object} data entity's data
+ * @param {Object} values possibly styled subspans contained in this style span.
+ */
+
+/**
+ * Transform Drafty using custom formatting.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty} content - content to transform.
+ * @param {Formatter} formatter - callback which transforms individual elements
+ * @param {Object} context - context provided to formatter as 'this'.
+ *
+ * @return {Object} transformed object
+ */
+Drafty.format = function(content, formatter, context) {
+  var {txt, fmt, ent} = content;
+
+  txt = txt || "";
+
+  if (!fmt) {
+    return [txt];
+  }
+
+  var spans = [].concat(fmt);
+
+  // Zero values may have been stripped. Restore them.
+  spans.map(function(s) {
+    s.at = s.at || 0;
+    s.len = s.len || 0;
+  });
+
+  // Sort spans first by start index (asc) then by length (desc).
+  spans.sort(function(a, b) {
+    if (a.at - b.at == 0) {
+      return b.len - a.len; // longer one comes first (<0)
+    }
+    return a.at - b.at;
+  });
+
+  // Denormalize entities into spans. Create a copy of the objects to leave
+  // original Drafty object unchanged.
+  spans = spans.map(function(s) {
+    var data;
+    var tp = s.tp;
+    if (!tp) {
+      s.key = s.key || 0;
+      data = ent[s.key].data;
+      tp = ent[s.key].tp;
+    }
+    return {tp: tp, data: data, at: s.at, len: s.len};
+  });
+
+  return forEach(txt, 0, txt.length, spans, formatter, context);
+}
+
+/**
+ * Given structured representation of rich text, convert it to plain text.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty} content - content to convert to plain text.
+ */
+Drafty.toPlainText = function(content) {
+  return typeof content == 'string' ? content : content.txt;
+}
+
+/**
+ * Returns true if content has no markup and no entities.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty} content - content to check for presence of markup.
+ * @returns true is content is plain text, false otherwise.
+ */
+Drafty.isPlainText = function(content) {
+  return typeof content == 'string' || !(content.fmt || content.ent);
+}
+
+/**
+ * Check if the drafty content has attachments.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty} content - content to check for attachments.
+ * @returns true if there are attachments.
+ */
+Drafty.hasAttachments = function(content) {
+  if (content.ent && content.ent.length > 0) {
+    for (var i in content.ent) {
+      if (content.ent[i].tp == "EX") {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Callback for applying custom formatting/transformation to a Drafty object.
+ * Called once for each syle span.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @callback AttachmentCallback
+ * @param {Object} data attachment data
+ * @param {number} index attachment's index in `content.ent`.
+ */
+
+/**
+ * Enumerate attachments.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty} content - drafty object to process for attachments.
+ * @param {AttachmentCallback} callback - callback to call for each attachment.
+ * @param {Object} content - value of "this" for callback.
+ */
+Drafty.attachments = function(content, callback, context) {
+  if (content.ent && content.ent.length > 0) {
+    for (var i in content.ent) {
+      if (content.ent[i].tp == "EX") {
+        callback.call(context, content.ent[i].data, i);
+      }
+    }
+  }
+}
+
+/**
+ * Given the entity, get URL which can be used for downloading
+ * entity data.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Object} entity.data to get the URl from.
+ */
+Drafty.getDownloadUrl = function(entData) {
+  let url = null;
+  if (entData.val) {
+    url = base64toObjectUrl(entData.val, entData.mime);
+  } else if (typeof entData.ref == 'string') {
+    url = entData.ref;
+  }
+  return url;
+}
+
+/**
+ * Check if the entity data is being uploaded to the server.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Object} entity.data to get the URl from.
+ * @returns {boolean} true if upload is in progress, false otherwise.
+ */
+Drafty.isUploading = function(entData) {
+  return entData.ref instanceof Promise;
+}
+
+/**
+ * Given the entity, get URL which can be used for previewing
+ * the entity.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Object} entity.data to get the URl from.
+ *
+ * @returns {string} url for previewing or null if no such url is available.
+ */
+Drafty.getPreviewUrl = function(entData) {
+  return entData.val ? base64toObjectUrl(entData.val, entData.mime) : null;
+}
+
+/**
+ * Get approximate size of the entity.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Object} entity.data to get the size for.
+ */
+Drafty.getEntitySize = function(entData) {
+  // Either size hint or length of value. The value is base64 encoded,
+  // the actual object size is smaller than the encoded length.
+  return entData.size ? entData.size : entData.val ? (entData.val.length * 0.75) | 0 : 0;
+}
+
+/**
+ * Get entity mime type.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Object} entity.data to get the type for.
+ */
+Drafty.getEntityMimeType = function(entData) {
+  return entData.mime || "text/plain";
+}
+
+/**
+ * Get HTML tag for a given two-letter style name
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {string} style - two-letter style, like ST or LN
+ *
+ * @returns {string} tag name
+ */
+Drafty.tagName = function(style) {
+  return HTML_TAGS[style] ? HTML_TAGS[style].name : undefined;
+}
+
+/**
+ * For a given data bundle generate an object with HTML attributes,
+ * for instance, given {url: "http://www.example.com/"} return
+ * {href: "http://www.example.com/"}
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {string} style - tw-letter style to generate attributes for.
+ * @param {Object} data - data bundle to convert to attributes
+ *
+ * @returns {Object} object with HTML attributes.
+ */
+Drafty.attrValue = function(style, data) {
+  if (data && DECORATORS[style]) {
+    return DECORATORS[style].props(data);
+  }
+
+  return undefined;
+}
+
+/**
+ * Drafty MIME type.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @returns {string} HTTP Content-Type "text/x-drafty".
+ */
+Drafty.getContentType = function() {
+  return "text/x-drafty";
+}
+
+module.exports = Drafty;
