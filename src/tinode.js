@@ -44,7 +44,7 @@
 
 if (typeof require == 'function') {
   if (typeof Drafty == 'undefined') {
-    var Drafty = require('./drafty.es5.js');
+    var Drafty = require('./drafty.js');
   }
   var package_version = require('../version.json').version;
 }
