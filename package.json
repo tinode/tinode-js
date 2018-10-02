@@ -4,9 +4,9 @@
   "version": "0.15.5",
   "scripts": {
     "build": "npm run build:tn-prod && npm run build:tn-dev && npm run build:dr-prod && npm run build:dr-dev",
-    "build:tn-prod": "browserify ./src/tinode.js --standalone Tinode --plugin tinyify > ./umd/tinode.prod.js",
+    "build:tn-prod": "browserify ./src/tinode.js --standalone Tinode --plugin tinyify -t babelify > ./umd/tinode.prod.js",
     "build:tn-dev": "browserify ./src/tinode.js --standalone Tinode > ./umd/tinode.dev.js",
-    "build:dr-prod": "browserify ./src/drafty.js --standalone Drafty --plugin tinyify > ./umd/drafty.prod.js",
+    "build:dr-prod": "browserify ./src/drafty.js --standalone Drafty --plugin tinyify -t babelify > ./umd/drafty.prod.js",
     "build:dr-dev": "browserify ./src/drafty.js --standalone Drafty > ./umd/drafty.dev.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -35,6 +35,9 @@
   "homepage": "https://github.com/tinode/chat",
   "main": "./umd/tinode.prod.js",
   "devDependencies": {
+    "@babel/core": "^7.1.2",
+    "@babel/preset-env": "^7.1.0",
+    "babelify": "^10.0.0",
     "minami": "^1.2.3",
     "tinyify": "^2.4.3"
   }
