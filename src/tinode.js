@@ -738,6 +738,10 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     instance.isConnected = function() {
       return (_socket && (_socket.readyState === 1));
     }
+
+    instance.transport = function() {
+      return "ws";
+    }
   }
 
   // Initialization for long polling.
@@ -831,10 +835,12 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
     instance.disconnect = function() {
       if (_sender) {
+        _sender.onreadystatechange = undefined;
         _sender.abort();
         _sender = null;
       }
       if (_poller) {
+        _poller.onreadystatechange = undefined;
         _poller.abort();
         _poller = null;
       }
@@ -856,6 +862,10 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
     instance.isConnected = function() {
       return (_poller && true);
+    }
+
+    instance.transport = function() {
+      return "lp";
     }
   }
 
