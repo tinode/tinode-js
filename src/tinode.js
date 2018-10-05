@@ -981,8 +981,10 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
   // Push notification token. Called deviceToken for consistency with the Android SDK.
   this._deviceToken = null;
 
-  // Cache of pending promises
+  // Cache of pending promises by message id.
   this._pendingPromises = {};
+  // Promises which are resolved on successful login.
+  this._onLoginPromises = [];
 
   /** A connection object, see {@link Connection}. */
   this._connection = new Connection(host_, apiKey_, transport_, secure_, true);
@@ -1069,11 +1071,23 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
     }
   }
 
+  // Resolve promises on successful login.
+  let execOnLoginPromises = (userId) => {
+    // Resolve all promises if user Id has not changed.
+    this._onLoginPromises.forEach((resolver) => {
+      if (resolver.userId == userId) {
+        resolver.resolve();
+      }
+    });
+    // Reset all.
+    this._onLoginPromises = [];
+  }
+
   // Generator of default promises for sent packets
   let makePromise = (id) => {
-    var promise = null;
+    let promise = null;
     if (id) {
-      var promise = new Promise((resolve, reject) => {
+      let promise = new Promise((resolve, reject) => {
         // Stored callbacks will be called when the response packet with this Id arrives
         this._pendingPromises[id] = {
           "resolve": resolve,
@@ -1082,6 +1096,20 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       })
     }
     return promise;
+  }
+  // Queues a promise which will be resolved on successful login.
+  // These promises are never rejected. They are either resolved
+  // or deleted when disconnect() is called.
+  this.onLoginPromise = () {
+    if (this._authenticated) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve, unused) => {
+      this._onLoginPromises.push({
+        "userId": this._myUID,
+        "resolve": resolve
+      });
+    }
   }
 
   // Generates unique message IDs
@@ -1250,6 +1278,10 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       };
     } else {
       this._authToken = null;
+    }
+
+    if (this._authenticated) {
+      execOnLoginPromises(ctrl.params.user);
     }
 
     if (this.onLogin) {
@@ -1514,6 +1546,9 @@ Tinode.prototype = {
     if (this._connection) {
       this._connection.disconnect();
     }
+    // Clear all onLogin promises. We don't
+    // want them carried accross logins.
+    this._onLoginPromises = [];
   },
 
   /**
@@ -2228,7 +2263,7 @@ Tinode.prototype = {
    */
   enableLogging: function(enabled, trimLongStrings) {
     this._loggingEnabled = enabled;
-    this._trimLongStrings = trimLongStrings;
+    this._trimLongStrings = enabled && trimLongStrings;
   },
 
   /**
@@ -3074,7 +3109,8 @@ Topic.prototype = {
 
     // Send data
     pub._sending = true;
-    return this._tinode.publishMessage(pub);
+    return this._tinode.publishMessage(pub)
+      .catch((err) => {});
   },
 
   /**
