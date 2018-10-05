@@ -544,7 +544,7 @@ var CBuffer = function(compare) {
     forEach: function(callback, startIdx, beforeIdx, context) {
       startIdx = startIdx | 0;
       beforeIdx = beforeIdx || buffer.length;
-      for (var i = startIdx; i < beforeIdx; i++) {
+      for (let i = startIdx; i < beforeIdx; i++) {
         callback.call(context, buffer[i], i);
       }
     },
@@ -983,8 +983,6 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
 
   // Cache of pending promises by message id.
   this._pendingPromises = {};
-  // Promises which are resolved on successful login.
-  this._onLoginPromises = [];
 
   /** A connection object, see {@link Connection}. */
   this._connection = new Connection(host_, apiKey_, transport_, secure_, true);
@@ -1071,18 +1069,6 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
     }
   }
 
-  // Resolve promises on successful login.
-  let execOnLoginPromises = (userId) => {
-    // Resolve all promises if user Id has not changed.
-    this._onLoginPromises.forEach((resolver) => {
-      if (resolver.userId == userId) {
-        resolver.resolve();
-      }
-    });
-    // Reset all.
-    this._onLoginPromises = [];
-  }
-
   // Generator of default promises for sent packets
   let makePromise = (id) => {
     let promise = null;
@@ -1096,20 +1082,6 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       })
     }
     return promise;
-  }
-  // Queues a promise which will be resolved on successful login.
-  // These promises are never rejected. They are either resolved
-  // or deleted when disconnect() is called.
-  this.onLoginPromise = () {
-    if (this._authenticated) {
-      return Promise.resolve();
-    }
-    return new Promise((resolve, unused) => {
-      this._onLoginPromises.push({
-        "userId": this._myUID,
-        "resolve": resolve
-      });
-    }
   }
 
   // Generates unique message IDs
@@ -1278,10 +1250,6 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       };
     } else {
       this._authToken = null;
-    }
-
-    if (this._authenticated) {
-      execOnLoginPromises(ctrl.params.user);
     }
 
     if (this.onLogin) {
@@ -1546,9 +1514,6 @@ Tinode.prototype = {
     if (this._connection) {
       this._connection.disconnect();
     }
-    // Clear all onLogin promises. We don't
-    // want them carried accross logins.
-    this._onLoginPromises = [];
   },
 
   /**
@@ -3060,18 +3025,6 @@ Topic.prototype = {
   },
 
   /**
-   * Immediately publish data to topic. Wrapper for {@link Tinode#publish}.
-   * @memberof Tinode.Topic#
-   *
-   * @param {string | Object} data - Data to publish, either plain string or a Drafty object.
-   * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating
-   * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
-   */
-  publish: function(data, noEcho) {
-    return this.publishMessage(this.createMessage(data, noEcho));
-  },
-
-  /**
    * Create a draft of a message without sending it to the server.
    * @memberof Tinode.Topic#
    *
@@ -3083,6 +3036,18 @@ Topic.prototype = {
    */
   createMessage: function(data, noEcho) {
     return this._tinode.createMessage(this.name, data, noEcho);
+  },
+
+  /**
+   * Immediately publish data to topic. Wrapper for {@link Tinode#publish}.
+   * @memberof Tinode.Topic#
+   *
+   * @param {string | Object} data - Data to publish, either plain string or a Drafty object.
+   * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
+   */
+  publish: function(data, noEcho) {
+    return this.publishMessage(this.createMessage(data, noEcho));
   },
 
   /**
@@ -3109,8 +3074,7 @@ Topic.prototype = {
 
     // Send data
     pub._sending = true;
-    return this._tinode.publishMessage(pub)
-      .catch((err) => {});
+    return this._tinode.publishMessage(pub);
   },
 
   /**
@@ -3131,22 +3095,25 @@ Topic.prototype = {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
     }
 
-    // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
-    // before the message is sent.
-    var seq = pub.seq = this._getQueuedSeqId();
-    pub._generated = true;
-    pub.ts = new Date();
-    pub.from = this._tinode.getCurrentUserID();
+    let seq = pub.seq || this._getQueuedSeqId();
+    if (!pub._generated) {
+      // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
+      // before the message is sent.
 
-    // Don't need an echo message becasue the message is added to local cache right away.
-    pub.noecho = true;
-    // Add to cache.
-    this._messages.put(pub);
+      pub._generated = true;
+      pub.seq = seq;
+      pub.ts = new Date();
+      pub.from = this._tinode.getCurrentUserID();
 
-    if (this.onData) {
-      this.onData(pub);
+      // Don't need an echo message because the message is added to local cache right away.
+      pub.noecho = true;
+      // Add to cache.
+      this._messages.put(pub);
+
+      if (this.onData) {
+        this.onData(pub);
+      }
     }
-
     // If promise is provided, send the queued message when it's resolved.
     // If no promise is provided, create a resolved one and send immediately.
     prom = (prom || Promise.resolve()).then(
@@ -3616,6 +3583,21 @@ Topic.prototype = {
       }
     }
   },
+},
+
+  /**
+   * Iterate over cached unsent messages. Wraps {@link Tinode.Topic#messages}.
+   * @memberof Tinode.Topic#
+   *
+   * @param {function} callback - Callback which will receive messages one by one. See {@link Tinode.CBuffer#forEach}
+   * @param {Object} context - Value of `this` inside the `callback`.
+   */
+  queuedMessages: function(callback, context) {
+    if (!callback) {
+      throw new Error("Callback must be provided");
+    }
+    this.messages(callback, LOCAL_SEQID, undefined, context);
+  },
 
   /**
    * Get the number of topic subscribers who marked this message as either recv or read
@@ -3793,7 +3775,7 @@ Topic.prototype = {
    * @returns message status constant.
    */
   msgStatus: function(msg) {
-    var status = MESSAGE_STATUS_NONE;
+    let status = MESSAGE_STATUS_NONE;
     if (msg.from == this._tinode.getCurrentUserID()) {
       if (msg._sending) {
         status = MESSAGE_STATUS_SENDING;
