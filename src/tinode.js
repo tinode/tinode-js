@@ -74,6 +74,10 @@ const MESSAGE_STATUS_SENT = 3; // Delivered to the server.
 const MESSAGE_STATUS_RECEIVED = 4; // Received by the client.
 const MESSAGE_STATUS_READ = 5; // Read by the user.
 const MESSAGE_STATUS_TO_ME = 6; // Message from another user.
+
+// Error code to return in case of a network problem.
+const NETWORK_ERROR = 503;
+const NETWORK_ERROR_TEXT = "Connection failed";
 // Utility functions
 
 // Add brower missing function for non browser app, eg nodeJs
@@ -801,11 +805,13 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
             if (reject) {
               reject(poller.responseText);
             }
-            if (instance.onMessage) {
+            if (instance.onMessage && poller.responseText) {
               instance.onMessage(poller.responseText);
             }
             if (instance.onDisconnect) {
-              instance.onDisconnect(new Error("" + poller.status + " " + poller.responseText));
+              let code = poller.status || NETWORK_ERROR;
+              let text = poller.responseText || NETWORK_ERROR_TEXT;
+              instance.onDisconnect(new Error(text + "(" + code + ")"));
             }
           }
         }
@@ -1073,7 +1079,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
   let makePromise = (id) => {
     let promise = null;
     if (id) {
-      let promise = new Promise((resolve, reject) => {
+      promise = new Promise((resolve, reject) => {
         // Stored callbacks will be called when the response packet with this Id arrives
         this._pendingPromises[id] = {
           "resolve": resolve,
@@ -1219,14 +1225,14 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       promise = makePromise(id);
     }
     pkt = simplify(pkt);
-    var msg = JSON.stringify(pkt);
+    let msg = JSON.stringify(pkt);
     this.logger("out: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
     try {
       this._connection.sendText(msg);
     } catch (err) {
       // If sendText throws, wrap the error in a promise or rethrow.
       if (id) {
-        execPromise(id, 503, null, err.message);
+        execPromise(id, NETWORK_ERROR, null, err.message);
       } else {
         throw err;
       }
@@ -3583,7 +3589,6 @@ Topic.prototype = {
       }
     }
   },
-},
 
   /**
    * Iterate over cached unsent messages. Wraps {@link Tinode.Topic#messages}.
