@@ -70,10 +70,11 @@ const LOCAL_SEQID = 0xFFFFFFF;
 const MESSAGE_STATUS_NONE = 0; // Status not assigned.
 const MESSAGE_STATUS_QUEUED = 1; // Local ID assigned, in progress to be sent.
 const MESSAGE_STATUS_SENDING = 2; // Transmission started.
-const MESSAGE_STATUS_SENT = 3; // Delivered to the server.
-const MESSAGE_STATUS_RECEIVED = 4; // Received by the client.
-const MESSAGE_STATUS_READ = 5; // Read by the user.
-const MESSAGE_STATUS_TO_ME = 6; // Message from another user.
+const MESSAGE_STATUS_FAILED = 3; // At least one attempt was made to send the message.
+const MESSAGE_STATUS_SENT = 4; // Delivered to the server.
+const MESSAGE_STATUS_RECEIVED = 5; // Received by the client.
+const MESSAGE_STATUS_READ = 6; // Read by the user.
+const MESSAGE_STATUS_TO_ME = 7; // Message from another user.
 
 // Error code to return in case of a network problem.
 const NETWORK_ERROR = 503;
@@ -1489,6 +1490,7 @@ Tinode.getLibrary = function() {
 Tinode.MESSAGE_STATUS_NONE = MESSAGE_STATUS_NONE,
   Tinode.MESSAGE_STATUS_QUEUED = MESSAGE_STATUS_QUEUED,
   Tinode.MESSAGE_STATUS_SENDING = MESSAGE_STATUS_SENDING,
+  Tinode.MESSAGE_STATUS_FAILED = MESSAGE_STATUS_FAILED,
   Tinode.MESSAGE_STATUS_SENT = MESSAGE_STATUS_SENT,
   Tinode.MESSAGE_STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED,
   Tinode.MESSAGE_STATUS_READ = MESSAGE_STATUS_READ,
@@ -3070,7 +3072,7 @@ Topic.prototype = {
     }
 
     // Update header with attachment records.
-    if (Drafty.hasAttachments(pub.content)) {
+    if (Drafty.hasAttachments(pub.content) && !pub.head.attachments) {
       let attachments = [];
       Drafty.attachments(pub.content, (data) => {
         attachments.push(data.ref);
@@ -3080,7 +3082,16 @@ Topic.prototype = {
 
     // Send data
     pub._sending = true;
-    return this._tinode.publishMessage(pub);
+    return this._tinode.publishMessage(pub).then((ctrl) => {
+      pub._sending = false;
+      pub.seq = ctrl.params.seq;
+      pub.ts = ctrl.ts;
+      this._routeData(pub);
+      return ctrl;
+    }).catch((err) => {
+      pub._sending = false;
+      pub._failed = true;
+    });
   },
 
   /**
@@ -3131,13 +3142,7 @@ Topic.prototype = {
           };
         }
 
-        return this.publishMessage(pub).then((ctrl) => {
-          pub._sending = false;
-          pub.seq = ctrl.params.seq;
-          pub.ts = ctrl.ts;
-          this._routeData(pub);
-          return ctrl;
-        });
+        return this.publishMessage(pub);
       },
       (err) => {
         pub._sending = false;
@@ -3784,6 +3789,8 @@ Topic.prototype = {
     if (msg.from == this._tinode.getCurrentUserID()) {
       if (msg._sending) {
         status = MESSAGE_STATUS_SENDING;
+      } else if (msg._failed) {
+        status = MESSAGE_STATUS_FAILED;
       } else if (msg.seq >= LOCAL_SEQID) {
         status = MESSAGE_STATUS_QUEUED;
       } else if (this.msgReadCount(msg.seq) > 0) {
@@ -4767,6 +4774,7 @@ var Message = function(topic_, content_) {
 Message.STATUS_NONE = MESSAGE_STATUS_NONE;
 Message.STATUS_QUEUED = MESSAGE_STATUS_QUEUED;
 Message.STATUS_SENDING = MESSAGE_STATUS_SENDING;
+Message.STATUS_FAILED = MESSAGE_STATUS_FAILED;
 Message.STATUS_SENT = MESSAGE_STATUS_SENT;
 Message.STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED;
 Message.STATUS_READ = MESSAGE_STATUS_READ;
