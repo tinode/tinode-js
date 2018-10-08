@@ -1565,7 +1565,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {String} uid - User id to update
-   * @param {String} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
+   * @param {String} scheme - Authentication scheme; <tt>"basic" and "anonymous"</tt> are the currently supported schemes.
    * @param {String} secret - Authentication secret, assumed to be already base64 encoded.
    * @param {Boolean=} login - Use new account to authenticate current session
    * @param {Tinode.AccountParams=} params - User data to pass to the server.
