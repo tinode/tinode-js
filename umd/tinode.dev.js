@@ -942,14 +942,14 @@ module.exports = Drafty;
  */
 'use strict';
 
-if (typeof require === 'function') {
-  if (typeof Drafty === 'undefined') {
+if (typeof require == 'function') {
+  if (typeof Drafty == 'undefined') {
     var Drafty = require('./drafty.js');
   }
   var package_version = require('../version.json').version;
 }
 let WebSocketProvider;
-if (typeof(WebSocket) !== "undefined") {
+if (typeof(WebSocket) != "undefined") {
   WebSocketProvider = WebSocket;
 }
 initForNonBrowserApp();
@@ -971,10 +971,15 @@ const LOCAL_SEQID = 0xFFFFFFF;
 const MESSAGE_STATUS_NONE = 0; // Status not assigned.
 const MESSAGE_STATUS_QUEUED = 1; // Local ID assigned, in progress to be sent.
 const MESSAGE_STATUS_SENDING = 2; // Transmission started.
-const MESSAGE_STATUS_SENT = 3; // Delivered to the server.
-const MESSAGE_STATUS_RECEIVED = 4; // Received by the client.
-const MESSAGE_STATUS_READ = 5; // Read by the user.
-const MESSAGE_STATUS_TO_ME = 6; // Message from another user.
+const MESSAGE_STATUS_FAILED = 3; // At least one attempt was made to send the message.
+const MESSAGE_STATUS_SENT = 4; // Delivered to the server.
+const MESSAGE_STATUS_RECEIVED = 5; // Received by the client.
+const MESSAGE_STATUS_READ = 6; // Read by the user.
+const MESSAGE_STATUS_TO_ME = 7; // Message from another user.
+
+// Error code to return in case of a network problem.
+const NETWORK_ERROR = 503;
+const NETWORK_ERROR_TEXT = "Connection failed";
 // Utility functions
 
 // Add brower missing function for non browser app, eg nodeJs
@@ -982,7 +987,7 @@ function initForNonBrowserApp() {
   // Tinode requirement in native mode because react native doesn't provide Base64 method
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
 
-  if (typeof btoa === "undefined") {
+  if (typeof btoa == "undefined") {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
     global.btoa = function(input = '') {
       let str = input;
@@ -1003,7 +1008,7 @@ function initForNonBrowserApp() {
     };
   }
 
-  if (typeof atob === "undefined") {
+  if (typeof atob == "undefined") {
     global.atob = function(input = '') {
       let str = input.replace(/=+$/, '');
       let output = '';
@@ -1023,7 +1028,7 @@ function initForNonBrowserApp() {
     };
   }
 
-  if (typeof window === "undefined") {
+  if (typeof window == "undefined") {
     global.window = {
       WebSocket: WebSocketProvider,
       URL: {
@@ -1445,7 +1450,7 @@ var CBuffer = function(compare) {
     forEach: function(callback, startIdx, beforeIdx, context) {
       startIdx = startIdx | 0;
       beforeIdx = beforeIdx || buffer.length;
-      for (var i = startIdx; i < beforeIdx; i++) {
+      for (let i = startIdx; i < beforeIdx; i++) {
         callback.call(context, buffer[i], i);
       }
     },
@@ -1639,6 +1644,10 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     instance.isConnected = function() {
       return (_socket && (_socket.readyState === 1));
     }
+
+    instance.transport = function() {
+      return "ws";
+    }
   }
 
   // Initialization for long polling.
@@ -1698,11 +1707,13 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
             if (reject) {
               reject(poller.responseText);
             }
-            if (instance.onMessage) {
+            if (instance.onMessage && poller.responseText) {
               instance.onMessage(poller.responseText);
             }
             if (instance.onDisconnect) {
-              instance.onDisconnect(new Error("" + poller.status + " " + poller.responseText));
+              let code = poller.status || NETWORK_ERROR;
+              let text = poller.responseText || NETWORK_ERROR_TEXT;
+              instance.onDisconnect(new Error(text + "(" + code + ")"));
             }
           }
         }
@@ -1732,10 +1743,12 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
     instance.disconnect = function() {
       if (_sender) {
+        _sender.onreadystatechange = undefined;
         _sender.abort();
         _sender = null;
       }
       if (_poller) {
+        _poller.onreadystatechange = undefined;
         _poller.abort();
         _poller = null;
       }
@@ -1757,6 +1770,10 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
     instance.isConnected = function() {
       return (_poller && true);
+    }
+
+    instance.transport = function() {
+      return "lp";
     }
   }
 
@@ -1872,7 +1889,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
   // Push notification token. Called deviceToken for consistency with the Android SDK.
   this._deviceToken = null;
 
-  // Cache of pending promises
+  // Cache of pending promises by message id.
   this._pendingPromises = {};
 
   /** A connection object, see {@link Connection}. */
@@ -1962,9 +1979,9 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
 
   // Generator of default promises for sent packets
   let makePromise = (id) => {
-    var promise = null;
+    let promise = null;
     if (id) {
-      var promise = new Promise((resolve, reject) => {
+      promise = new Promise((resolve, reject) => {
         // Stored callbacks will be called when the response packet with this Id arrives
         this._pendingPromises[id] = {
           "resolve": resolve,
@@ -2110,14 +2127,14 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       promise = makePromise(id);
     }
     pkt = simplify(pkt);
-    var msg = JSON.stringify(pkt);
+    let msg = JSON.stringify(pkt);
     this.logger("out: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
     try {
       this._connection.sendText(msg);
     } catch (err) {
       // If sendText throws, wrap the error in a promise or rethrow.
       if (id) {
-        execPromise(id, 503, null, err.message);
+        execPromise(id, NETWORK_ERROR, null, err.message);
       } else {
         throw err;
       }
@@ -2348,9 +2365,17 @@ Tinode.getVersion = function() {
   return VERSION;
 };
 
+/**
+ * To use for non browser app, allow to specify WebSocket provider
+ * @param provider webSocket provider ex: for nodeJS require('ws')
+ * @memberof Tinode
+ * @static
+ *
+ */
 Tinode.setWebSocketProvider = function(provider) {
   WebSocketProvider = provider;
 };
+
 /**
  * Return information about the current name and version of this Tinode library.
  * @memberof Tinode
@@ -2366,6 +2391,7 @@ Tinode.getLibrary = function() {
 Tinode.MESSAGE_STATUS_NONE = MESSAGE_STATUS_NONE,
   Tinode.MESSAGE_STATUS_QUEUED = MESSAGE_STATUS_QUEUED,
   Tinode.MESSAGE_STATUS_SENDING = MESSAGE_STATUS_SENDING,
+  Tinode.MESSAGE_STATUS_FAILED = MESSAGE_STATUS_FAILED,
   Tinode.MESSAGE_STATUS_SENT = MESSAGE_STATUS_SENT,
   Tinode.MESSAGE_STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED,
   Tinode.MESSAGE_STATUS_READ = MESSAGE_STATUS_READ,
@@ -3111,7 +3137,7 @@ Tinode.prototype = {
    */
   enableLogging: function(enabled, trimLongStrings) {
     this._loggingEnabled = enabled;
-    this._trimLongStrings = trimLongStrings;
+    this._trimLongStrings = enabled && trimLongStrings;
   },
 
   /**
@@ -3908,18 +3934,6 @@ Topic.prototype = {
   },
 
   /**
-   * Immediately publish data to topic. Wrapper for {@link Tinode#publish}.
-   * @memberof Tinode.Topic#
-   *
-   * @param {string | Object} data - Data to publish, either plain string or a Drafty object.
-   * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating
-   * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
-   */
-  publish: function(data, noEcho) {
-    return this.publishMessage(this.createMessage(data, noEcho));
-  },
-
-  /**
    * Create a draft of a message without sending it to the server.
    * @memberof Tinode.Topic#
    *
@@ -3931,6 +3945,18 @@ Topic.prototype = {
    */
   createMessage: function(data, noEcho) {
     return this._tinode.createMessage(this.name, data, noEcho);
+  },
+
+  /**
+   * Immediately publish data to topic. Wrapper for {@link Tinode#publish}.
+   * @memberof Tinode.Topic#
+   *
+   * @param {string | Object} data - Data to publish, either plain string or a Drafty object.
+   * @param {Boolean=} noEcho - If <tt>true</tt> server will not echo message back to originating
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
+   */
+  publish: function(data, noEcho) {
+    return this.publishMessage(this.createMessage(data, noEcho));
   },
 
   /**
@@ -3947,7 +3973,7 @@ Topic.prototype = {
     }
 
     // Update header with attachment records.
-    if (Drafty.hasAttachments(pub.content)) {
+    if (Drafty.hasAttachments(pub.content) && !pub.head.attachments) {
       let attachments = [];
       Drafty.attachments(pub.content, (data) => {
         attachments.push(data.ref);
@@ -3957,7 +3983,16 @@ Topic.prototype = {
 
     // Send data
     pub._sending = true;
-    return this._tinode.publishMessage(pub);
+    return this._tinode.publishMessage(pub).then((ctrl) => {
+      pub._sending = false;
+      pub.seq = ctrl.params.seq;
+      pub.ts = ctrl.ts;
+      this._routeData(pub);
+      return ctrl;
+    }).catch((err) => {
+      pub._sending = false;
+      pub._failed = true;
+    });
   },
 
   /**
@@ -3978,22 +4013,25 @@ Topic.prototype = {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
     }
 
-    // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
-    // before the message is sent.
-    var seq = pub.seq = this._getQueuedSeqId();
-    pub._generated = true;
-    pub.ts = new Date();
-    pub.from = this._tinode.getCurrentUserID();
+    let seq = pub.seq || this._getQueuedSeqId();
+    if (!pub._generated) {
+      // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
+      // before the message is sent.
 
-    // Don't need an echo message becasue the message is added to local cache right away.
-    pub.noecho = true;
-    // Add to cache.
-    this._messages.put(pub);
+      pub._generated = true;
+      pub.seq = seq;
+      pub.ts = new Date();
+      pub.from = this._tinode.getCurrentUserID();
 
-    if (this.onData) {
-      this.onData(pub);
+      // Don't need an echo message because the message is added to local cache right away.
+      pub.noecho = true;
+      // Add to cache.
+      this._messages.put(pub);
+
+      if (this.onData) {
+        this.onData(pub);
+      }
     }
-
     // If promise is provided, send the queued message when it's resolved.
     // If no promise is provided, create a resolved one and send immediately.
     prom = (prom || Promise.resolve()).then(
@@ -4005,13 +4043,7 @@ Topic.prototype = {
           };
         }
 
-        return this.publishMessage(pub).then((ctrl) => {
-          pub._sending = false;
-          pub.seq = ctrl.params.seq;
-          pub.ts = ctrl.ts;
-          this._routeData(pub);
-          return ctrl;
-        });
+        return this.publishMessage(pub);
       },
       (err) => {
         pub._sending = false;
@@ -4465,6 +4497,20 @@ Topic.prototype = {
   },
 
   /**
+   * Iterate over cached unsent messages. Wraps {@link Tinode.Topic#messages}.
+   * @memberof Tinode.Topic#
+   *
+   * @param {function} callback - Callback which will receive messages one by one. See {@link Tinode.CBuffer#forEach}
+   * @param {Object} context - Value of `this` inside the `callback`.
+   */
+  queuedMessages: function(callback, context) {
+    if (!callback) {
+      throw new Error("Callback must be provided");
+    }
+    this.messages(callback, LOCAL_SEQID, undefined, context);
+  },
+
+  /**
    * Get the number of topic subscribers who marked this message as either recv or read
    * Current user is excluded from the count.
    * @memberof Tinode.Topic#
@@ -4640,10 +4686,12 @@ Topic.prototype = {
    * @returns message status constant.
    */
   msgStatus: function(msg) {
-    var status = MESSAGE_STATUS_NONE;
+    let status = MESSAGE_STATUS_NONE;
     if (msg.from == this._tinode.getCurrentUserID()) {
       if (msg._sending) {
         status = MESSAGE_STATUS_SENDING;
+      } else if (msg._failed) {
+        status = MESSAGE_STATUS_FAILED;
       } else if (msg.seq >= LOCAL_SEQID) {
         status = MESSAGE_STATUS_QUEUED;
       } else if (this.msgReadCount(msg.seq) > 0) {
@@ -5627,6 +5675,7 @@ var Message = function(topic_, content_) {
 Message.STATUS_NONE = MESSAGE_STATUS_NONE;
 Message.STATUS_QUEUED = MESSAGE_STATUS_QUEUED;
 Message.STATUS_SENDING = MESSAGE_STATUS_SENDING;
+Message.STATUS_FAILED = MESSAGE_STATUS_FAILED;
 Message.STATUS_SENT = MESSAGE_STATUS_SENT;
 Message.STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED;
 Message.STATUS_READ = MESSAGE_STATUS_READ;
@@ -5650,9 +5699,10 @@ Message.prototype.constructor = Message;
 
 module.exports = Tinode;
 module.exports.Drafty = Drafty;
+
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"../version.json":3,"./drafty.js":1}],3:[function(require,module,exports){
-module.exports={"version": "0.15.7-rc4"}
+module.exports={"version": "0.15.7-rc5"}
 
 },{}]},{},[2])(2)
 });
