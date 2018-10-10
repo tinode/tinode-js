@@ -72,7 +72,7 @@ const ENTITY_TYPES = [
       }
       return {url: val};
     },
-    re: /(https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,4}\b(?:[-a-zA-Z0-9@:%_\+.~#?&//=]*)/g},
+    re: /(?:(?:https?|ftp):\/\/|www\.|ftp\.)[-A-Z0-9+&@#\/%=~_|$?!:,.]*[A-Z0-9+&@#\/%=~_|$]/ig},
   // Mentions @user (must be 2 or more characters)
   {name: "MN", dataName: "val",
     pack: function(val) { return {val: val.slice(1)}; },
