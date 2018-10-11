@@ -73,7 +73,7 @@ const ENTITY_TYPES = [
       }
       return {url: val};
     },
-    re: /(https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,4}\b(?:[-a-zA-Z0-9@:%_\+.~#?&//=]*)/g},
+    re: /(?:(?:https?|ftp):\/\/|www\.|ftp\.)[-A-Z0-9+&@#\/%=~_|$?!:,.]*[A-Z0-9+&@#\/%=~_|$]/ig},
   // Mentions @user (must be 2 or more characters)
   {name: "MN", dataName: "val",
     pack: function(val) { return {val: val.slice(1)}; },
@@ -2466,7 +2466,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {String} uid - User id to update
-   * @param {String} scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
+   * @param {String} scheme - Authentication scheme; <tt>"basic"</tt> and <tt>"anonymous"</tt> are the currently supported schemes.
    * @param {String} secret - Authentication secret, assumed to be already base64 encoded.
    * @param {Boolean=} login - Use new account to authenticate current session
    * @param {Tinode.AccountParams=} params - User data to pass to the server.
@@ -5702,7 +5702,7 @@ module.exports.Drafty = Drafty;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"../version.json":3,"./drafty.js":1}],3:[function(require,module,exports){
-module.exports={"version": "0.15.7-rc5"}
+module.exports={"version": "0.15.7-rc6"}
 
 },{}]},{},[2])(2)
 });
