@@ -5702,7 +5702,7 @@ module.exports.Drafty = Drafty;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"../version.json":3,"./drafty.js":1}],3:[function(require,module,exports){
-module.exports={"version": "0.15.7-rc6"}
+module.exports={"version": "0.15.7"}
 
 },{}]},{},[2])(2)
 });
