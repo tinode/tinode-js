@@ -1375,6 +1375,15 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
     this._serverInfo = null;
     this._authenticated = false;
 
+    // Reject all pending promises
+    for (let key in this._pendingPromises) {
+      let callbacks = this._pendingPromises[key];
+      if (callbacks && callbacks.reject) {
+        callbacks.reject(new Error(NETWORK_ERROR_TEXT + " (" + NETWORK_ERROR + ")"));
+      }
+    }
+    this._pendingPromises = {};
+
     cacheMap((obj, key) => {
       if (key.lastIndexOf("topic:", 0) === 0) {
         obj._resetSub();
