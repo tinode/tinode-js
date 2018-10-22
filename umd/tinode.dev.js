@@ -2276,6 +2276,15 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
     this._serverInfo = null;
     this._authenticated = false;
 
+    // Reject all pending promises
+    for (let key in this._pendingPromises) {
+      let callbacks = this._pendingPromises[key];
+      if (callbacks && callbacks.reject) {
+        callbacks.reject(new Error(NETWORK_ERROR_TEXT + " (" + NETWORK_ERROR + ")"));
+      }
+    }
+    this._pendingPromises = {};
+
     cacheMap((obj, key) => {
       if (key.lastIndexOf("topic:", 0) === 0) {
         obj._resetSub();
@@ -5702,7 +5711,7 @@ module.exports.Drafty = Drafty;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"../version.json":3,"./drafty.js":1}],3:[function(require,module,exports){
-module.exports={"version": "0.15.7"}
+module.exports={"version": "0.15.8-rc1"}
 
 },{}]},{},[2])(2)
 });
