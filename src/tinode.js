@@ -41,6 +41,10 @@
  */
 'use strict';
 
+// NOTE TO DEVELOPERS:
+// Localizable strings should be double quoted "строка на другом языке", non-localizable strings should
+// be single quoted 'non-localized'.
+
 if (typeof require == 'function') {
   if (typeof Drafty == 'undefined') {
     var Drafty = require('./drafty.js');
@@ -48,21 +52,21 @@ if (typeof require == 'function') {
   var package_version = require('../version.json').version;
 }
 let WebSocketProvider;
-if (typeof(WebSocket) != "undefined") {
+if (typeof(WebSocket) != 'undefined') {
   WebSocketProvider = WebSocket;
 }
 initForNonBrowserApp();
 
 
 // Global constants
-const PROTOCOL_VERSION = "0";
-const VERSION = package_version || "0.15";
-const LIBRARY = "tinodejs/" + VERSION;
+const PROTOCOL_VERSION = '0';
+const VERSION = package_version || '0.15';
+const LIBRARY = 'tinodejs/' + VERSION;
 
-const TOPIC_NEW = "new";
-const TOPIC_ME = "me";
-const TOPIC_FND = "fnd";
-const USER_NEW = "new";
+const TOPIC_NEW ='new';
+const TOPIC_ME = 'me';
+const TOPIC_FND = 'fnd';
+const USER_NEW = 'new';
 
 // Starting value of a locally-generated seqId used for pending messages.
 const LOCAL_SEQID = 0xFFFFFFF;
@@ -86,13 +90,15 @@ function initForNonBrowserApp() {
   // Tinode requirement in native mode because react native doesn't provide Base64 method
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
 
-  if (typeof btoa == "undefined") {
+  if (typeof btoa == 'undefined') {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
     global.btoa = function(input = '') {
       let str = input;
       let output = '';
 
-      for (let block = 0, charCode, i = 0, map = chars; str.charAt(i | 0) || (map = '=', i % 1); output += map.charAt(63 & block >> 8 - i % 1 * 8)) {
+      for (let block = 0, charCode, i = 0, map = chars;
+        str.charAt(i | 0) || (map = '=', i % 1);
+        output += map.charAt(63 & block >> 8 - i % 1 * 8)) {
 
         charCode = str.charCodeAt(i += 3 / 4);
 
@@ -107,7 +113,7 @@ function initForNonBrowserApp() {
     };
   }
 
-  if (typeof atob == "undefined") {
+  if (typeof atob == 'undefined') {
     global.atob = function(input = '') {
       let str = input.replace(/=+$/, '');
       let output = '';
@@ -127,7 +133,7 @@ function initForNonBrowserApp() {
     };
   }
 
-  if (typeof window == "undefined") {
+  if (typeof window == 'undefined') {
     global.window = {
       WebSocket: WebSocketProvider,
       URL: {
@@ -176,7 +182,7 @@ function mergeObj(dst, src, ignore) {
     return dst;
   }
 
-  if (typeof src !== "object") {
+  if (typeof src != 'object') {
     return src ? src : dst;
   }
 
@@ -224,12 +230,12 @@ function xdreq() {
   if ('withCredentials' in new XMLHttpRequest()) {
     // Support for standard cross-domain requests
     xdreq = new XMLHttpRequest();
-  } else if (typeof XDomainRequest !== "undefined") {
+  } else if (typeof XDomainRequest != 'undefined') {
     // IE-specific "CORS" with XDR
     xdreq = new XDomainRequest();
   } else {
     // Browser without CORS support, don't know how to handle
-    throw new Error("browser not supported");
+    throw new Error("Browser not supported");
   }
 
   return xdreq;
@@ -242,7 +248,7 @@ function jsonBuildHelper(key, val) {
     val = rfc3339DateString(val);
   } else if (val === undefined || val === null || val === false ||
     (Array.isArray(val) && val.length == 0) ||
-    ((typeof val === "object") && (Object.keys(val).length === 0))) {
+    ((typeof val == 'object') && (Object.keys(val).length == 0))) {
     // strip out empty elements while serializing objects to JSON
     return undefined;
   }
@@ -253,7 +259,7 @@ function jsonBuildHelper(key, val) {
 // Strips all values from an object of they evaluate to false or if their name starts with '_'.
 function simplify(obj) {
   Object.keys(obj).forEach(function(key) {
-    if (key[0] == "_") {
+    if (key[0] == '_') {
       // Strip fields like "obj._key".
       delete obj[key];
     } else if (!obj[key]) {
@@ -321,8 +327,8 @@ function jsonParseHelper(key, val) {
 
 // Trims very long strings (encoded images) to make logged packets more readable.
 function jsonLoggerHelper(key, val) {
-  if (typeof val === 'string' && val.length > 128) {
-    return "<" + val.length + ", bytes: " + val.substring(0, 12) + '...' + val.substring(val.length - 12) + ">";
+  if (typeof val == 'string' && val.length > 128) {
+    return '<' + val.length + ', bytes: ' + val.substring(0, 12) + '...' + val.substring(val.length - 12) + '>';
   }
   return jsonBuildHelper(key, val);
 };
@@ -354,7 +360,7 @@ function getBrowserInfo(ua) {
     });
     if (tokens.length > 0) {
       // Return the least common browser string and version.
-      result = tokens[0][0] + "/" + tokens[0][1];
+      result = tokens[0][0] + '/' + tokens[0][1];
     } else {
       // Failed to ID the browser. Return the webkit version.
       result = m[1];
@@ -363,42 +369,42 @@ function getBrowserInfo(ua) {
   } else if (/trident/i.test(ua)) {
     m = /(?:\brv[ :]+([.\d]+))|(?:\bMSIE ([.\d]+))/g.exec(ua);
     if (m) {
-      result = "MSIE/" + (m[1] || m[2]);
+      result = 'MSIE/' + (m[1] || m[2]);
     } else {
-      result = "MSIE/?";
+      result = 'MSIE/?';
     }
     // Test for Firefox.
   } else if (/firefox/i.test(ua)) {
     m = /Firefox\/([.\d]+)/g.exec(ua);
     if (m) {
-      result = "Firefox/" + m[1];
+      result = 'Firefox/' + m[1];
     } else {
-      result = "Firefox/?";
+      result = 'Firefox/?';
     }
     // Older Opera.
   } else if (/presto/i.test(ua)) {
     m = /Opera\/([.\d]+)/g.exec(ua);
     if (m) {
-      result = "Opera/" + m[1];
+      result = 'Opera/' + m[1];
     } else {
-      result = "Opera/?";
+      result = 'Opera/?';
     }
   } else {
     // Failed to parse anything meaningfull. Try the last resort.
     m = /([\w.]+)\/([.\d]+)/.exec(ua);
     if (m) {
-      result = m[1] + "/" + m[2];
+      result = m[1] + '/' + m[2];
     } else {
-      m = ua.split(" ");
+      m = ua.split(' ');
       result = m[0];
     }
   }
 
   // Shorten the version to one dot 'a.bb.ccc.d -> a.bb' at most.
-  m = result.split("/");
+  m = result.split('/');
   if (m.length > 1) {
-    var v = m[1].split(".");
-    result = m[0] + "/" + v[0] + (v[1] ? "." + v[1] : '');
+    var v = m[1].split('.');
+    result = m[0] + '/' + v[0] + (v[1] ? '.' + v[1] : '');
   }
   return result;
 }
@@ -578,13 +584,13 @@ function makeBaseUrl(host, protocol, apiKey) {
     if (url.charAt(url.length - 1) !== '/') {
       url += '/';
     }
-    url += "v" + PROTOCOL_VERSION + "/channels";
-    if (protocol === "http" || protocol === "https") {
+    url += 'v' + PROTOCOL_VERSION + '/channels';
+    if (protocol === 'http' || protocol === 'https') {
       // Long polling endpoint end with "lp", i.e.
       // '/v0/channels/lp' vs just '/v0/channels' for ws
-      url += "/lp";
+      url += '/lp';
     }
-    url += "?apikey=" + apiKey;
+    url += '?apikey=' + apiKey;
   }
 
   return url;
@@ -662,7 +668,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       }
 
       return new Promise(function(resolve, reject) {
-        var url = makeBaseUrl(host, secure ? "wss" : "ws", apiKey);
+        var url = makeBaseUrl(host, secure ? 'wss' : 'ws', apiKey);
 
         log("Connecting to: " + url);
 
@@ -745,7 +751,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     }
 
     instance.transport = function() {
-      return "ws";
+      return 'ws';
     }
   }
 
@@ -785,7 +791,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
             var pkt = JSON.parse(poller.responseText, jsonParseHelper);
             var text = poller.responseText;
 
-            _lpURL = url_ + "&sid=" + pkt.ctrl.params.sid
+            _lpURL = url_ + '&sid=' + pkt.ctrl.params.sid
             poller = lp_poller(_lpURL);
             poller.send(null)
             if (instance.onOpen) {
@@ -831,7 +837,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       }
 
       return new Promise(function(resolve, reject) {
-        var url = makeBaseUrl(host, secure ? "https" : "http", apiKey);
+        var url = makeBaseUrl(host, secure ? 'https' : 'http', apiKey);
         log("Connecting to: " + url);
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null)
@@ -872,20 +878,20 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     }
 
     instance.transport = function() {
-      return "lp";
+      return 'lp';
     }
   }
 
-  if (transport_ === "lp") {
+  if (transport_ === 'lp') {
     // explicit request to use long polling
     init_lp(this);
-  } else if (transport_ === "ws") {
+  } else if (transport_ === 'ws') {
     // explicit request to use web socket
     // if websockets are not available, horrible things will happen
     init_ws(this);
   } else {
     // Default transport selection
-    if (typeof window != 'object' || !window["WebSocket"]) {
+    if (typeof window != 'object' || !window['WebSocket']) {
       // The browser has no websockets
       init_lp(this);
     } else {
@@ -959,7 +965,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
 
   // Name and version of the browser.
   this._browser = '';
-  this._platform = "undefined";
+  this._platform = 'undefined';
   this._humanLanguage = 'xx';
   // Underlying OS.
   if (typeof navigator != 'undefined') {
@@ -1011,15 +1017,15 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
   this._cache = {};
 
   let cachePut = this.cachePut = (type, name, obj) => {
-    this._cache[type + ":" + name] = obj;
+    this._cache[type + ':' + name] = obj;
   }
 
   let cacheGet = this.cacheGet = (type, name) => {
-    return this._cache[type + ":" + name];
+    return this._cache[type + ':' + name];
   }
 
   let cacheDel = this.cacheDel = (type, name) => {
-    delete this._cache[type + ":" + name];
+    delete this._cache[type + ':' + name];
   }
   // Enumerate all items in cache, call func for each item.
   // Enumeration stops if func returns true.
@@ -1037,7 +1043,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
     topic._tinode = this;
 
     topic._cacheGetUser = (uid) => {
-      var pub = cacheGet("user", uid);
+      var pub = cacheGet('user', uid);
       if (pub) {
         return {
           user: uid,
@@ -1047,16 +1053,16 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       return undefined;
     };
     topic._cachePutUser = (uid, user) => {
-      return cachePut("user", uid, mergeObj({}, user.public));
+      return cachePut('user', uid, mergeObj({}, user.public));
     };
     topic._cacheDelUser = (uid) => {
-      return cacheDel("user", uid);
+      return cacheDel('user', uid);
     };
     topic._cachePutSelf = () => {
-      return cachePut("topic", topic.name, topic);
+      return cachePut('topic', topic.name, topic);
     }
     topic._cacheDelSelf = () => {
-      return cacheDel("topic", topic.name);
+      return cacheDel('topic', topic.name);
     }
   }
 
@@ -1083,8 +1089,8 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
       promise = new Promise((resolve, reject) => {
         // Stored callbacks will be called when the response packet with this Id arrives
         this._pendingPromises[id] = {
-          "resolve": resolve,
-          "reject": reject
+          'resolve': resolve,
+          'reject': reject
         };
       })
     }
@@ -1098,119 +1104,119 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
 
   // Get User Agent string
   let getUserAgent = () => {
-    return this._appName + " (" + (this._browser ? this._browser + "; " : "") + this._platform + "); " + LIBRARY;
+    return this._appName + ' (' + (this._browser ? this._browser + '; ' : '') + this._platform + '); ' + LIBRARY;
   }
 
   // Generator of packets stubs
   this.initPacket = (type, topic) => {
     var pkt = null;
     switch (type) {
-      case "hi":
+      case 'hi':
         return {
-          "hi": {
-            "id": getNextUniqueId(),
-            "ver": VERSION,
-            "ua": getUserAgent(),
-            "dev": this._deviceToken,
-            "lang": this._humanLanguage
+          'hi': {
+            'id': getNextUniqueId(),
+            'ver': VERSION,
+            'ua': getUserAgent(),
+            'dev': this._deviceToken,
+            'lang': this._humanLanguage
           }
         };
 
-      case "acc":
+      case 'acc':
         return {
-          "acc": {
-            "id": getNextUniqueId(),
-            "user": null,
-            "scheme": null,
-            "secret": null,
-            "login": false,
-            "tags": null,
-            "desc": {},
-            "cred": {}
+          'acc': {
+            'id': getNextUniqueId(),
+            'user': null,
+            'scheme': null,
+            'secret': null,
+            'login': false,
+            'tags': null,
+            'desc': {},
+            'cred': {}
           }
         };
 
-      case "login":
+      case 'login':
         return {
-          "login": {
-            "id": getNextUniqueId(),
-            "scheme": null,
-            "secret": null
+          'login': {
+            'id': getNextUniqueId(),
+            'scheme': null,
+            'secret': null
           }
         };
 
-      case "sub":
+      case 'sub':
         return {
-          "sub": {
-            "id": getNextUniqueId(),
-            "topic": topic,
-            "set": {},
-            "get": {}
+          'sub': {
+            'id': getNextUniqueId(),
+            'topic': topic,
+            'set': {},
+            'get': {}
           }
         };
 
-      case "leave":
+      case 'leave':
         return {
-          "leave": {
-            "id": getNextUniqueId(),
-            "topic": topic,
-            "unsub": false
+          'leave': {
+            'id': getNextUniqueId(),
+            'topic': topic,
+            'unsub': false
           }
         };
 
-      case "pub":
+      case 'pub':
         return {
-          "pub": {
-            "id": getNextUniqueId(),
-            "topic": topic,
-            "noecho": false,
-            "head": null,
-            "content": {}
+          'pub': {
+            'id': getNextUniqueId(),
+            'topic': topic,
+            'noecho': false,
+            'head': null,
+            'content': {}
           }
         };
 
-      case "get":
+      case 'get':
         return {
-          "get": {
-            "id": getNextUniqueId(),
-            "topic": topic,
-            "what": null, // data, sub, desc, space separated list; unknown strings are ignored
-            "desc": {},
-            "sub": {},
-            "data": {}
+          'get': {
+            'id': getNextUniqueId(),
+            'topic': topic,
+            'what': null, // data, sub, desc, space separated list; unknown strings are ignored
+            'desc': {},
+            'sub': {},
+            'data': {}
           }
         };
 
-      case "set":
+      case 'set':
         return {
-          "set": {
-            "id": getNextUniqueId(),
-            "topic": topic,
-            "desc": {},
-            "sub": {},
-            "tags": []
+          'set': {
+            'id': getNextUniqueId(),
+            'topic': topic,
+            'desc': {},
+            'sub': {},
+            'tags': []
           }
         };
 
-      case "del":
+      case 'del':
         return {
-          "del": {
-            "id": getNextUniqueId(),
-            "topic": topic,
-            "what": null,
-            "delseq": null,
-            "user": null,
-            "hard": false
+          'del': {
+            'id': getNextUniqueId(),
+            'topic': topic,
+            'what': null,
+            'delseq': null,
+            'user': null,
+            'hard': false
           }
         };
 
-      case "note":
+      case 'note':
         return {
-          "note": {
+          'note': {
             // no id by design
-            "topic": topic,
-            "what": null, // one of "recv", "read", "kp"
-            "seq": undefined // the server-side message id aknowledged as received or read
+            'topic': topic,
+            'what': null, // one of "recv", "read", "kp"
+            'seq': undefined // the server-side message id aknowledged as received or read
           }
         };
 
@@ -1300,8 +1306,8 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
         }
 
         // All messages received: "params":{"count":11,"what":"data"},
-        if (pkt.ctrl.params && pkt.ctrl.params.what == "data") {
-          var topic = cacheGet("topic", pkt.ctrl.topic);
+        if (pkt.ctrl.params && pkt.ctrl.params.what == 'data') {
+          var topic = cacheGet('topic', pkt.ctrl.topic);
           if (topic) {
             topic._allMessagesReceived(pkt.ctrl.params.count);
           }
@@ -1311,7 +1317,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
         // Handling a {meta} message.
 
         // Preferred API: Route meta to topic, if one is registered
-        var topic = cacheGet("topic", pkt.meta.topic);
+        var topic = cacheGet('topic', pkt.meta.topic);
         if (topic) {
           topic._routeMeta(pkt.meta);
         }
@@ -1324,7 +1330,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
         // Handling {data} message
 
         // Preferred API: Route data to topic, if one is registered
-        var topic = cacheGet("topic", pkt.data.topic);
+        var topic = cacheGet('topic', pkt.data.topic);
         if (topic) {
           topic._routeData(pkt.data);
         }
@@ -1337,7 +1343,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
         // Handling {pres} message
 
         // Preferred API: Route presence to topic, if one is registered
-        var topic = cacheGet("topic", pkt.pres.topic);
+        var topic = cacheGet('topic', pkt.pres.topic);
         if (topic) {
           topic._routePres(pkt.pres);
         }
@@ -1350,7 +1356,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
         // {info} message - read/received notifications and key presses
 
         // Preferred API: Route {info}} to topic, if one is registered
-        var topic = cacheGet("topic", pkt.info.topic);
+        var topic = cacheGet('topic', pkt.info.topic);
         if (topic) {
           topic._routeInfo(pkt.info);
         }
@@ -1379,13 +1385,13 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_) {
     for (let key in this._pendingPromises) {
       let callbacks = this._pendingPromises[key];
       if (callbacks && callbacks.reject) {
-        callbacks.reject(new Error(NETWORK_ERROR_TEXT + " (" + NETWORK_ERROR + ")"));
+        callbacks.reject(new Error(NETWORK_ERROR_TEXT + ' (' + NETWORK_ERROR + ')'));
       }
     }
     this._pendingPromises = {};
 
     cacheMap((obj, key) => {
-      if (key.lastIndexOf("topic:", 0) === 0) {
+      if (key.lastIndexOf('topic:', 0) === 0) {
         obj._resetSub();
       }
     });
@@ -1421,10 +1427,10 @@ Tinode.credential = function(meth, val, params, resp) {
   }
   if (meth && (val || resp)) {
     return [{
-      "meth": meth,
-      "val": val,
-      "resp": resp,
-      "params": params
+      'meth': meth,
+      'val': val,
+      'resp': resp,
+      'params': params
     }];
   }
   return null;
@@ -1446,7 +1452,7 @@ Tinode.topicType = function(name) {
     'new': 'grp',
     'usr': 'p2p'
   };
-  var tp = (typeof name == "string") ? name.substring(0, 3) : 'xxx';
+  var tp = (typeof name == 'string') ? name.substring(0, 3) : 'xxx';
   return types[tp];
 };
 
@@ -1506,7 +1512,7 @@ Tinode.MESSAGE_STATUS_NONE = MESSAGE_STATUS_NONE,
   Tinode.MESSAGE_STATUS_TO_ME = MESSAGE_STATUS_TO_ME,
 
   // Unicode [del] symbol.
-  Tinode.DEL_CHAR = "\u2421";
+  Tinode.DEL_CHAR = '\u2421';
 
 // Public methods;
 Tinode.prototype = {
@@ -1580,7 +1586,7 @@ Tinode.prototype = {
    * @param {Tinode.AccountParams=} params - User data to pass to the server.
    */
   account: function(uid, scheme, secret, login, params) {
-    var pkt = this.initPacket("acc");
+    var pkt = this.initPacket('acc');
     pkt.acc.user = uid;
     pkt.acc.scheme = scheme;
     pkt.acc.secret = secret;
@@ -1638,8 +1644,8 @@ Tinode.prototype = {
     // Make sure we are not using 'null' or 'undefined';
     username = username || '';
     password = password || '';
-    return this.createAccount("basic",
-      b64EncodeUnicode(username + ":" + password), true, params);
+    return this.createAccount('basic',
+      b64EncodeUnicode(username + ':' + password), true, params);
   },
 
   /**
@@ -1657,8 +1663,8 @@ Tinode.prototype = {
     // Make sure we are not using 'null' or 'undefined';
     username = username || '';
     password = password || '';
-    return this.account(uid, "basic",
-      b64EncodeUnicode(username + ":" + password), false, params);
+    return this.account(uid, 'basic',
+      b64EncodeUnicode(username + ':' + password), false, params);
   },
 
   /**
@@ -1668,7 +1674,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
   hello: function() {
-    var pkt = this.initPacket("hi");
+    var pkt = this.initPacket('hi');
 
     return this.send(pkt, pkt.hi.id)
       .then((ctrl) => {
@@ -1706,8 +1712,8 @@ Tinode.prototype = {
       this._deviceToken = dt;
       if (sendToServer && this.isConnected() && this.isAuthenticated()) {
         this.send({
-          "hi": {
-            "dev": dt
+          'hi': {
+            'dev': dt
           }
         });
         sent = true;
@@ -1726,7 +1732,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
   login: function(scheme, secret, cred) {
-    var pkt = this.initPacket("login");
+    var pkt = this.initPacket('login');
     pkt.login.scheme = scheme;
     pkt.login.secret = secret;
     pkt.login.cred = cred;
@@ -1747,7 +1753,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   loginBasic: function(uname, password, cred) {
-    return this.login("basic", b64EncodeUnicode(uname + ":" + password), cred)
+    return this.login('basic', b64EncodeUnicode(uname + ':' + password), cred)
       .then((ctrl) => {
         this._login = uname;
         return ctrl;
@@ -1762,7 +1768,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   loginToken: function(token, cred) {
-    return this.login("token", token, cred);
+    return this.login('token', token, cred);
   },
 
   /**
@@ -1776,7 +1782,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving the server reply.
    */
   requestResetAuthSecret: function(scheme, method, value) {
-    return this.login("reset", b64EncodeUnicode(scheme + ":" + method + ":" + value));
+    return this.login('reset', b64EncodeUnicode(scheme + ':' + method + ':' + value));
   },
 
   /**
@@ -1851,7 +1857,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   subscribe: function(topicName, getParams, setParams) {
-    var pkt = this.initPacket("sub", topicName)
+    var pkt = this.initPacket('sub', topicName)
     if (!topicName) {
       topicName = TOPIC_NEW;
     }
@@ -1886,7 +1892,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   leave: function(topic, unsub) {
-    var pkt = this.initPacket("leave", topic);
+    var pkt = this.initPacket('leave', topic);
     pkt.leave.unsub = unsub;
 
     return this.send(pkt, pkt.leave.id);
@@ -1903,9 +1909,9 @@ Tinode.prototype = {
    * @returns {Object} new message which can be sent to the server or otherwise used.
    */
   createMessage: function(topic, data, noEcho) {
-    let pkt = this.initPacket("pub", topic);
+    let pkt = this.initPacket('pub', topic);
 
-    let dft = typeof data == "string" ? Drafty.parse(data) : data;
+    let dft = typeof data == 'string' ? Drafty.parse(data) : data;
     if (dft && !Drafty.isPlainText(dft)) {
       pkt.pub.head = {
         mime: Drafty.getContentType()
@@ -1989,7 +1995,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   getMeta: function(topic, params) {
-    var pkt = this.initPacket("get", topic);
+    var pkt = this.initPacket('get', topic);
 
     pkt.get = mergeObj(pkt.get, params);
 
@@ -2005,11 +2011,11 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   setMeta: function(topic, params) {
-    var pkt = this.initPacket("set", topic);
+    var pkt = this.initPacket('set', topic);
     var what = [];
 
     if (params) {
-      ["desc", "sub", "tags"].map(function(key) {
+      ['desc', 'sub', 'tags'].map(function(key) {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];
@@ -2044,9 +2050,9 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   delMessages: function(topic, ranges, hard) {
-    var pkt = this.initPacket("del", topic);
+    var pkt = this.initPacket('del', topic);
 
-    pkt.del.what = "msg";
+    pkt.del.what = 'msg';
     pkt.del.delseq = ranges;
     pkt.del.hard = hard;
 
@@ -2061,11 +2067,11 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   delTopic: function(topic) {
-    var pkt = this.initPacket("del", topic);
-    pkt.del.what = "topic";
+    var pkt = this.initPacket('del', topic);
+    pkt.del.what = 'topic';
 
     return this.send(pkt, pkt.del.id).then((ctrl) => {
-      this.cacheDel("topic", topic);
+      this.cacheDel('topic', topic);
       return this.ctrl;
     });
   },
@@ -2079,8 +2085,8 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   delSubscription: function(topic, user) {
-    var pkt = this.initPacket("del", topic);
-    pkt.del.what = "sub";
+    var pkt = this.initPacket('del', topic);
+    pkt.del.what = 'sub';
     pkt.del.user = user;
 
     return this.send(pkt, pkt.del.id);
@@ -2099,7 +2105,7 @@ Tinode.prototype = {
       throw new Error("Invalid message id " + seq);
     }
 
-    var pkt = this.initPacket("note", topic);
+    var pkt = this.initPacket('note', topic);
     pkt.note.what = what;
     pkt.note.seq = seq;
     this.send(pkt);
@@ -2113,8 +2119,8 @@ Tinode.prototype = {
    * @param {String} topic - Name of the topic to broadcast to.
    */
   noteKeyPress: function(topic) {
-    var pkt = this.initPacket("note", topic);
-    pkt.note.what = "kp";
+    var pkt = this.initPacket('note', topic);
+    pkt.note.what = 'kp';
     this.send(pkt);
   },
 
@@ -2127,7 +2133,7 @@ Tinode.prototype = {
    * @returns {Tinode.Topic} Requested or newly created topic or <tt>undefined</tt> if topic name is invalid.
    */
   getTopic: function(name) {
-    var topic = this.cacheGet("topic", name);
+    var topic = this.cacheGet('topic', name);
     if (!topic && name) {
       if (name == TOPIC_ME) {
         topic = new TopicMe();
@@ -2137,7 +2143,7 @@ Tinode.prototype = {
         topic = new Topic(name);
       }
       // topic._new = false;
-      this.cachePut("topic", name, topic);
+      this.cachePut('topic', name, topic);
       this.attachCacheToTopic(topic);
     }
     return topic;
@@ -2396,7 +2402,7 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withData: function(since, before, limit) {
-    this.what["data"] = {
+    this.what['data'] = {
       since: since,
       before: before,
       limit: limit
@@ -2437,7 +2443,7 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withDesc: function(ims) {
-    this.what["desc"] = {
+    this.what['desc'] = {
       ims: ims
     };
     return this;
@@ -2473,7 +2479,7 @@ MetaGetBuilder.prototype = {
     } else {
       opts.user = userOrTopic;
     }
-    this.what["sub"] = opts;
+    this.what['sub'] = opts;
     return this;
   },
 
@@ -2512,7 +2518,7 @@ MetaGetBuilder.prototype = {
    */
   withLaterSub: function(limit) {
     return this.withSub(
-      this.topic.getType() == "p2p" ? this._get_ims() : this.topic._lastSubsUpdate,
+      this.topic.getType() == 'p2p' ? this._get_ims() : this.topic._lastSubsUpdate,
       limit);
   },
 
@@ -2523,7 +2529,7 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withTags: function() {
-    this.what["tags"] = true;
+    this.what['tags'] = true;
     return this;
   },
 
@@ -2538,7 +2544,7 @@ MetaGetBuilder.prototype = {
    */
   withDel: function(since, limit) {
     if (since || limit) {
-      this.what["del"] = {
+      this.what['del'] = {
         since: since,
         limit: limit
       };
@@ -2570,7 +2576,7 @@ MetaGetBuilder.prototype = {
     var params = {};
     var what = [];
     var instance = this;
-    ["data", "sub", "desc", "tags", "del"].map(function(key) {
+    ['data', 'sub', 'desc', 'tags', 'del'].map(function(key) {
       if (instance.what.hasOwnProperty(key)) {
         what.push(key);
         if (Object.getOwnPropertyNames(instance.what[key]).length > 0) {
@@ -2579,7 +2585,7 @@ MetaGetBuilder.prototype = {
       }
     });
     if (what.length > 0) {
-      params.what = what.join(" ");
+      params.what = what.join(' ');
     } else {
       params = undefined;
     }
@@ -2677,7 +2683,7 @@ AccessMode.encode = function(val) {
   }
 
   var bitmask = ['J', 'R', 'W', 'P', 'A', 'S', 'D', 'O'];
-  var res = "";
+  var res = '';
   for (var i = 0; i < bitmask.length; i++) {
     if ((val & (1 << i)) != 0) {
       res = res + bitmask[i];
@@ -3505,7 +3511,7 @@ Topic.prototype = {
    * @param {Number} seq - ID of the message to aknowledge.
    */
   noteRecv: function(seq) {
-    this.note("recv", seq);
+    this.note('recv', seq);
   },
 
   /**
@@ -3515,7 +3521,7 @@ Topic.prototype = {
    * @param {Number} seq - ID of the message to aknowledge.
    */
   noteRead: function(seq) {
-    this.note("read", seq);
+    this.note('read', seq);
   },
 
   /**
@@ -3649,7 +3655,7 @@ Topic.prototype = {
    * @returns {Number} Number of subscribers who claim to have received the message.
    */
   msgReadCount: function(seq) {
-    return this.msgReceiptCount("read", seq);
+    return this.msgReceiptCount('read', seq);
   },
 
   /**
@@ -3661,7 +3667,7 @@ Topic.prototype = {
    * @returns {number} Number of subscribers who claim to have received the message.
    */
   msgRecvCount: function(seq) {
-    return this.msgReceiptCount("recv", seq);
+    return this.msgReceiptCount('recv', seq);
   },
 
   /**
@@ -3842,7 +3848,7 @@ Topic.prototype = {
     // Update locally cached contact with the new message count
     var me = this._tinode.getMeTopic();
     if (me) {
-      me.setMsgReadRecv(this.name, "msg", data.seq, data.ts);
+      me.setMsgReadRecv(this.name, 'msg', data.seq, data.ts);
     }
   },
 
@@ -3871,22 +3877,22 @@ Topic.prototype = {
   _routePres: function(pres) {
     var user;
     switch (pres.what) {
-      case "del":
+      case 'del':
         // Delete cached messages.
         this._processDelMessages(pres.clear, pres.delseq);
         break;
-      case "on":
-      case "off":
+      case 'on':
+      case 'off':
         // Update online status of a subscription.
         user = this._users[pres.src];
         if (user) {
-          user.online = pres.what == "on";
+          user.online = pres.what == 'on';
         } else {
           this._tinode.logger("Presence update for an unknown user", this.name, pres.src);
         }
         break;
-      case "acs":
-        let uid = pres.src == "me" ? this._tinode.getCurrentUserID() : pres.src;
+      case 'acs':
+        let uid = pres.src == 'me' ? this._tinode.getCurrentUserID() : pres.src;
         user = this._users[uid];
         if (!user) {
           // Update for an unknown user
@@ -3938,7 +3944,7 @@ Topic.prototype = {
 
   // Process {info} message
   _routeInfo: function(info) {
-    if (info.what !== "kp") {
+    if (info.what !== 'kp') {
       var user = this._users[info.from];
       if (user) {
         user[info.what] = info.seq;
@@ -3955,13 +3961,13 @@ Topic.prototype = {
     // Copy parameters from desc object to this topic.
     mergeObj(this, desc);
 
-    if (typeof this.created === "string") {
+    if (typeof this.created == 'string') {
       this.created = new Date(this.created);
     }
-    if (typeof this.updated === "string") {
+    if (typeof this.updated == 'string') {
       this.updated = new Date(this.updated);
     }
-    if (typeof this.touched === "string") {
+    if (typeof this.touched == 'string') {
       this.touched = new Date(this.touched);
     }
 
@@ -4089,8 +4095,8 @@ Topic.prototype = {
     if (me) {
       me._routePres({
         _generated: true,
-        what: "gone",
-        topic: "me",
+        what: 'gone',
+        topic: 'me',
         src: this.name
       });
     }
@@ -4212,10 +4218,10 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       var cont = this._contacts[pres.src];
       if (cont) {
         switch (pres.what) {
-          case "on": // topic came online
+          case 'on': // topic came online
             cont.online = true;
             break;
-          case "off": // topic went offline
+          case 'off': // topic went offline
             if (cont.online) {
               cont.online = false;
               if (cont.seen) {
@@ -4227,39 +4233,39 @@ TopicMe.prototype = Object.create(Topic.prototype, {
               }
             }
             break;
-          case "msg": // new message received
+          case 'msg': // new message received
             cont.touched = new Date();
             cont.seq = pres.seq | 0;
             cont.unread = cont.seq - cont.read;
             break;
-          case "upd": // desc updated
+          case 'upd': // desc updated
             // Request updated description
             this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
             break;
-          case "acs": // access mode changed
+          case 'acs': // access mode changed
             if (cont.acs) {
               cont.acs.updateAll(pres.dacs);
             } else {
               cont.acs = new AccessMode().updateAll(pres.dacs);
             }
             break;
-          case "ua": // user agent changed
+          case 'ua': // user agent changed
             cont.seen = {
               when: new Date(),
               ua: pres.ua
             };
             break;
-          case "recv": // user's other session marked some messges as received
+          case 'recv': // user's other session marked some messges as received
             cont.recv = cont.recv ? Math.max(cont.recv, pres.seq) : (pres.seq | 0);
             break;
-          case "read": // user's other session marked some messages as read
+          case 'read': // user's other session marked some messages as read
             cont.read = cont.read ? Math.max(cont.read, pres.seq) : (pres.seq | 0);
             cont.unread = cont.seq - cont.read;
             break;
-          case "gone": // topic deleted or unsubscribed from
+          case 'gone': // topic deleted or unsubscribed from
             delete this._contacts[pres.src];
             break;
-          case "del":
+          case 'del':
             // Update topic.del value.
             break;
         }
@@ -4267,7 +4273,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         if (this.onContactUpdate) {
           this.onContactUpdate(pres.what, cont);
         }
-      } else if (pres.what == "acs") {
+      } else if (pres.what == 'acs') {
         // New subscriptions and deleted/banned subscriptions have full
         // access mode (no + or - in the dacs string). Changes to known subscriptions are sent as
         // deltas, but they should not happen here.
@@ -4351,27 +4357,31 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       var mode = null;
       if (cont) {
         seq = seq | 0;
-        if (what === "recv") {
-          oldVal = cont.recv;
-          cont.recv = cont.recv ? Math.max(cont.recv, seq) : seq;
-          doUpdate = (oldVal != cont.recv);
-        } else if (what === "read") {
-          oldVal = cont.read;
-          cont.read = cont.read ? Math.max(cont.read, seq) : seq;
-          cont.unread = cont.seq - cont.read;
-          doUpdate = (oldVal != cont.read);
-          if (cont.recv < cont.read) {
-            cont.recv = cont.read;
-            doUpdate = true;
-          }
-        } else if (what === "msg") {
-          oldVal = cont.seq;
-          cont.seq = cont.seq ? Math.max(cont.seq, seq) : seq;
-          cont.unread = cont.seq - cont.read;
-          if (!cont.touched || cont.touched < ts) {
-            cont.touched = ts;
-          }
-          doUpdate = (oldVal != cont.seq);
+        switch (what) {
+          case 'recv':
+            oldVal = cont.recv;
+            cont.recv = cont.recv ? Math.max(cont.recv, seq) : seq;
+            doUpdate = (oldVal != cont.recv);
+            break;
+          case 'read':
+            oldVal = cont.read;
+            cont.read = cont.read ? Math.max(cont.read, seq) : seq;
+            cont.unread = cont.seq - cont.read;
+            doUpdate = (oldVal != cont.read);
+            if (cont.recv < cont.read) {
+              cont.recv = cont.read;
+              doUpdate = true;
+            }
+            break;
+          case 'msg':
+            oldVal = cont.seq;
+            cont.seq = cont.seq ? Math.max(cont.seq, seq) : seq;
+            cont.unread = cont.seq - cont.read;
+            if (!cont.touched || cont.touched < ts) {
+              cont.touched = ts;
+            }
+            doUpdate = (oldVal != cont.seq);
+            break;
         }
 
         if (doUpdate && (!cont.acs || !cont.acs.isMuted()) && this.onContactUpdate) {
@@ -4568,9 +4578,9 @@ LargeFileHelper.prototype = {
       throw new Error("Must authenticate first");
     }
     var instance = this;
-    this.xhr.open("POST", "/v" + PROTOCOL_VERSION + "/file/u/", true);
-    this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
-    this.xhr.setRequestHeader("X-Tinode-Auth", "Token " + this._authToken.token);
+    this.xhr.open('POST', '/v' + PROTOCOL_VERSION + '/file/u/', true);
+    this.xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
+    this.xhr.setRequestHeader('X-Tinode-Auth', 'Token ' + this._authToken.token);
     var result = new Promise((resolve, reject) => {
       this.toResolve = resolve;
       this.toReject = reject;
@@ -4633,8 +4643,8 @@ LargeFileHelper.prototype = {
 
     try {
       var form = new FormData();
-      form.append("file", file);
-      form.set("id", this._msgId);
+      form.append('file', file);
+      form.set('id', this._msgId);
       this.xhr.send(form);
     } catch (err) {
       if (this.toReject) {
@@ -4668,10 +4678,10 @@ LargeFileHelper.prototype = {
     }
     var instance = this;
     // Get data as blob (stored by the browser as a temporary file).
-    this.xhr.open("GET", relativeUrl, true);
-    this.xhr.setRequestHeader("X-Tinode-APIKey", this._apiKey);
-    this.xhr.setRequestHeader("X-Tinode-Auth", "Token " + this._authToken.token);
-    this.xhr.responseType = "blob";
+    this.xhr.open('GET', relativeUrl, true);
+    this.xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
+    this.xhr.setRequestHeader('X-Tinode-Auth', 'Token ' + this._authToken.token);
+    this.xhr.responseType = 'blob';
 
     this.onProgress = onProgress;
     this.xhr.onprogress = function(e) {
@@ -4691,12 +4701,12 @@ LargeFileHelper.prototype = {
     // save the blob as file other than to fake a click on an <a href... download=...>.
     this.xhr.onload = function() {
       if (this.status == 200) {
-        var link = document.createElement("a");
+        var link = document.createElement('a');
         link.href = window.URL.createObjectURL(new Blob([this.response], {
           type: mimetype
         }));
-        link.style.display = "none";
-        link.setAttribute("download", filename);
+        link.style.display = 'none';
+        link.setAttribute('download', filename);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
