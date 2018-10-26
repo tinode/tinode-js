@@ -42,8 +42,8 @@
 'use strict';
 
 // NOTE TO DEVELOPERS:
-// Localizable strings should be double quoted "строка на другом языке", non-localizable strings should
-// be single quoted 'non-localized'.
+// Localizable strings should be double quoted "строка на другом языке",
+// non-localizable strings should be single quoted 'non-localized'.
 
 if (typeof require == 'function') {
   if (typeof Drafty == 'undefined') {
@@ -51,8 +51,9 @@ if (typeof require == 'function') {
   }
   var package_version = require('../version.json').version;
 }
+
 let WebSocketProvider;
-if (typeof(WebSocket) != 'undefined') {
+if (typeof WebSocket != 'undefined') {
   WebSocketProvider = WebSocket;
 }
 initForNonBrowserApp();
@@ -63,7 +64,7 @@ const PROTOCOL_VERSION = '0';
 const VERSION = package_version || '0.15';
 const LIBRARY = 'tinodejs/' + VERSION;
 
-const TOPIC_NEW ='new';
+const TOPIC_NEW = 'new';
 const TOPIC_ME = 'me';
 const TOPIC_FND = 'fnd';
 const USER_NEW = 'new';
@@ -96,9 +97,7 @@ function initForNonBrowserApp() {
       let str = input;
       let output = '';
 
-      for (let block = 0, charCode, i = 0, map = chars;
-        str.charAt(i | 0) || (map = '=', i % 1);
-        output += map.charAt(63 & block >> 8 - i % 1 * 8)) {
+      for (let block = 0, charCode, i = 0, map = chars; str.charAt(i | 0) || (map = '=', i % 1); output += map.charAt(63 & block >> 8 - i % 1 * 8)) {
 
         charCode = str.charCodeAt(i += 3 / 4);
 
@@ -4815,5 +4814,7 @@ Message.prototype = {
 }
 Message.prototype.constructor = Message;
 
-module.exports = Tinode;
-module.exports.Drafty = Drafty;
+if (typeof module != 'undefined') {
+  module.exports = Tinode;
+  module.exports.Drafty = Drafty;
+}

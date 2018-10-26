@@ -894,4 +894,6 @@ Drafty.getContentType = function() {
   return "text/x-drafty";
 }
 
-module.exports = Drafty;
+if (typeof module != 'undefined') {
+  module.exports = Drafty;
+}
