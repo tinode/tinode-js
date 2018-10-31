@@ -1103,7 +1103,7 @@ function mergeObj(dst, src, ignore) {
     return src.length > 0 ? src : dst;
   }
 
-  if (!dst) {
+  if (!dst || dst === Tinode.DEL_CHAR) {
     dst = src.constructor();
   }
 
@@ -5724,7 +5724,7 @@ if (typeof module != 'undefined') {
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"../version.json":3,"./drafty.js":1}],3:[function(require,module,exports){
-module.exports={"version": "0.15.8"}
+module.exports={"version": "0.15.9-rc1"}
 
 },{}]},{},[2])(2)
 });

@@ -200,7 +200,7 @@ function mergeObj(dst, src, ignore) {
     return src.length > 0 ? src : dst;
   }
 
-  if (!dst) {
+  if (!dst || dst === Tinode.DEL_CHAR) {
     dst = src.constructor();
   }
 
