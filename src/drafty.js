@@ -52,19 +52,19 @@
 // so it's a bit messy.
 const INLINE_STYLES = [
   // Strong = bold, *bold text*
-  {name: "ST", start: /(?:^|\W)(\*)[^\s*]/, end: /[^\s*](\*)(?=$|\W)/},
+  {name: 'ST', start: /(?:^|\W)(\*)[^\s*]/, end: /[^\s*](\*)(?=$|\W)/},
   // Emphesized = italic, _italic text_
-  {name: "EM", start: /(?:^|[\W_])(_)[^\s_]/, end: /[^\s_](_)(?=$|[\W_])/},
+  {name: 'EM', start: /(?:^|[\W_])(_)[^\s_]/, end: /[^\s_](_)(?=$|[\W_])/},
   // Deleted, ~strike this though~
-  {name: "DL", start: /(?:^|\W)(~)[^\s~]/, end: /[^\s~](~)(?=$|\W)/},
+  {name: 'DL', start: /(?:^|\W)(~)[^\s~]/, end: /[^\s~](~)(?=$|\W)/},
   // Code block `this is monospace`
-  {name: "CO", start: /(?:^|\W)(`)[^`]/, end: /[^`](`)(?=$|\W)/}
+  {name: 'CO', start: /(?:^|\W)(`)[^`]/, end: /[^`](`)(?=$|\W)/}
 ];
 
 // RegExps for entity extraction (RF = reference)
 const ENTITY_TYPES = [
   // URLs
-  {name: "LN", dataName: "url",
+  {name: 'LN', dataName: 'url',
     pack: function(val) {
       // Check if the protocol is specified, if not use http
       if (!/^[a-z]+:\/\//i.test(val)) {
@@ -74,11 +74,11 @@ const ENTITY_TYPES = [
     },
     re: /(?:(?:https?|ftp):\/\/|www\.|ftp\.)[-A-Z0-9+&@#\/%=~_|$?!:,.]*[A-Z0-9+&@#\/%=~_|$]/ig},
   // Mentions @user (must be 2 or more characters)
-  {name: "MN", dataName: "val",
+  {name: 'MN', dataName: 'val',
     pack: function(val) { return {val: val.slice(1)}; },
     re: /\B@(\w\w+)/g},
   // Hashtags #hashtag, like metion 2 or more characters.
-  {name: "HT", dataName: "val",
+  {name: 'HT', dataName: 'val',
     pack: function(val) { return {val: val.slice(1)}; },
     re: /\B#(\w\w+)/g}
 ];
@@ -103,7 +103,7 @@ function base64toObjectUrl(b64, contentType) {
     bin = atob(b64);
   } catch (err) {
     console.log("Drafty: failed to decode base64-encoded object", err.message);
-    bin = atob("");
+    bin = atob('');
   }
   var length = bin.length;
   var buf = new ArrayBuffer(length);
@@ -163,6 +163,17 @@ var DECORATORS = {
         'data-size': (data.val.length * 0.75) | 0,
         'data-mime': data.mime
       };
+    },
+  },
+  FM: {
+    open: function(data) {
+
+    },
+    close: function(data) {
+
+    },
+    props: function(data) {
+
     },
   }
 };
@@ -408,7 +419,7 @@ function splice(src, at, insert) {
  */
 Drafty.parse = function(content) {
   // Make sure we are parsing strings only.
-  if (typeof content != "string") {
+  if (typeof content != 'string') {
     return null;
   }
 
@@ -485,7 +496,7 @@ Drafty.parse = function(content) {
       var block = blx[i];
       var offset = result.txt.length + 1;
 
-      result.fmt.push({tp: "BR", len: 1, at: offset - 1});
+      result.fmt.push({tp: 'BR', len: 1, at: offset - 1});
 
       result.txt += " " + block.txt;
       if (block.fmt) {
@@ -537,7 +548,7 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
     key: content.ent.length
   });
   content.ent.push({
-    tp: "IM",
+    tp: 'IM',
     data: {
       mime: mime,
       val: base64bits,
@@ -553,7 +564,7 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
 }
 
 /**
- * Add file to Drafty content. Either as a blob or as a reference.
+ * Attach file to Drafty content. Either as a blob or as a reference.
  * @memberof Tinode.Drafty#
  * @static
  *
@@ -576,7 +587,7 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
   });
 
   let ex = {
-    tp: "EX",
+    tp: 'EX',
     data: {
       mime: mime,
       val: base64bits,
@@ -592,6 +603,72 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
     );
   }
   content.ent.push(ex);
+
+  return content;
+}
+
+/**
+ * Insert an interactive form.
+ * @memberof Tinode.Drafty#
+ * @static
+ *
+ * @param {Drafty} content object to insert form into.
+ * @param {integer} at index where the object is inserted. The length of the image is always 1.
+ * @param {Object[]} definitions of form fields and data. Allowed data types: plain text, Drafty, Button.
+ * @param {string} formName optional name of the form.
+ * @param {string} name of the layout to use for representing the form, optional.
+ */
+Drafty.insertForm = function(content, at, data, formName, layout) {
+  content = content || {txt: " "};
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: at,
+    len: 1,
+    key: content.ent.length
+  });
+  content.ent.push({
+    tp: 'FM',
+    data: {
+      name: formName,
+      layout: layout,
+      val: Array.isArray(data) ? data : []
+    }
+  });
+
+  return content;
+}
+
+/**
+ * Attach a generic JS object. The object is attached as a json string.
+ * Intended for representing a form response.
+ *
+ * @memberof Tinode.Drafty#
+ * @static
+ *
+ * @param {Drafty} content object to attach file to.
+ * @param {Object} data to convert to json string and attach.
+ * @param {string} name of this data, optional.
+ */
+Drafty.attachJSON = function(content, data, name) {
+  content = content || {txt: ""};
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: -1,
+    len: 0,
+    key: content.ent.length
+  });
+
+  content.ent.push({
+    tp: 'EX',
+    data: {
+      mime: 'application/json',
+      val: JSON.stringify(data)
+    }
+  });
 
   return content;
 }
@@ -744,7 +821,7 @@ Drafty.isPlainText = function(content) {
 Drafty.hasAttachments = function(content) {
   if (content.ent && content.ent.length > 0) {
     for (var i in content.ent) {
-      if (content.ent[i].tp == "EX") {
+      if (content.ent[i].tp == 'EX') {
         return true;
       }
     }
@@ -775,7 +852,7 @@ Drafty.hasAttachments = function(content) {
 Drafty.attachments = function(content, callback, context) {
   if (content.ent && content.ent.length > 0) {
     for (var i in content.ent) {
-      if (content.ent[i].tp == "EX") {
+      if (content.ent[i].tp == 'EX') {
         callback.call(context, content.ent[i].data, i);
       }
     }
@@ -847,7 +924,7 @@ Drafty.getEntitySize = function(entData) {
  * @param {Object} entity.data to get the type for.
  */
 Drafty.getEntityMimeType = function(entData) {
-  return entData.mime || "text/plain";
+  return entData.mime || 'text/plain';
 }
 
 /**
@@ -891,7 +968,35 @@ Drafty.attrValue = function(style, data) {
  * @returns {string} HTTP Content-Type "text/x-drafty".
  */
 Drafty.getContentType = function() {
-  return "text/x-drafty";
+  return 'text/x-drafty';
+}
+
+/**
+ * Create an object representing a form button.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {string} title is the UI text written on the button.
+ * @param {string} actionType is the type of the button, one of 'url', 'pub'.
+ * @param {string} actionValue is the value associated with the action: 'url': required actual URL, 'pub': optional button name to add to response.
+ */
+Drafty.formButton = function(title, actionType, actionValue) {
+  // Ensure title and actionValue are strings.
+  title = ('' + title).trim();
+  actionValue = ('' + actionValue).trim();
+
+  if (!title || ['url', 'pub'].indexOf(actionType) == -1) {
+    return null;
+  }
+  if (actionType == 'url' && !actionValue) {
+    return null;
+  }
+
+  return {
+    txt: title
+    tp: actionType,
+    val: actionValue
+  };
 }
 
 if (typeof module != 'undefined') {
