@@ -48,6 +48,8 @@
 
 'use strict';
 
+const MAX_FORM_ELEMENTS = 16;
+
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
 const INLINE_STYLES = [
@@ -93,7 +95,9 @@ const HTML_TAGS = {
   LN: { name: 'a', isVoid: false },
   MN: { name: 'a', isVoid: false },
   HT: { name: 'a', isVoid: false },
-  IM: { name: 'img', isVoid: true }
+  IM: { name: 'img', isVoid: true },
+  FM: { name: 'div', isVoid: true },
+  BN: { name: 'button', isVoid: false }
 };
 
 // Convert base64-encoded string into Blob.
@@ -116,38 +120,54 @@ function base64toObjectUrl(b64, contentType) {
 }
 
 // Helpers for converting Drafty to HTML.
-var DECORATORS = {
+const DECORATORS = {
+  // Visial styles
   ST: { open: function() { return '<b>'; }, close: function() { return '</b>'; }},
   EM: { open: function() { return '<i>'; }, close: function() { return '</i>'}},
   DL: { open: function() { return '<del>'; }, close: function() { return '</del>'}},
   CO: { open: function() { return '<tt>'; }, close: function() { return '</tt>'}},
+  // Line break
   BR: { open: function() { return ''; }, close: function() { return '<br/>'}},
+  // Link (URL)
   LN: {
     open: function(data) { return '<a href="' + data.url + '">'; },
     close: function(data) { return '</a>'; },
     props: function(data) { return { href: data.url, target: "_blank" }; },
   },
+  // Mention
   MN: {
     open: function(data) { return '<a href="#' + data.val + '">'; },
     close: function(data) { return '</a>'; },
     props: function(data) { return { name: data.val }; },
   },
+  // Hashtag
   HT: {
     open: function(data) { return '<a href="#' + data.val + '">'; },
     close: function(data) { return '</a>'; },
     props: function(data) { return { name: data.val }; },
   },
+  // Button
+  BN: {
+    open: function(data) { return '<button>'; },
+    close: function(data) { return '</button>'; },
+    props: function(data) {
+      return {
+        'data-act': data.act,
+        'data-val': data.val,
+        'data-name': data.name,
+      };
+    },
+  },
+  // Image
   IM: {
     open: function(data) {
       // Don't use data.ref for preview: it's a security risk.
-      var previewUrl = base64toObjectUrl(data.val, data.mime);
-      var downloadUrl = data.ref ? data.ref : previewUrl;
-      var res = (data.name ? '<a href="' + downloadUrl + '" download="' + data.name + '">' : '') +
+      const previewUrl = base64toObjectUrl(data.val, data.mime);
+      const downloadUrl = data.ref ? data.ref : previewUrl;
+      return (data.name ? '<a href="' + downloadUrl + '" download="' + data.name + '">' : '') +
         '<img src="' + previewUrl + '"' +
           (data.width ? ' width="' + data.width + '"' : '') +
           (data.height ? ' height="' + data.height + '"' : '') + ' border="0" />';
-      console.log("open: " + res);
-      return res;
     },
     close: function(data) {
       return (data.name ? '</a>' : '');
@@ -165,21 +185,42 @@ var DECORATORS = {
       };
     },
   },
+  // Form - structured layout of elements.
   FM: {
     open: function(data) {
-
+      let res = '<div>';
+      if (Array.isArray(data.val)) {
+        let count = Math.min(data.val.length, MAX_FORM_ELEMENTS);
+        for (let i=0; i<count; i++) {
+          let val = data.val[i];
+          let content = null;
+          switch (typeof val) {
+          case 'string':
+            content = val.txt;
+            break;
+          case 'object':
+            content = Drafty.UNSAFE_toHTML(val);
+            break;
+          }
+          res += '<div>' + content + '</div>';
+        }
+      }
+      return res;
     },
     close: function(data) {
-
+      return '</div>';
     },
     props: function(data) {
-
-    },
+      return {
+        'data-layout': data.layout,
+        'data-name': data.name
+      };
+    }
   }
 };
 
 /**
- * Th main object which performs all the formatting actions.
+ * The main object which performs all the formatting actions.
  * @class Drafty
  * @memberof Tinode
  * @constructor
@@ -233,9 +274,9 @@ function chunkify(line, start, end, spans) {
 function forEach(line, start, end, spans, formatter, context) {
   // Add un-styled range before the styled span starts.
   // Process ranges calling formatter for each range.
-  var result = [];
+  let result = [];
   for (var i = 0; i < spans.length; i++) {
-    var span = spans[i];
+    let span = spans[i];
 
     // Add un-styled range before the styled span starts.
     if (start < span.at) {
@@ -243,13 +284,13 @@ function forEach(line, start, end, spans, formatter, context) {
       start = span.at;
     }
     // Get all spans which are within current span.
-    var subspans = [];
-    for (var si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
+    let subspans = [];
+    for (let si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
       subspans.push(spans[si]);
       i = si;
     }
 
-    var tag = HTML_TAGS[span.tp] || {};
+    let tag = HTML_TAGS[span.tp] || {};
     result.push(formatter.call(context, span.tp, span.data,
       tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context)));
 
@@ -267,9 +308,9 @@ function forEach(line, start, end, spans, formatter, context) {
 // Detect starts and ends of formatting spans. Unformatted spans are
 // ignored at this stage.
 function spannify(original, re_start, re_end, type) {
-  var result = [];
-  var index = 0;
-  var line = original.slice(0); // make a copy;
+  let result = [];
+  let index = 0;
+  let line = original.slice(0); // make a copy;
 
   while (line.length > 0) {
     // match[0]; // match, like '*abc*'
@@ -277,14 +318,14 @@ function spannify(original, re_start, re_end, type) {
     // match['index']; // offset where the match started.
 
     // Find the opening token.
-    var start = re_start.exec(line);
+    let start = re_start.exec(line);
     if (start == null) {
       break;
     }
 
     // Because javascript RegExp does not support lookbehind, the actual offset may not point
     // at the markup character. Find it in the matched string.
-    var start_offset = start['index'] + start[0].lastIndexOf(start[1]);
+    let start_offset = start['index'] + start[0].lastIndexOf(start[1]);
     // Clip the processed part of the string.
     line = line.slice(start_offset + 1);
     // start_offset is an offset within the clipped string. Convert to original index.
@@ -293,11 +334,11 @@ function spannify(original, re_start, re_end, type) {
     index = start_offset + 1;
 
     // Find the matching closing token.
-    var end = re_end ? re_end.exec(line) : null;
+    let end = re_end ? re_end.exec(line) : null;
     if (end == null) {
       break;
     }
-    var end_offset = end['index'] + end[0].indexOf(end[1]);
+    let end_offset = end['index'] + end[0].indexOf(end[1]);
     // Clip the processed part of the string.
     line = line.slice(end_offset + 1);
     // Update offsets
@@ -614,7 +655,7 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
  *
  * @param {Drafty} content object to insert form into.
  * @param {integer} at index where the object is inserted. The length of the image is always 1.
- * @param {Object[]} definitions of form fields and data. Allowed data types: plain text, Drafty, Button.
+ * @param {Object[]} definitions of form fields and data. Allowed data types are plain text and Drafty.
  * @param {string} formName optional name of the form.
  * @param {string} name of the layout to use for representing the form, optional.
  */
@@ -634,6 +675,59 @@ Drafty.insertForm = function(content, at, data, formName, layout) {
       name: formName,
       layout: layout,
       val: Array.isArray(data) ? data : []
+    }
+  });
+
+  return content;
+}
+
+/**
+ * Insert buttn into Drafty document.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty|string} content is Drafty object to insert button to or a string to be used as button text.
+ * @param {at} is locattion where the button is inserted.
+ * @param {len} is the length of the text to be used as button title.
+ * @param {string} name is an opaque ID of the button. Client should just return it to the server when the button is clicked.
+ * @param {string} actionType is the type of the button, one of 'url' or 'pub'.
+ * @param {string} actionValue is the value associated with the action: 'url': URL, 'pub': optional data to add to response.
+ */
+Drafty.insertButton = function(content, at, len, name, actionType, actionValue) {
+  if (typeof content == 'string') {
+    content = {txt: content};
+  }
+  if (!content || !content.txt || content.txt.length < at+len) {
+    console.log(1, content, content.txt.length, at, len);
+    return null;
+  }
+
+  if (len <= 0 || ['url', 'pub'].indexOf(actionType) == -1) {
+    console.log(2, len, actionType);
+    return null;
+  }
+
+  // Ensure actionValue is a string.
+  actionValue = ('' + actionValue).trim();
+  if (actionType == 'url' && !actionValue) {
+    console.log(3, actionType, actionValue);
+    return null;
+  }
+
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: at,
+    len: len,
+    key: content.ent.length
+  });
+  content.ent.push({
+    tp: 'BN',
+    data: {
+      act: actionType,
+      val: actionValue,
+      name: name
     }
   });
 
@@ -773,9 +867,9 @@ Drafty.format = function(content, formatter, context) {
 
   // Denormalize entities into spans. Create a copy of the objects to leave
   // original Drafty object unchanged.
-  spans = spans.map(function(s) {
-    var data;
-    var tp = s.tp;
+  spans = spans.map((s) => {
+    let data;
+    let tp = s.tp;
     if (!tp) {
       s.key = s.key || 0;
       data = ent[s.key].data;
@@ -969,34 +1063,6 @@ Drafty.attrValue = function(style, data) {
  */
 Drafty.getContentType = function() {
   return 'text/x-drafty';
-}
-
-/**
- * Create an object representing a form button.
- * @memberof Tinode.Drafty
- * @static
- *
- * @param {string} title is the UI text written on the button.
- * @param {string} actionType is the type of the button, one of 'url', 'pub'.
- * @param {string} actionValue is the value associated with the action: 'url': required actual URL, 'pub': optional button name to add to response.
- */
-Drafty.formButton = function(title, actionType, actionValue) {
-  // Ensure title and actionValue are strings.
-  title = ('' + title).trim();
-  actionValue = ('' + actionValue).trim();
-
-  if (!title || ['url', 'pub'].indexOf(actionType) == -1) {
-    return null;
-  }
-  if (actionType == 'url' && !actionValue) {
-    return null;
-  }
-
-  return {
-    txt: title
-    tp: actionType,
-    val: actionValue
-  };
 }
 
 if (typeof module != 'undefined') {
