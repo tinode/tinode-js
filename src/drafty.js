@@ -1,15 +1,17 @@
 /**
  * @file Basic parser and formatter for very simple text markup. Mostly targeted at
- * mobile use cases similar to Telegram and WhatsApp.
+ * mobile use cases similar to Telegram, WhatsApp, and FB Messenger.
  *
  * Supports:
  *   *abc* -> <b>abc</b>
  *   _abc_ -> <i>abc</i>
  *   ~abc~ -> <del>abc</del>
  *   `abc` -> <tt>abc</tt>
+ * Also forms and buttons.
  *
  * Nested formatting is supported, e.g. *abc _def_* -> <b>abc <i>def</i></b>
  * URLs, @mentions, and #hashtags are extracted and converted into links.
+ * Forms and buttons can be added procedurally.
  * JSON data representation is inspired by Draft.js raw formatting.
  *
  * @copyright 2015-2018 Tinode
