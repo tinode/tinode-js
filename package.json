@@ -3,10 +3,10 @@
   "description": "Tinode SDK",
   "version": "0.15.9-rc1",
   "scripts": {
-    "format": "js-beautify -r src/tinode.js ",
+    "format": "js-beautify -r src/tinode.js && js-beautify -r src/drafty.js",
     "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
     "build:prod": "browserify ./src/tinode.js --standalone Tinode -t [ babelify --presets [ @babel/preset-env ] ] --plugin tinyify > ./umd/tinode.prod.js",
-    "build:dev": "browserify ./src/tinode.js --standalone Tinode > ./umd/tinode.dev.js",
+    "build:dev": "browserify ./src/tinode.js --debug --standalone Tinode > ./umd/tinode.dev.js",
     "build:docs": "jsdoc ./src -t ./node_modules/minami -d ../tinode.github.io/js-api",
     "vers": "echo \"{\\\"version\\\": \\\"`node -p -e \"require('./package.json').version\"`\\\"}\" > version.json",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -39,6 +39,7 @@
     "@babel/core": "^7.1.2",
     "@babel/preset-env": "^7.1.0",
     "babelify": "^10.0.0",
+    "browserify": "^16.2.3",
     "js-beautify": "^1.8.6",
     "jsdoc": "^3.5.5",
     "minami": "^1.2.3",

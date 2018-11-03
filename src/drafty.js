@@ -50,56 +50,128 @@
 
 'use strict';
 
-const MAX_FORM_ELEMENTS = 16;
+const MAX_FORM_ELEMENTS = 8;
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
 const INLINE_STYLES = [
   // Strong = bold, *bold text*
-  {name: 'ST', start: /(?:^|\W)(\*)[^\s*]/, end: /[^\s*](\*)(?=$|\W)/},
+  {
+    name: 'ST',
+    start: /(?:^|\W)(\*)[^\s*]/,
+    end: /[^\s*](\*)(?=$|\W)/
+  },
   // Emphesized = italic, _italic text_
-  {name: 'EM', start: /(?:^|[\W_])(_)[^\s_]/, end: /[^\s_](_)(?=$|[\W_])/},
+  {
+    name: 'EM',
+    start: /(?:^|[\W_])(_)[^\s_]/,
+    end: /[^\s_](_)(?=$|[\W_])/
+  },
   // Deleted, ~strike this though~
-  {name: 'DL', start: /(?:^|\W)(~)[^\s~]/, end: /[^\s~](~)(?=$|\W)/},
+  {
+    name: 'DL',
+    start: /(?:^|\W)(~)[^\s~]/,
+    end: /[^\s~](~)(?=$|\W)/
+  },
   // Code block `this is monospace`
-  {name: 'CO', start: /(?:^|\W)(`)[^`]/, end: /[^`](`)(?=$|\W)/}
+  {
+    name: 'CO',
+    start: /(?:^|\W)(`)[^`]/,
+    end: /[^`](`)(?=$|\W)/
+  }
 ];
 
 // RegExps for entity extraction (RF = reference)
 const ENTITY_TYPES = [
   // URLs
-  {name: 'LN', dataName: 'url',
+  {
+    name: 'LN',
+    dataName: 'url',
     pack: function(val) {
       // Check if the protocol is specified, if not use http
       if (!/^[a-z]+:\/\//i.test(val)) {
         val = 'http://' + val;
       }
-      return {url: val};
+      return {
+        url: val
+      };
     },
-    re: /(?:(?:https?|ftp):\/\/|www\.|ftp\.)[-A-Z0-9+&@#\/%=~_|$?!:,.]*[A-Z0-9+&@#\/%=~_|$]/ig},
+    re: /(?:(?:https?|ftp):\/\/|www\.|ftp\.)[-A-Z0-9+&@#\/%=~_|$?!:,.]*[A-Z0-9+&@#\/%=~_|$]/ig
+  },
   // Mentions @user (must be 2 or more characters)
-  {name: 'MN', dataName: 'val',
-    pack: function(val) { return {val: val.slice(1)}; },
-    re: /\B@(\w\w+)/g},
+  {
+    name: 'MN',
+    dataName: 'val',
+    pack: function(val) {
+      return {
+        val: val.slice(1)
+      };
+    },
+    re: /\B@(\w\w+)/g
+  },
   // Hashtags #hashtag, like metion 2 or more characters.
-  {name: 'HT', dataName: 'val',
-    pack: function(val) { return {val: val.slice(1)}; },
-    re: /\B#(\w\w+)/g}
+  {
+    name: 'HT',
+    dataName: 'val',
+    pack: function(val) {
+      return {
+        val: val.slice(1)
+      };
+    },
+    re: /\B#(\w\w+)/g
+  }
 ];
 
 // HTML tag name suggestions
 const HTML_TAGS = {
-  ST: { name: 'b', isVoid: false },
-  EM: { name: 'i', isVoid: false },
-  DL: { name: 'del', isVoid: false },
-  CO: { name: 'tt', isVoid: false },
-  BR: { name: 'br', isVoid: true },
-  LN: { name: 'a', isVoid: false },
-  MN: { name: 'a', isVoid: false },
-  HT: { name: 'a', isVoid: false },
-  IM: { name: 'img', isVoid: true },
-  FM: { name: 'div', isVoid: true },
-  BN: { name: 'button', isVoid: false }
+  ST: {
+    name: 'b',
+    isVoid: false
+  },
+  EM: {
+    name: 'i',
+    isVoid: false
+  },
+  DL: {
+    name: 'del',
+    isVoid: false
+  },
+  CO: {
+    name: 'tt',
+    isVoid: false
+  },
+  BR: {
+    name: 'br',
+    isVoid: true
+  },
+  LN: {
+    name: 'a',
+    isVoid: false
+  },
+  MN: {
+    name: 'a',
+    isVoid: false
+  },
+  HT: {
+    name: 'a',
+    isVoid: false
+  },
+  IM: {
+    name: 'img',
+    isVoid: true
+  },
+  FM: {
+    name: 'div',
+    isVoid: true
+  },
+  BN: {
+    name: 'button',
+    isVoid: false
+  },
+  HD: {
+    name: '',
+    isVoid: false
+  }
 };
 
 // Convert base64-encoded string into Blob.
@@ -118,46 +190,122 @@ function base64toObjectUrl(b64, contentType) {
     arr[i] = bin.charCodeAt(i);
   }
 
-  return URL.createObjectURL(new Blob([buf], {type: contentType}));
+  return URL.createObjectURL(new Blob([buf], {
+    type: contentType
+  }));
 }
 
 // Helpers for converting Drafty to HTML.
 const DECORATORS = {
   // Visial styles
-  ST: { open: function() { return '<b>'; }, close: function() { return '</b>'; }},
-  EM: { open: function() { return '<i>'; }, close: function() { return '</i>'}},
-  DL: { open: function() { return '<del>'; }, close: function() { return '</del>'}},
-  CO: { open: function() { return '<tt>'; }, close: function() { return '</tt>'}},
+  ST: {
+    open: function() {
+      return '<b>';
+    },
+    close: function() {
+      return '</b>';
+    }
+  },
+  EM: {
+    open: function() {
+      return '<i>';
+    },
+    close: function() {
+      return '</i>'
+    }
+  },
+  DL: {
+    open: function() {
+      return '<del>';
+    },
+    close: function() {
+      return '</del>'
+    }
+  },
+  CO: {
+    open: function() {
+      return '<tt>';
+    },
+    close: function() {
+      return '</tt>'
+    }
+  },
   // Line break
-  BR: { open: function() { return ''; }, close: function() { return '<br/>'}},
+  BR: {
+    open: function() {
+      return '';
+    },
+    close: function() {
+      return '<br/>'
+    }
+  },
+  // Hidden element
+  HD: {
+    open: function() {
+      return '';
+    },
+    close: function() {
+      return '';
+    }
+  },
   // Link (URL)
   LN: {
-    open: function(data) { return '<a href="' + data.url + '">'; },
-    close: function(data) { return '</a>'; },
-    props: function(data) { return { href: data.url, target: "_blank" }; },
+    open: function(data) {
+      return '<a href="' + data.url + '">';
+    },
+    close: function(data) {
+      return '</a>';
+    },
+    props: function(data) {
+      return data ? {
+        href: data.url,
+        target: "_blank"
+      } : null;
+    },
   },
   // Mention
   MN: {
-    open: function(data) { return '<a href="#' + data.val + '">'; },
-    close: function(data) { return '</a>'; },
-    props: function(data) { return { name: data.val }; },
+    open: function(data) {
+      return '<a href="#' + data.val + '">';
+    },
+    close: function(data) {
+      return '</a>';
+    },
+    props: function(data) {
+      return data ? {
+        name: data.val
+      } : null;
+    },
   },
   // Hashtag
   HT: {
-    open: function(data) { return '<a href="#' + data.val + '">'; },
-    close: function(data) { return '</a>'; },
-    props: function(data) { return { name: data.val }; },
+    open: function(data) {
+      return '<a href="#' + data.val + '">';
+    },
+    close: function(data) {
+      return '</a>';
+    },
+    props: function(data) {
+      return data ? {
+        name: data.val
+      } : null;
+    },
   },
   // Button
   BN: {
-    open: function(data) { return '<button>'; },
-    close: function(data) { return '</button>'; },
+    open: function(data) {
+      return '<button>';
+    },
+    close: function(data) {
+      return '</button>';
+    },
     props: function(data) {
-      return {
+      return data ? {
         'data-act': data.act,
         'data-val': data.val,
         'data-name': data.name,
-      };
+        'data-ref': data.ref
+      } : null;
     },
   },
   // Image
@@ -168,14 +316,15 @@ const DECORATORS = {
       const downloadUrl = data.ref ? data.ref : previewUrl;
       return (data.name ? '<a href="' + downloadUrl + '" download="' + data.name + '">' : '') +
         '<img src="' + previewUrl + '"' +
-          (data.width ? ' width="' + data.width + '"' : '') +
-          (data.height ? ' height="' + data.height + '"' : '') + ' border="0" />';
+        (data.width ? ' width="' + data.width + '"' : '') +
+        (data.height ? ' height="' + data.height + '"' : '') + ' border="0" />';
     },
     close: function(data) {
       return (data.name ? '</a>' : '');
     },
     props: function(data) {
-      var url = base64toObjectUrl(data.val, data.mime);
+      if (!data) return null;
+      let url = base64toObjectUrl(data.val, data.mime);
       return {
         src: url,
         title: data.name,
@@ -191,18 +340,18 @@ const DECORATORS = {
   FM: {
     open: function(data) {
       let res = '<div>';
-      if (Array.isArray(data.val)) {
-        let count = Math.min(data.val.length, MAX_FORM_ELEMENTS);
-        for (let i=0; i<count; i++) {
+      if (data && Array.isArray(data.val)) {
+        const count = Math.min(data.val.length, MAX_FORM_ELEMENTS);
+        for (let i = 0; i < count; i++) {
           let val = data.val[i];
           let content = null;
           switch (typeof val) {
-          case 'string':
-            content = val.txt;
-            break;
-          case 'object':
-            content = Drafty.UNSAFE_toHTML(val);
-            break;
+            case 'string':
+              content = val.txt;
+              break;
+            case 'object':
+              content = Drafty.UNSAFE_toHTML(val);
+              break;
           }
           res += '<div>' + content + '</div>';
         }
@@ -213,10 +362,11 @@ const DECORATORS = {
       return '</div>';
     },
     props: function(data) {
-      return {
+      if (!data) return null;
+      return data ? {
         'data-layout': data.layout,
         'data-name': data.name
-      };
+      } : null;
     }
   }
 };
@@ -227,8 +377,7 @@ const DECORATORS = {
  * @memberof Tinode
  * @constructor
  */
-var Drafty = function() {
-}
+var Drafty = function() {}
 
 // Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
 // a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
@@ -249,11 +398,15 @@ function chunkify(line, start, end, spans) {
 
     // Grab the initial unstyled chunk
     if (span.start > start) {
-      chunks.push({text: line.slice(start, span.start)});
+      chunks.push({
+        text: line.slice(start, span.start)
+      });
     }
 
     // Grab the styled chunk. It may include subchunks.
-    var chunk = {type: span.type};
+    var chunk = {
+      type: span.type
+    };
     var chld = chunkify(line, span.start + 1, span.end - 1, span.children);
     if (chld.length > 0) {
       chunk.children = chld;
@@ -266,10 +419,36 @@ function chunkify(line, start, end, spans) {
 
   // Grab the remaining unstyled chunk, after the last span
   if (start < end) {
-    chunks.push({text: line.slice(start, end)});
+    chunks.push({
+      text: line.slice(start, end)
+    });
   }
 
   return chunks;
+}
+
+// Return a tree of formatted objects for an FM element.
+function forForm(form, placeholder, formatter, context, key) {
+  const children = [];
+  const elements = form.data && form.data.val;
+  if (Array.isArray(elements)) {
+    const count = Math.min(elements.length, MAX_FORM_ELEMENTS);
+    for (let i = 0; i < count; i++) {
+      let el = elements[i];
+      if (typeof el == 'string') {
+        children.push(formatter.call(context, null, undefined, line.slice(start, span.at), children.length));
+      } else {
+        children.push(Drafty.format(el, formatter, context));
+      }
+    }
+  }
+
+  // If the form is empty, use placeholder text.
+  if (children.length == 0) {
+    children = placeholder;
+  }
+
+  return formatter.call(context, 'FM', form, children, key);
 }
 
 // Inverse of chunkify. Returns a tree of formatted spans.
@@ -277,31 +456,34 @@ function forEach(line, start, end, spans, formatter, context) {
   // Add un-styled range before the styled span starts.
   // Process ranges calling formatter for each range.
   let result = [];
-  for (var i = 0; i < spans.length; i++) {
+  for (let i = 0; i < spans.length; i++) {
     let span = spans[i];
 
     // Add un-styled range before the styled span starts.
     if (start < span.at) {
-      result.push(formatter.call(context, null, undefined, line.slice(start, span.at)));
+      result.push(formatter.call(context, null, undefined, line.slice(start, span.at), result.length));
       start = span.at;
     }
     // Get all spans which are within current span.
-    let subspans = [];
+    const subspans = [];
     for (let si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
       subspans.push(spans[si]);
       i = si;
     }
-
-    let tag = HTML_TAGS[span.tp] || {};
-    result.push(formatter.call(context, span.tp, span.data,
-      tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context)));
+    if (span.tp == 'FM') {
+      result.push(forForm(span, subspans, formatter, context, result.length));
+    } else {
+      const tag = HTML_TAGS[span.tp] || {};
+      result.push(formatter.call(context, span.tp, span.data,
+        tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context), result.length));
+    }
 
     start = span.at + span.len;
   }
 
   // Add the last unformatted range.
   if (start < end) {
-    result.push(formatter.call(context, null, undefined, line.slice(start, end)));
+    result.push(formatter.call(context, null, undefined, line.slice(start, end), result.length));
   }
 
   return result;
@@ -349,7 +531,7 @@ function spannify(original, re_start, re_end, type) {
     index = end_offset + 1;
 
     result.push({
-      text: original.slice(start_offset+1, end_offset),
+      text: original.slice(start_offset + 1, end_offset),
       children: [],
       start: start_offset,
       end: end_offset,
@@ -403,7 +585,8 @@ function extractEntities(line) {
         len: match[0].length,
         unique: match[0],
         data: entity.pack(match[0]),
-        type: entity.name});
+        type: entity.name
+      });
     }
   });
 
@@ -412,7 +595,7 @@ function extractEntities(line) {
   }
 
   // Remove entities detected inside other entities, like #hashtag in a URL.
-  extracted.sort(function(a,b) {
+  extracted.sort(function(a, b) {
     return a.offset - b.offset;
   });
 
@@ -439,12 +622,19 @@ function draftify(chunks, startAt) {
     }
 
     if (chunk.type) {
-      ranges.push({at: plain.length + startAt, len: chunk.text.length, tp: chunk.type});
+      ranges.push({
+        at: plain.length + startAt,
+        len: chunk.text.length,
+        tp: chunk.type
+      });
     }
 
     plain += chunk.text;
   }
-  return {txt: plain, fmt: ranges};
+  return {
+    txt: plain,
+    fmt: ranges
+  };
 }
 
 // Splice two strings: insert second string into the first one at the given index
@@ -488,10 +678,12 @@ Drafty.parse = function(content) {
 
     var block;
     if (spans.length == 0) {
-      block = {txt: line};
+      block = {
+        txt: line
+      };
     } else {
       // Sort spans by style occurence early -> late
-      spans.sort(function(a,b) {
+      spans.sort(function(a, b) {
         return a.start - b.start;
       });
 
@@ -504,7 +696,10 @@ Drafty.parse = function(content) {
 
       var drafty = draftify(chunks, 0);
 
-      block = {txt: drafty.txt, fmt: drafty.fmt};
+      block = {
+        txt: drafty.txt,
+        fmt: drafty.fmt
+      };
     }
 
     // Extract entities from the cleaned up string.
@@ -518,9 +713,16 @@ Drafty.parse = function(content) {
         if (!index) {
           index = entityMap.length;
           entityIndex[entity.unique] = index;
-          entityMap.push({tp: entity.type, data: entity.data});
+          entityMap.push({
+            tp: entity.type,
+            data: entity.data
+          });
         }
-        ranges.push({at: entity.offset, len: entity.len, key: index});
+        ranges.push({
+          at: entity.offset,
+          len: entity.len,
+          key: index
+        });
       }
       block.ent = ranges;
     }
@@ -528,33 +730,41 @@ Drafty.parse = function(content) {
     blx.push(block);
   });
 
-  var result = {txt: ""};
+  var result = {
+    txt: ""
+  };
 
   // Merge lines and save line breaks as BR inline formatting.
   if (blx.length > 0) {
     result.txt = blx[0].txt;
     result.fmt = (blx[0].fmt || []).concat(blx[0].ent || []);
 
-    for (var i = 1; i<blx.length; i++) {
+    for (var i = 1; i < blx.length; i++) {
       var block = blx[i];
       var offset = result.txt.length + 1;
 
-      result.fmt.push({tp: 'BR', len: 1, at: offset - 1});
+      result.fmt.push({
+        tp: 'BR',
+        len: 1,
+        at: offset - 1
+      });
 
       result.txt += " " + block.txt;
       if (block.fmt) {
         result.fmt = result.fmt.concat(block.fmt.map(function(s) {
-          s.at += offset; return s;
+          s.at += offset;
+          return s;
         }));
       }
       if (block.ent) {
         result.fmt = result.fmt.concat(block.ent.map(function(s) {
-          s.at += offset; return s;
+          s.at += offset;
+          return s;
         }));
       }
     }
 
-    if (result.fmt.length ==  0) {
+    if (result.fmt.length == 0) {
       delete result.fmt;
     }
 
@@ -581,7 +791,9 @@ Drafty.parse = function(content) {
  * @param {string} refurl reference to the content. Could be null or undefined.
  */
 Drafty.insertImage = function(content, at, mime, base64bits, width, height, fname, size, refurl) {
-  content = content || {txt: " "};
+  content = content || {
+    txt: " "
+  };
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
 
@@ -619,7 +831,9 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
  * @param {string | Promise} refurl optional reference to the content.
  */
 Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
-  content = content || {txt: ""};
+  content = content || {
+    txt: ""
+  };
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
 
@@ -641,7 +855,9 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
   }
   if (refurl instanceof Promise) {
     ex.data.ref = refurl.then(
-      (url) => { ex.data.ref = url; },
+      (url) => {
+        ex.data.ref = url;
+      },
       (err) => { /* catch the error, otherwise it will appear in the console. */ }
     );
   }
@@ -662,7 +878,9 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
  * @param {string} name of the layout to use for representing the form, optional.
  */
 Drafty.insertForm = function(content, at, data, formName, layout) {
-  content = content || {txt: " "};
+  content = content || {
+    txt: " "
+  };
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
 
@@ -697,22 +915,21 @@ Drafty.insertForm = function(content, at, data, formName, layout) {
  */
 Drafty.insertButton = function(content, at, len, name, actionType, actionValue) {
   if (typeof content == 'string') {
-    content = {txt: content};
+    content = {
+      txt: content
+    };
   }
-  if (!content || !content.txt || content.txt.length < at+len) {
-    console.log(1, content, content.txt.length, at, len);
+  if (!content || !content.txt || content.txt.length < at + len) {
     return null;
   }
 
   if (len <= 0 || ['url', 'pub'].indexOf(actionType) == -1) {
-    console.log(2, len, actionType);
     return null;
   }
 
   // Ensure actionValue is a string.
   actionValue = ('' + actionValue).trim();
   if (actionType == 'url' && !actionValue) {
-    console.log(3, actionType, actionValue);
     return null;
   }
 
@@ -748,7 +965,9 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue) 
  * @param {string} name of this data, optional.
  */
 Drafty.attachJSON = function(content, data, name) {
-  content = content || {txt: ""};
+  content = content || {
+    txt: ""
+  };
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
 
@@ -782,13 +1001,18 @@ Drafty.attachJSON = function(content, data, name) {
  * @return HTML-representation of content.
  */
 Drafty.UNSAFE_toHTML = function(content) {
-  var {txt, fmt, ent} = content;
+  var {
+    txt,
+    fmt,
+    ent
+  } = content;
 
   var markup = [];
   if (fmt) {
     for (var i in fmt) {
       var range = fmt[i];
-      var tp = range.tp, data;
+      var tp = range.tp,
+        data;
       if (!tp) {
         var entity = ent[range.key];
         if (entity) {
@@ -800,8 +1024,14 @@ Drafty.UNSAFE_toHTML = function(content) {
       if (DECORATORS[tp]) {
         // Because we later sort in descending order, closing markup must come first.
         // Otherwise zero-length objects will not be represented correctly.
-        markup.push({idx: range.at + range.len, what: DECORATORS[tp].close(data)});
-        markup.push({idx: range.at, what: DECORATORS[tp].open(data)});
+        markup.push({
+          idx: range.at + range.len,
+          what: DECORATORS[tp].close(data)
+        });
+        markup.push({
+          idx: range.at,
+          what: DECORATORS[tp].open(data)
+        });
       }
     }
   }
@@ -829,6 +1059,7 @@ Drafty.UNSAFE_toHTML = function(content) {
  * @param {string} style style code such as "ST" or "IM".
  * @param {Object} data entity's data
  * @param {Object} values possibly styled subspans contained in this style span.
+ * @param {number} index of the current element among its siblings.
  */
 
 /**
@@ -843,7 +1074,11 @@ Drafty.UNSAFE_toHTML = function(content) {
  * @return {Object} transformed object
  */
 Drafty.format = function(content, formatter, context) {
-  var {txt, fmt, ent} = content;
+  let {
+    txt,
+    fmt,
+    ent
+  } = content;
 
   txt = txt || "";
 
@@ -874,10 +1109,20 @@ Drafty.format = function(content, formatter, context) {
     let tp = s.tp;
     if (!tp) {
       s.key = s.key || 0;
-      data = ent[s.key].data;
-      tp = ent[s.key].tp;
+      if (ent[s.key]) {
+        data = ent[s.key].data;
+        tp = ent[s.key].tp;
+      } else {
+        // Hide invalid element
+        tp = 'HD';
+      }
     }
-    return {tp: tp, data: data, at: s.at, len: s.len};
+    return {
+      tp: tp,
+      data: data,
+      at: s.at,
+      len: s.len
+    };
   });
 
   return forEach(txt, 0, txt.length, spans, formatter, context);
