@@ -164,6 +164,10 @@ const HTML_TAGS = {
     name: 'div',
     isVoid: true
   },
+  FE: {
+    name: 'div',
+    isVoid: false,
+  },
   BN: {
     name: 'button',
     isVoid: false
@@ -368,6 +372,15 @@ const DECORATORS = {
         'data-name': data.name
       } : null;
     }
+  },
+  // Form element
+  FE: {
+    open: function() {
+      return '<div>';
+    },
+    close: function() {
+      return '</div>';
+    }
   }
 };
 
@@ -435,11 +448,8 @@ function forForm(form, placeholder, formatter, context, key) {
     const count = Math.min(elements.length, MAX_FORM_ELEMENTS);
     for (let i = 0; i < count; i++) {
       let el = elements[i];
-      if (typeof el == 'string') {
-        children.push(formatter.call(context, null, undefined, line.slice(start, span.at), children.length));
-      } else {
-        children.push(Drafty.format(el, formatter, context));
-      }
+      children.push(formatter.call(context, 'FE', undefined,
+        (typeof el == 'string') ? el : Drafty.format(el, formatter, context), children.length));
     }
   }
 
