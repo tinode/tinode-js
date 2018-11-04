@@ -51,6 +51,7 @@
 'use strict';
 
 const MAX_FORM_ELEMENTS = 8;
+const JSON_MIME_TYPE = 'application/json';
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
@@ -308,7 +309,8 @@ const DECORATORS = {
         'data-act': data.act,
         'data-val': data.val,
         'data-name': data.name,
-        'data-ref': data.ref
+        'data-ref': data.ref,
+        'data-title': data.buttonText
       } : null;
     },
   },
@@ -380,6 +382,11 @@ const DECORATORS = {
     },
     close: function() {
       return '</div>';
+    },
+    props: function(data) {
+      return data ? {
+        'data-dftp': data.dftp
+      } : null;
     }
   }
 };
@@ -440,6 +447,26 @@ function chunkify(line, start, end, spans) {
   return chunks;
 }
 
+// Identify data contained in a Drafty object
+function getElementType(el) {
+  if (!el) {
+    return 'nil';
+  }
+  if (typeof el == 'string') {
+    return 'str';
+  }
+  if (typeof el != 'object') {
+    return undefined;
+  }
+
+  // Check the type of contained element.
+  if ((Array.isArray(el.ent) && el.ent.length == 1) &&
+    (!el.fmt || (Array.isArray(el.fmt) && el.fmt.length == 1))) {
+    return ('fe-' + el.ent[0].tp).toLowerCase();
+  }
+  return 'dft';
+}
+
 // Return a tree of formatted objects for an FM element.
 function forForm(form, placeholder, formatter, context, key) {
   const children = [];
@@ -448,7 +475,9 @@ function forForm(form, placeholder, formatter, context, key) {
     const count = Math.min(elements.length, MAX_FORM_ELEMENTS);
     for (let i = 0; i < count; i++) {
       let el = elements[i];
-      children.push(formatter.call(context, 'FE', undefined,
+      children.push(formatter.call(context, 'FE', {
+          dftp: getElementType(el)
+        },
         (typeof el == 'string') ? el : Drafty.format(el, formatter, context), children.length));
     }
   }
@@ -458,7 +487,7 @@ function forForm(form, placeholder, formatter, context, key) {
     children = placeholder;
   }
 
-  return formatter.call(context, 'FM', form, children, key);
+  return formatter.call(context, 'FM', form.data, children, key);
 }
 
 // Inverse of chunkify. Returns a tree of formatted spans.
@@ -468,7 +497,10 @@ function forEach(line, start, end, spans, formatter, context) {
   let result = [];
   for (let i = 0; i < spans.length; i++) {
     let span = spans[i];
-
+    if (span.at < 0) {
+      // throw out non-visual spans.
+      continue;
+    }
     // Add un-styled range before the styled span starts.
     if (start < span.at) {
       result.push(formatter.call(context, null, undefined, line.slice(start, span.at), result.length));
@@ -483,9 +515,16 @@ function forEach(line, start, end, spans, formatter, context) {
     if (span.tp == 'FM') {
       result.push(forForm(span, subspans, formatter, context, result.length));
     } else {
-      const tag = HTML_TAGS[span.tp] || {};
-      result.push(formatter.call(context, span.tp, span.data,
-        tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context), result.length));
+      const tag = HTML_TAGS[span.tp] || {}
+      if (span.tp == 'BN') {
+        // Make button content unstyled.
+        span.data = span.data || {};
+        span.data.buttonText = line.slice(span.at, span.at + span.len);
+        result.push(formatter.call(context, span.tp, span.data, span.data.buttonText, result.length));
+      } else {
+        result.push(formatter.call(context, span.tp, span.data,
+          tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context), result.length));
+      }
     }
 
     start = span.at + span.len;
@@ -972,9 +1011,8 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue) 
  *
  * @param {Drafty} content object to attach file to.
  * @param {Object} data to convert to json string and attach.
- * @param {string} name of this data, optional.
  */
-Drafty.attachJSON = function(content, data, name) {
+Drafty.attachJSON = function(content, data) {
   content = content || {
     txt: ""
   };
@@ -990,8 +1028,8 @@ Drafty.attachJSON = function(content, data, name) {
   content.ent.push({
     tp: 'EX',
     data: {
-      mime: 'application/json',
-      val: JSON.stringify(data)
+      mime: JSON_MIME_TYPE,
+      val: data
     }
   });
 
@@ -1092,11 +1130,20 @@ Drafty.format = function(content, formatter, context) {
 
   txt = txt || "";
 
-  if (!fmt) {
-    return [txt];
+  if (!Array.isArray(fmt)) {
+    // Handle special case when all values in fmt are 0 and fmt is skipped.
+    if (Array.isArray(ent) && ent.length == 1) {
+      fmt = [{
+        at: 0,
+        len: 0,
+        key: 0
+      }];
+    } else {
+      return [txt];
+    }
   }
 
-  var spans = [].concat(fmt);
+  let spans = [].concat(fmt);
 
   // Zero values may have been stripped. Restore them.
   spans.map(function(s) {
@@ -1220,7 +1267,7 @@ Drafty.attachments = function(content, callback, context) {
  */
 Drafty.getDownloadUrl = function(entData) {
   let url = null;
-  if (entData.val) {
+  if (entData.mime != JSON_MIME_TYPE && entData.val) {
     url = base64toObjectUrl(entData.val, entData.mime);
   } else if (typeof entData.ref == 'string') {
     url = entData.ref;
