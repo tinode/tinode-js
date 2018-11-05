@@ -492,9 +492,9 @@ function forForm(form, placeholder, formatter, context, key) {
 
 // Inverse of chunkify. Returns a tree of formatted spans.
 function forEach(line, start, end, spans, formatter, context) {
-  // Add un-styled range before the styled span starts.
-  // Process ranges calling formatter for each range.
   let result = [];
+  
+  // Process ranges calling formatter for each range.
   for (let i = 0; i < spans.length; i++) {
     let span = spans[i];
     if (span.at < 0) {
@@ -951,18 +951,19 @@ Drafty.insertForm = function(content, at, data, formName, layout) {
 }
 
 /**
- * Insert buttn into Drafty document.
+ * Insert clickable button into Drafty document.
  * @memberof Tinode.Drafty
  * @static
  *
  * @param {Drafty|string} content is Drafty object to insert button to or a string to be used as button text.
- * @param {at} is locattion where the button is inserted.
- * @param {len} is the length of the text to be used as button title.
- * @param {string} name is an opaque ID of the button. Client should just return it to the server when the button is clicked.
+ * @param {number} is location where the button is inserted.
+ * @param {number} is the length of the text to be used as button title.
+ * @param {string} name of the button. Client should return it to the server when the button is clicked.
  * @param {string} actionType is the type of the button, one of 'url' or 'pub'.
- * @param {string} actionValue is the value associated with the action: 'url': URL, 'pub': optional data to add to response.
+ * @param {string} actionValue is the value to return on click:
+ * @param {string} refUrl is the URL to go to when the 'url' button is clicked.
  */
-Drafty.insertButton = function(content, at, len, name, actionType, actionValue) {
+Drafty.insertButton = function(content, at, len, name, actionType, actionValue, refUrl) {
   if (typeof content == 'string') {
     content = {
       txt: content
@@ -976,11 +977,11 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue) 
     return null;
   }
 
-  // Ensure actionValue is a string.
-  actionValue = ('' + actionValue).trim();
-  if (actionType == 'url' && !actionValue) {
+  // Ensure refUrl is a string.
+  if (actionType == 'url' && !refUrl) {
     return null;
   }
+  refUrl = '' + refUrl;
 
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
@@ -995,6 +996,7 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue) 
     data: {
       act: actionType,
       val: actionValue,
+      ref: refUrl,
       name: name
     }
   });
