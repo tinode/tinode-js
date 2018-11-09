@@ -163,9 +163,9 @@ const HTML_TAGS = {
   },
   FM: {
     name: 'div',
-    isVoid: true
+    isVoid: false
   },
-  FE: {
+  RW: {
     name: 'div',
     isVoid: false,
   },
@@ -181,17 +181,17 @@ const HTML_TAGS = {
 
 // Convert base64-encoded string into Blob.
 function base64toObjectUrl(b64, contentType) {
-  var bin;
+  let bin;
   try {
     bin = atob(b64);
   } catch (err) {
     console.log("Drafty: failed to decode base64-encoded object", err.message);
     bin = atob('');
   }
-  var length = bin.length;
-  var buf = new ArrayBuffer(length);
-  var arr = new Uint8Array(buf);
-  for (var i = 0; i < length; i++) {
+  let length = bin.length;
+  let buf = new ArrayBuffer(length);
+  let arr = new Uint8Array(buf);
+  for (let i = 0; i < length; i++) {
     arr[i] = bin.charCodeAt(i);
   }
 
@@ -238,10 +238,10 @@ const DECORATORS = {
   // Line break
   BR: {
     open: function() {
-      return '';
+      return '<br/>';
     },
     close: function() {
-      return '<br/>'
+      return ''
     }
   },
   // Hidden element
@@ -345,48 +345,19 @@ const DECORATORS = {
   // Form - structured layout of elements.
   FM: {
     open: function(data) {
-      let res = '<div>';
-      if (data && Array.isArray(data.val)) {
-        const count = Math.min(data.val.length, MAX_FORM_ELEMENTS);
-        for (let i = 0; i < count; i++) {
-          let val = data.val[i];
-          let content = null;
-          switch (typeof val) {
-            case 'string':
-              content = val.txt;
-              break;
-            case 'object':
-              content = Drafty.UNSAFE_toHTML(val);
-              break;
-          }
-          res += '<div>' + content + '</div>';
-        }
-      }
-      return res;
+      return '<div>';
     },
     close: function(data) {
       return '</div>';
-    },
-    props: function(data) {
-      if (!data) return null;
-      return data ? {
-        'data-layout': data.layout,
-        'data-name': data.name
-      } : null;
     }
   },
-  // Form element
-  FE: {
-    open: function() {
+  // Row: logic grouping of elements
+  RW: {
+    open: function(data) {
       return '<div>';
     },
-    close: function() {
+    close: function(data) {
       return '</div>';
-    },
-    props: function(data) {
-      return data ? {
-        'data-dftp': data.dftp
-      } : null;
     }
   }
 };
@@ -447,53 +418,10 @@ function chunkify(line, start, end, spans) {
   return chunks;
 }
 
-// Identify data contained in a Drafty object
-function getElementType(el) {
-  if (!el) {
-    return 'nil';
-  }
-  if (typeof el == 'string') {
-    return 'str';
-  }
-  if (typeof el != 'object') {
-    return undefined;
-  }
-
-  // Check the type of contained element.
-  if ((Array.isArray(el.ent) && el.ent.length == 1) &&
-    (!el.fmt || (Array.isArray(el.fmt) && el.fmt.length == 1))) {
-    return ('fe-' + el.ent[0].tp).toLowerCase();
-  }
-  return 'dft';
-}
-
-// Return a tree of formatted objects for an FM element.
-function forForm(form, placeholder, formatter, context, key) {
-  const children = [];
-  const elements = form.data && form.data.val;
-  if (Array.isArray(elements)) {
-    const count = Math.min(elements.length, MAX_FORM_ELEMENTS);
-    for (let i = 0; i < count; i++) {
-      let el = elements[i];
-      children.push(formatter.call(context, 'FE', {
-          dftp: getElementType(el)
-        },
-        (typeof el == 'string') ? el : Drafty.format(el, formatter, context), children.length));
-    }
-  }
-
-  // If the form is empty, use placeholder text.
-  if (children.length == 0) {
-    children = placeholder;
-  }
-
-  return formatter.call(context, 'FM', form.data, children, key);
-}
-
 // Inverse of chunkify. Returns a tree of formatted spans.
 function forEach(line, start, end, spans, formatter, context) {
   let result = [];
-  
+
   // Process ranges calling formatter for each range.
   for (let i = 0; i < spans.length; i++) {
     let span = spans[i];
@@ -512,20 +440,11 @@ function forEach(line, start, end, spans, formatter, context) {
       subspans.push(spans[si]);
       i = si;
     }
-    if (span.tp == 'FM') {
-      result.push(forForm(span, subspans, formatter, context, result.length));
-    } else {
-      const tag = HTML_TAGS[span.tp] || {}
-      if (span.tp == 'BN') {
-        // Make button content unstyled.
-        span.data = span.data || {};
-        span.data.buttonText = line.slice(span.at, span.at + span.len);
-        result.push(formatter.call(context, span.tp, span.data, span.data.buttonText, result.length));
-      } else {
-        result.push(formatter.call(context, span.tp, span.data,
-          tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context), result.length));
-      }
-    }
+
+    const tag = HTML_TAGS[span.tp] || {}
+    result.push(formatter.call(context, span.tp, span.data,
+      tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context),
+      result.length));
 
     start = span.at + span.len;
   }
@@ -825,7 +744,7 @@ Drafty.parse = function(content) {
 }
 
 /**
- * Add inline image to Drafty content.
+ * Insert inline image into Drafty content.
  * @memberof Tinode.Drafty#
  * @static
  *
@@ -838,6 +757,8 @@ Drafty.parse = function(content) {
  * @param {string} fname file name suggestion for downloading the image.
  * @param {integer} size size of the external file. Treat is as an untrusted hint.
  * @param {string} refurl reference to the content. Could be null or undefined.
+ *
+ * @return {Drafty} updated content.
  */
 Drafty.insertImage = function(content, at, mime, base64bits, width, height, fname, size, refurl) {
   content = content || {
@@ -868,6 +789,30 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
 }
 
 /**
+ * Append image to Drafty content.
+ * @memberof Tinode.Drafty#
+ * @static
+ *
+ * @param {Drafty} content object to add image to.
+ * @param {string} mime mime-type of the image, e.g. "image/png"
+ * @param {string} base64bits base64-encoded image content (or preview, if large image is attached)
+ * @param {integer} width width of the image
+ * @param {integer} height height of the image
+ * @param {string} fname file name suggestion for downloading the image.
+ * @param {integer} size size of the external file. Treat is as an untrusted hint.
+ * @param {string} refurl reference to the content. Could be null or undefined.
+ *
+ * @return {Drafty} updated content.
+ */
+Drafty.appendImage = function(content, mime, base64bits, width, height, fname, size, refurl) {
+  content = content || {
+    txt: ""
+  };
+  content.txt += " ";
+  return Drafty.insertImage(content, content.txt.length - 1, mime, base64bits, width, height, fname, size, refurl);
+}
+
+/**
  * Attach file to Drafty content. Either as a blob or as a reference.
  * @memberof Tinode.Drafty#
  * @static
@@ -878,6 +823,8 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
  * @param {string} fname file name suggestion for downloading.
  * @param {integer} size size of the external file. Treat is as an untrusted hint.
  * @param {string | Promise} refurl optional reference to the content.
+ *
+ * @return {Drafty} updated content.
  */
 Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
   content = content || {
@@ -916,35 +863,28 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
 }
 
 /**
- * Insert an interactive form.
+ * Wraps content into an interactive form.
  * @memberof Tinode.Drafty#
  * @static
  *
- * @param {Drafty} content object to insert form into.
- * @param {integer} at index where the object is inserted. The length of the image is always 1.
- * @param {Object[]} definitions of form fields and data. Allowed data types are plain text and Drafty.
- * @param {string} formName optional name of the form.
- * @param {string} name of the layout to use for representing the form, optional.
+ * @param {Drafty|string} content to wrap into a form.
+ * @param {number} at index where the forms starts.
+ * @param {number} len length of the form content.
+ *
+ * @return {Drafty} updated content.
  */
-Drafty.insertForm = function(content, at, data, formName, layout) {
-  content = content || {
-    txt: " "
-  };
-  content.ent = content.ent || [];
+Drafty.wrapAsForm = function(content, at, len) {
+  if (typeof content == 'string') {
+    content = {
+      txt: content
+    };
+  }
   content.fmt = content.fmt || [];
 
   content.fmt.push({
     at: at,
-    len: 1,
-    key: content.ent.length
-  });
-  content.ent.push({
-    tp: 'FM',
-    data: {
-      name: formName,
-      layout: layout,
-      val: Array.isArray(data) ? data : []
-    }
+    len: len,
+    tp: 'FM'
   });
 
   return content;
@@ -956,12 +896,14 @@ Drafty.insertForm = function(content, at, data, formName, layout) {
  * @static
  *
  * @param {Drafty|string} content is Drafty object to insert button to or a string to be used as button text.
- * @param {number} is location where the button is inserted.
- * @param {number} is the length of the text to be used as button title.
+ * @param {number} at is location where the button is inserted.
+ * @param {number} len is the length of the text to be used as button title.
  * @param {string} name of the button. Client should return it to the server when the button is clicked.
  * @param {string} actionType is the type of the button, one of 'url' or 'pub'.
  * @param {string} actionValue is the value to return on click:
  * @param {string} refUrl is the URL to go to when the 'url' button is clicked.
+ *
+ * @return {Drafty} updated content.
  */
 Drafty.insertButton = function(content, at, len, name, actionType, actionValue, refUrl) {
   if (typeof content == 'string') {
@@ -972,11 +914,9 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue, 
   if (!content || !content.txt || content.txt.length < at + len) {
     return null;
   }
-
   if (len <= 0 || ['url', 'pub'].indexOf(actionType) == -1) {
     return null;
   }
-
   // Ensure refUrl is a string.
   if (actionType == 'url' && !refUrl) {
     return null;
@@ -1002,6 +942,29 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue, 
   });
 
   return content;
+}
+
+/**
+ * Append clickable button to Drafty document.
+ * @memberof Tinode.Drafty
+ * @static
+ *
+ * @param {Drafty|string} content is Drafty object to insert button to or a string to be used as button text.
+ * @param {string} title is the text to be used as button title.
+ * @param {string} name of the button. Client should return it to the server when the button is clicked.
+ * @param {string} actionType is the type of the button, one of 'url' or 'pub'.
+ * @param {string} actionValue is the value to return on click:
+ * @param {string} refUrl is the URL to go to when the 'url' button is clicked.
+ *
+ * @return {Drafty} updated content.
+ */
+Drafty.appendButton = function(content, title, name, actionType, actionValue, refUrl) {
+  content = content || {
+    txt: ""
+  };
+  let at = content.txt.length;
+  content.txt += title;
+  return Drafty.insertButton(content, at, title.length, name, actionType, actionValue, refUrl);
 }
 
 /**
@@ -1038,6 +1001,20 @@ Drafty.attachJSON = function(content, data) {
   return content;
 }
 
+Drafty.appendLineBreak = function(content) {
+  content = content || {
+    txt: ""
+  };
+  content.fmt = content.fmt || [];
+  content.fmt.push({
+    at: content.txt.length,
+    len: 1,
+    tp: 'BR'
+  });
+  content.txt += " ";
+
+  return content;
+}
 /**
  * Given the structured representation of rich text, convert it to HTML.
  * No attempt is made to strip pre-existing html markup.
@@ -1059,12 +1036,12 @@ Drafty.UNSAFE_toHTML = function(content) {
 
   var markup = [];
   if (fmt) {
-    for (var i in fmt) {
-      var range = fmt[i];
-      var tp = range.tp,
+    for (let i in fmt) {
+      let range = fmt[i];
+      let tp = range.tp,
         data;
       if (!tp) {
-        var entity = ent[range.key];
+        let entity = ent[range.key | 0];
         if (entity) {
           tp = entity.tp;
           data = entity.data;
@@ -1076,10 +1053,12 @@ Drafty.UNSAFE_toHTML = function(content) {
         // Otherwise zero-length objects will not be represented correctly.
         markup.push({
           idx: range.at + range.len,
+          len: -range.len,
           what: DECORATORS[tp].close(data)
         });
         markup.push({
           idx: range.at,
+          len: range.len,
           what: DECORATORS[tp].open(data)
         });
       }
@@ -1087,7 +1066,7 @@ Drafty.UNSAFE_toHTML = function(content) {
   }
 
   markup.sort(function(a, b) {
-    return b.idx - a.idx; // in descending order
+    return b.idx == a.idx ? b.len - a.len : b.idx - a.idx; // in descending order
   });
 
   for (var i in markup) {
