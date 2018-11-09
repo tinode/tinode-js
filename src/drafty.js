@@ -309,8 +309,7 @@ const DECORATORS = {
         'data-act': data.act,
         'data-val': data.val,
         'data-name': data.name,
-        'data-ref': data.ref,
-        'data-title': data.buttonText
+        'data-ref': data.ref
       } : null;
     },
   },
@@ -911,9 +910,11 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue, 
       txt: content
     };
   }
+
   if (!content || !content.txt || content.txt.length < at + len) {
     return null;
   }
+
   if (len <= 0 || ['url', 'pub'].indexOf(actionType) == -1) {
     return null;
   }
