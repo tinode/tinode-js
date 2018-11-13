@@ -1128,9 +1128,16 @@ Drafty.format = function(content, formatter, context) {
   let spans = [].concat(fmt);
 
   // Zero values may have been stripped. Restore them.
+  // Also ensure indexes and lengths are sane.
   spans.map(function(s) {
     s.at = s.at || 0;
     s.len = s.len || 0;
+    if (s.len < 0) {
+      s.len = 0;
+    }
+    if (s.at < -1) {
+      s.at = -1;
+    }
   });
 
   // Sort spans first by start index (asc) then by length (desc).
