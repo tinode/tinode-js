@@ -335,7 +335,7 @@ function jsonLoggerHelper(key, val) {
 // Parse browser user agent to extract browser name and version.
 function getBrowserInfo(ua, product) {
   ua = ua || '';
-  let reactnative = product || '';
+  let reactnative = '';
   // Check if this is a ReactNative app.
   if (/reactnative/i.test(product)) {
     reactnative = 'ReactNative; ';
