@@ -1300,6 +1300,9 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
 
     if (data === '0') {
       // Server response to a network probe.
+      if (this.onNetworkProbe) {
+        this.onNetworkProbe();
+      }
       // No processing is necessary.
       return;
     }
@@ -2399,6 +2402,13 @@ Tinode.prototype = {
    * @type {Tinode.onRawMessage}
    */
   onRawMessage: undefined,
+
+  /**
+   * Callback to receive server responses to network probes. See {@link Tinode#networkProbe}
+   * @memberof Tinode#
+   * @type {Tinode.onNetworkProbe}
+   */
+  onNetworkProbe: undefined,
 };
 
 /**
