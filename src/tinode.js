@@ -758,6 +758,10 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     instance.transport = function() {
       return 'ws';
     }
+
+    instance.probe = function() {
+      instance.sendText('1');
+    }
   }
 
   // Initialization for long polling.
@@ -884,6 +888,10 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
     instance.transport = function() {
       return 'lp';
+    }
+
+    instance.probe = function() {
+      instance.sendText('1');
     }
   }
 
@@ -1290,7 +1298,13 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
       this.onRawMessage(data);
     }
 
-    var pkt = JSON.parse(data, jsonParseHelper);
+    if (data === '0') {
+      // Server response to a network probe.
+      // No processing is necessary.
+      return;
+    }
+
+    let pkt = JSON.parse(data, jsonParseHelper);
     if (!pkt) {
       this.logger("in: " + data);
       this.logger("ERROR: failed to parse data");
@@ -1315,7 +1329,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
 
         // All messages received: "params":{"count":11,"what":"data"},
         if (pkt.ctrl.params && pkt.ctrl.params.what == 'data') {
-          var topic = cacheGet('topic', pkt.ctrl.topic);
+          let topic = cacheGet('topic', pkt.ctrl.topic);
           if (topic) {
             topic._allMessagesReceived(pkt.ctrl.params.count);
           }
@@ -1325,7 +1339,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
         // Handling a {meta} message.
 
         // Preferred API: Route meta to topic, if one is registered
-        var topic = cacheGet('topic', pkt.meta.topic);
+        let topic = cacheGet('topic', pkt.meta.topic);
         if (topic) {
           topic._routeMeta(pkt.meta);
         }
@@ -1338,7 +1352,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
         // Handling {data} message
 
         // Preferred API: Route data to topic, if one is registered
-        var topic = cacheGet('topic', pkt.data.topic);
+        let topic = cacheGet('topic', pkt.data.topic);
         if (topic) {
           topic._routeData(pkt.data);
         }
@@ -1351,7 +1365,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
         // Handling {pres} message
 
         // Preferred API: Route presence to topic, if one is registered
-        var topic = cacheGet('topic', pkt.pres.topic);
+        let topic = cacheGet('topic', pkt.pres.topic);
         if (topic) {
           topic._routePres(pkt.pres);
         }
@@ -1364,7 +1378,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
         // {info} message - read/received notifications and key presses
 
         // Preferred API: Route {info}} to topic, if one is registered
-        var topic = cacheGet('topic', pkt.info.topic);
+        let topic = cacheGet('topic', pkt.info.topic);
         if (topic) {
           topic._routeInfo(pkt.info);
         }
@@ -1548,7 +1562,17 @@ Tinode.prototype = {
   },
 
   /**
-   * Check for live connection to server
+   * Send a network probe message to make sure the connection is alive.
+   * @memberof Tinode#
+   */
+  networkProbe: function() {
+    if (this._connection) {
+      this._connection.probe();
+    }
+  },
+
+  /**
+   * Check for live connection to server.
    * @memberof Tinode#
    *
    * @returns {Boolean} true if there is a live connection, false otherwise.
@@ -1556,6 +1580,7 @@ Tinode.prototype = {
   isConnected: function() {
     return this._connection && this._connection.isConnected();
   },
+  
   /**
    * Check if connection is authenticated (last login was successful).
    * @memberof Tinode#
