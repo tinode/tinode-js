@@ -1580,7 +1580,7 @@ Tinode.prototype = {
   isConnected: function() {
     return this._connection && this._connection.isConnected();
   },
-  
+
   /**
    * Check if connection is authenticated (last login was successful).
    * @memberof Tinode#
