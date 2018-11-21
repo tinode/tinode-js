@@ -3396,7 +3396,7 @@ Topic.prototype = {
 
     // Send {del} message, return promise
     let result;
-    if (ranges.length > 0) {
+    if (tosend.length > 0) {
       result = this._tinode.delMessages(this.name, tosend, hard);
     } else {
       result = Promise.resolve({
@@ -3456,7 +3456,7 @@ Topic.prototype = {
     // Sort the list in ascending order
     list.sort((a, b) => a - b);
     // Convert the array of IDs to ranges.
-    var ranges = list.reduce((out, id) => {
+    let ranges = list.reduce((out, id) => {
       if (out.length == 0) {
         // First element.
         out.push({
@@ -3784,9 +3784,13 @@ Topic.prototype = {
     if (idx >= 0) {
       let msg = this._messages.getAt(idx);
       let status = this.msgStatus(msg);
-      if (status == MESSAGE_STATUS_QUEUED) {
+      if (status == MESSAGE_STATUS_QUEUED || status == MESSAGE_STATUS_FAILED) {
         msg._cancelled = true;
         this._messages.delAt(idx);
+        if (this.onData) {
+          // Calling with no parameters to indicate the message was deleted.
+          this.onData();
+        }
         return true;
       }
     }
