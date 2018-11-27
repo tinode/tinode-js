@@ -1595,13 +1595,20 @@ Tinode.prototype = {
   },
 
   /**
+   * Attempt to reconnect to the server immediately. If exponential backoff is
+   * in progress, reset it.
+   * @memberof Tinode#
+   */
+  reconnect: function() {
+    this._connection.reconnect();
+  },
+
+  /**
    * Disconnect from the server.
    * @memberof Tinode#
    */
   disconnect: function() {
-    if (this._connection) {
-      this._connection.disconnect();
-    }
+    this._connection.disconnect();
   },
 
   /**
@@ -1609,9 +1616,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    */
   networkProbe: function() {
-    if (this._connection) {
-      this._connection.probe();
-    }
+    this._connection.probe();
   },
 
   /**
@@ -1621,7 +1626,7 @@ Tinode.prototype = {
    * @returns {Boolean} true if there is a live connection, false otherwise.
    */
   isConnected: function() {
-    return this._connection && this._connection.isConnected();
+    return this._connection.isConnected();
   },
 
   /**
