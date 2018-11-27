@@ -636,14 +636,15 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     }
   }
 
-  // Reconnect after a timeout.
-  function reconnect() {
+  // Backoff implementation - reconnect after a timeout.
+  function boffReconnect() {
     // Clear timer
     clearTimeout(_boffTimer);
     // Calculate when to fire the reconnect attempt
-    var timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 + _BOFF_JITTER * Math.random()));
+    let timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 + _BOFF_JITTER * Math.random()));
     // Update iteration counter for future use
     _boffIteration = (_boffIteration >= _BOFF_MAX_ITER ? _boffIteration : _boffIteration + 1);
+
     _boffTimer = setTimeout(() => {
       log("Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
       // Maybe the socket was closed while we waited for the timer?
@@ -651,6 +652,13 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
         this.connect().catch(function() { /* do nothing */ });
       }
     }, timeout);
+  }
+
+  // Terminate auto-reconnect process.
+  function boffStop() {
+    clearTimeout(_boffTimer);
+    _boffTimer = null;
+    _boffIteration = 0;
   }
 
   // Initialization for Websocket
@@ -664,6 +672,8 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
      resolution is called without parameters, rejection passes the {Error} as parameter.
      */
     instance.connect = function(host_) {
+      _boffClosed = false;
+
       if (_socket && _socket.readyState === 1) {
         return Promise.resolve();
       }
@@ -673,24 +683,20 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       }
 
       return new Promise(function(resolve, reject) {
-        var url = makeBaseUrl(host, secure ? 'wss' : 'ws', apiKey);
+        let url = makeBaseUrl(host, secure ? 'wss' : 'ws', apiKey);
 
         log("Connecting to: " + url);
 
-        var conn = new WebSocketProvider(url);
+        let conn = new WebSocketProvider(url);
 
         conn.onopen = function(evt) {
-          _boffClosed = false;
-
           if (instance.onOpen) {
             instance.onOpen();
           }
           resolve();
 
           if (autoreconnect) {
-            clearTimeout(_boffTimer);
-            _boffTimer = null;
-            _boffIteration = 0;
+            boffStop();
           }
         }
 
@@ -702,7 +708,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
           }
 
           if (!_boffClosed && autoreconnect) {
-            reconnect.call(instance);
+            boffReconnect.call(instance);
           }
         }
 
@@ -720,14 +726,26 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     };
 
     /**
+     * Try to restore a network connection, also reset backoff.
+     * @memberof Tinode.Connection#
+     */
+    instance.reconnect = function() {
+      boffStop();
+      instance.connect();
+    };
+
+    /**
      * Terminate the network connection
      * @memberof Tinode.Connection#
      */
     instance.disconnect = function() {
-      if (_socket) {
-        _boffClosed = true;
-        _socket.close();
+      _boffClosed = true;
+      if (!_socket) {
+        return;
       }
+
+      boffStop();
+      _socket.close();
       _socket = null;
     };
 
@@ -766,11 +784,11 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
   // Initialization for long polling.
   function init_lp(instance) {
-    var XDR_UNSENT = 0; //	Client has been created. open() not called yet.
-    var XDR_OPENED = 1; //	open() has been called.
-    var XDR_HEADERS_RECEIVED = 2; // send() has been called, and headers and status are available.
-    var XDR_LOADING = 3; //	Downloading; responseText holds partial data.
-    var XDR_DONE = 4; // The operation is complete.
+    const XDR_UNSENT = 0; //	Client has been created. open() not called yet.
+    const XDR_OPENED = 1; //	open() has been called.
+    const XDR_HEADERS_RECEIVED = 2; // send() has been called, and headers and status are available.
+    const XDR_LOADING = 3; //	Downloading; responseText holds partial data.
+    const XDR_DONE = 4; // The operation is complete.
     // Fully composed endpoint URL, with API key & SID
     var _lpURL = null;
 
@@ -778,7 +796,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     var _sender = null;
 
     function lp_sender(url_) {
-      var sender = xdreq();
+      let sender = xdreq();
       sender.onreadystatechange = function(evt) {
         if (sender.readyState == XDR_DONE && sender.status >= 400) {
           // Some sort of error response
@@ -791,15 +809,14 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     }
 
     function lp_poller(url_, resolve, reject) {
-      var poller = xdreq();
+      let poller = xdreq();
+      let promiseCompleted = false;
 
       poller.onreadystatechange = function(evt) {
 
         if (poller.readyState == XDR_DONE) {
           if (poller.status == 201) { // 201 == HTTP.Created, get SID
-            var pkt = JSON.parse(poller.responseText, jsonParseHelper);
-            var text = poller.responseText;
-
+            let pkt = JSON.parse(poller.responseText, jsonParseHelper);
             _lpURL = url_ + '&sid=' + pkt.ctrl.params.sid
             poller = lp_poller(_lpURL);
             poller.send(null)
@@ -808,9 +825,14 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
             }
 
             if (resolve) {
+              promiseCompleted = true;
               resolve();
             }
-          } else if (poller.status == 200) { // 200 = HTTP.OK
+
+            if (autoreconnect) {
+              boffStop();
+            }
+          } else if (poller.status < 400) { // 400 = HTTP.BadRequest
             if (instance.onMessage) {
               instance.onMessage(poller.responseText)
             }
@@ -818,7 +840,8 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
             poller.send(null);
           } else {
             // Don't throw an error here, gracefully handle server errors
-            if (reject) {
+            if (reject && !promiseCompleted) {
+              promiseCompleted = true;
               reject(poller.responseText);
             }
             if (instance.onMessage && poller.responseText) {
@@ -829,6 +852,12 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
               let text = poller.responseText || NETWORK_ERROR_TEXT;
               instance.onDisconnect(new Error(text + "(" + code + ")"));
             }
+
+            // Polling has stopped. Indicate it by setting poller to null.
+            poller = null;
+            if (!_boffClosed && autoreconnect) {
+              boffReconnect.call(instance);
+            }
           }
         }
       }
@@ -837,7 +866,9 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     }
 
     instance.connect = function(host_) {
-      if (_poller && true) {
+      _boffClosed = false;
+
+      if (_poller) {
         return Promise.resolve();
       }
 
@@ -851,11 +882,19 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null)
       }).catch(function() {
-        // Do nothing
+        // Catch an error and do nothing.
       });
     };
 
+    instance.reconnect = function() {
+      boffStop();
+      instance.connect();
+    };
+
     instance.disconnect = function() {
+      _boffClosed = true;
+      boffStop();
+
       if (_sender) {
         _sender.onreadystatechange = undefined;
         _sender.abort();
@@ -866,6 +905,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
         _poller.abort();
         _poller = null;
       }
+
       if (instance.onDisconnect) {
         instance.onDisconnect(null);
       }
