@@ -2493,7 +2493,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    * @type {Tinode.onAutoreconnectIteration}
    */
-   onAutoreconnectIteration: undefined,
+  onAutoreconnectIteration: undefined,
 };
 
 /**
