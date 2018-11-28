@@ -644,12 +644,23 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     let timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 + _BOFF_JITTER * Math.random()));
     // Update iteration counter for future use
     _boffIteration = (_boffIteration >= _BOFF_MAX_ITER ? _boffIteration : _boffIteration + 1);
+    if (this.onAutoreconnectIteration) {
+      this.onAutoreconnectIteration(timeout);
+    }
 
     _boffTimer = setTimeout(() => {
       log("Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
       // Maybe the socket was closed while we waited for the timer?
       if (!_boffClosed) {
-        this.connect().catch(function() { /* do nothing */ });
+        let prom = this.connect();
+        if (this.onAutoreconnectIteration) {
+          this.onAutoreconnectIteration(0, prom);
+        } else {
+          // Suppress error if it's not used.
+          prom.catch(() => { /* do nothing */ });
+        }
+      } else if (this.onAutoreconnectIteration) {
+        this.onAutoreconnectIteration(-1);
       }
     }, timeout);
   }
@@ -674,7 +685,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     instance.connect = function(host_) {
       _boffClosed = false;
 
-      if (_socket && _socket.readyState === 1) {
+      if (_socket && _socket.readyState == _socket.OPEN) {
         return Promise.resolve();
       }
 
@@ -770,7 +781,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
      * @returns {boolean} true if connection is live, false otherwise
      */
     instance.isConnected = function() {
-      return (_socket && (_socket.readyState === 1));
+      return (_socket && (_socket.readyState == _socket.OPEN));
     }
 
     instance.transport = function() {
@@ -983,9 +994,24 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
   this.onOpen = undefined;
 
   /**
-   * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
-   * @callback LoggerCallbackType
+   * A callback to notify of reconnection attempts. See {@link Tinode.Connection#onAutoreconnectIteration}.
    * @memberof Tinode.Connection
+   * @callback AutoreconnectIterationType
+   * @param {string} timeout - time till the next reconnect attempt in milliseconds. -1 means reconnect was skipped.
+   * @param {Promise} promise resolved or rejected when the reconnect attemp completes.
+   *
+   */
+  /**
+   * A callback to inform when the next attampt to reconnect will happen and to receive connection promise.
+   * @memberof Tinode.Connection#
+   * @type {Tinode.Connection.AutoreconnectIterationType}
+   */
+  this.onAutoreconnectIteration = undefined;
+
+  /**
+   * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
+   * @memberof Tinode.Connection
+   * @callback LoggerCallbackType
    * @param {string} event - Event to log.
    */
   /**
@@ -1436,9 +1462,16 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
     }
   }
 
-  // Ready to send.
+  // Ready to start sending.
   this._connection.onOpen = () => {
     this.hello();
+  }
+
+  // Wrapper for the reconnect iterator callback.
+  this._connection.onAutoreconnectIteration = (timeout, promise) => {
+    if (this.onAutoreconnectIteration) {
+      this.onAutoreconnectIteration(timeout, promise);
+    }
   }
 
   this._connection.onDisconnect = (err) => {
@@ -2454,6 +2487,13 @@ Tinode.prototype = {
    * @type {Tinode.onNetworkProbe}
    */
   onNetworkProbe: undefined,
+
+  /**
+   * Callback to be notified when exponential backoff is iterating.
+   * @memberof Tinode#
+   * @type {Tinode.onAutoreconnectIteration}
+   */
+   onAutoreconnectIteration: undefined,
 };
 
 /**
