@@ -84,6 +84,11 @@ const MESSAGE_STATUS_TO_ME = 7; // Message from another user.
 // Error code to return in case of a network problem.
 const NETWORK_ERROR = 503;
 const NETWORK_ERROR_TEXT = "Connection failed";
+
+// Error code to return when user disconnected from server.
+const NETWORK_USER = 418;
+const NETWORK_USER_TEXT = "Disconnected by client";
+
 // Utility functions
 
 // Add brower missing function for non browser app, eg nodeJs
@@ -155,7 +160,7 @@ function rfc3339DateString(d) {
     return '0'.repeat(sp - ('' + val).length) + val;
   }
 
-  var millis = d.getUTCMilliseconds();
+  const millis = d.getUTCMilliseconds();
   return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
     'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) +
     (millis ? '.' + pad(millis, 3) : '') + 'Z';
@@ -204,7 +209,7 @@ function mergeObj(dst, src, ignore) {
     dst = src.constructor();
   }
 
-  for (var prop in src) {
+  for (let prop in src) {
     if (src.hasOwnProperty(prop) &&
       (src[prop] || src[prop] === false) &&
       (!ignore || !ignore[prop]) &&
@@ -223,7 +228,7 @@ function mergeToCache(cache, key, newval, ignore) {
 
 // Basic cross-domain requester. Supports normal browsers and IE8+
 function xdreq() {
-  var xdreq = null;
+  let xdreq = null;
 
   // Detect browser support for CORS
   if ('withCredentials' in new XMLHttpRequest()) {
@@ -284,11 +289,11 @@ function simplify(obj) {
 // Trim whitespace, strip empty and duplicate elements elements.
 // If the result is an empty array, add a single element "\u2421" (Unicode Del character).
 function normalizeArray(arr) {
-  var out = [];
+  let out = [];
   if (Array.isArray(arr)) {
     // Trim, throw away very short and empty tags.
-    for (var i = 0, l = arr.length; i < l; i++) {
-      var t = arr[i];
+    for (let i = 0, l = arr.length; i < l; i++) {
+      let t = arr[i];
       if (t) {
         t = t.trim().toLowerCase();
         if (t.length > 1) {
@@ -314,7 +319,7 @@ function jsonParseHelper(key, val) {
   // 2015-09-02T01:45:43[.123]Z
   if (key === 'ts' && typeof val === 'string' &&
     val.length >= 20 && val.length <= 24) {
-    var date = new Date(val);
+    let date = new Date(val);
     if (date) {
       return date;
     }
@@ -424,18 +429,18 @@ function getBrowserInfo(ua, product) {
  * @param {function} compare custom comparator of objects. Returns -1 if a < b, 0 if a == b, 1 otherwise.
  */
 var CBuffer = function(compare) {
-  var buffer = [];
+  let buffer = [];
 
   compare = compare || function(a, b) {
     return a === b ? 0 : a < b ? -1 : 1;
   };
 
   function findNearest(elem, arr, exact) {
-    var start = 0;
-    var end = arr.length - 1;
-    var pivot = 0;
-    var diff = 0;
-    var found = false;
+    let start = 0;
+    let end = arr.length - 1;
+    let pivot = 0;
+    let diff = 0;
+    let found = false;
 
     while (start <= end) {
       pivot = (start + end) / 2 | 0;
@@ -461,8 +466,7 @@ var CBuffer = function(compare) {
 
   // Insert element into a sorted array.
   function insertSorted(elem, arr) {
-    var idx = findNearest(elem, arr, false);
-    arr.splice(idx, 0, elem);
+    arr.splice(findNearest(elem, arr, false), 0, elem);
     return arr;
   }
 
@@ -484,14 +488,14 @@ var CBuffer = function(compare) {
      * @param {...Object|Array} - One or more objects to insert.
      */
     put: function() {
-      var insert;
+      let insert;
       // inspect arguments: if array, insert its elements, if one or more non-array arguments, insert them one by one
       if (arguments.length == 1 && Array.isArray(arguments[0])) {
         insert = arguments[0];
       } else {
         insert = arguments;
       }
-      for (var idx in insert) {
+      for (let idx in insert) {
         insertSorted(insert[idx], buffer);
       }
     },
@@ -503,7 +507,7 @@ var CBuffer = function(compare) {
      * @returns {Object} Element at the given position or <tt>undefined</tt>
      */
     delAt: function(at) {
-      var r = buffer.splice(at, 1);
+      let r = buffer.splice(at, 1);
       if (r && r.length > 0) {
         return r[0];
       }
@@ -581,7 +585,7 @@ var CBuffer = function(compare) {
 
 // Helper function for creating an endpoint URL
 function makeBaseUrl(host, protocol, apiKey) {
-  var url = null;
+  let url = null;
 
   if (protocol === 'http' || protocol === 'https' || protocol === 'ws' || protocol === 'wss') {
     url = protocol + '://';
@@ -619,7 +623,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
   let secure = secure_;
   let apiKey = apiKey_;
 
-  var autoreconnect = autoreconnect_;
+  let autoreconnect = autoreconnect_;
 
   // Settings for exponential backoff
   const _BOFF_BASE = 2000; // 2000 milliseconds, minimum delay between reconnects
@@ -674,7 +678,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
   // Initialization for Websocket
   function init_ws(instance) {
-    var _socket = null;
+    let _socket = null;
 
     /**
      * Initiate a new connection
@@ -715,7 +719,9 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
           _socket = null;
 
           if (instance.onDisconnect) {
-            instance.onDisconnect(null);
+            const code = _boffClosed ? NETWORK_USER : NETWORK_ERROR;
+            instance.onDisconnect(new Error(_boffClosed ? NETWORK_USER_TEXT : NETWORK_ERROR_TEXT +
+              ' (' + code + ')'), code);
           }
 
           if (!_boffClosed && autoreconnect) {
@@ -801,10 +807,10 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     const XDR_LOADING = 3; //	Downloading; responseText holds partial data.
     const XDR_DONE = 4; // The operation is complete.
     // Fully composed endpoint URL, with API key & SID
-    var _lpURL = null;
+    let _lpURL = null;
 
-    var _poller = null;
-    var _sender = null;
+    let _poller = null;
+    let _sender = null;
 
     function lp_sender(url_) {
       let sender = xdreq();
@@ -859,9 +865,9 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
               instance.onMessage(poller.responseText);
             }
             if (instance.onDisconnect) {
-              let code = poller.status || NETWORK_ERROR;
-              let text = poller.responseText || NETWORK_ERROR_TEXT;
-              instance.onDisconnect(new Error(text + "(" + code + ")"));
+              let code = poller.status || (_boffClosed ? NETWORK_USER : NETWORK_ERROR);
+              let text = poller.responseText || (_boffClosed ? NETWORK_USER_TEXT : NETWORK_ERROR_TEXT);
+              instance.onDisconnect(new Error(text + ' (' + code + ')'), code);
             }
 
             // Polling has stopped. Indicate it by setting poller to null.
@@ -888,7 +894,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       }
 
       return new Promise(function(resolve, reject) {
-        var url = makeBaseUrl(host, secure ? 'https' : 'http', apiKey);
+        const url = makeBaseUrl(host, secure ? 'https' : 'http', apiKey);
         log("Connecting to: " + url);
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null)
@@ -918,7 +924,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       }
 
       if (instance.onDisconnect) {
-        instance.onDisconnect(null);
+        instance.onDisconnect(new Error(NETWORK_USER_TEXT + ' (' + NETWORK_USER + ')'), NETWORK_USER);
       }
       // Ensure it's reconstructed
       _lpURL = null;
@@ -1083,8 +1089,8 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
   // Console logger
   this.logger = (str) => {
     if (this._loggingEnabled) {
-      var d = new Date()
-      var dateString = ('0' + d.getUTCHours()).slice(-2) + ':' +
+      const d = new Date()
+      const dateString = ('0' + d.getUTCHours()).slice(-2) + ':' +
         ('0' + d.getUTCMinutes()).slice(-2) + ':' +
         ('0' + d.getUTCSeconds()).slice(-2) + ':' +
         ('0' + d.getUTCMilliseconds()).slice(-3);
@@ -1111,7 +1117,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
   // Enumerate all items in cache, call func for each item.
   // Enumeration stops if func returns true.
   let cacheMap = this.cacheMap = (func, context) => {
-    for (var idx in this._cache) {
+    for (let idx in this._cache) {
       if (func(this._cache[idx], idx, context)) {
         break;
       }
@@ -1124,7 +1130,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
     topic._tinode = this;
 
     topic._cacheGetUser = (uid) => {
-      var pub = cacheGet('user', uid);
+      const pub = cacheGet('user', uid);
       if (pub) {
         return {
           user: uid,
@@ -1150,7 +1156,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
   // Resolve or reject a pending promise.
   // Unresolved promises are stored in _pendingPromises.
   let execPromise = (id, code, onOK, errorText) => {
-    var callbacks = this._pendingPromises[id];
+    const callbacks = this._pendingPromises[id];
     if (callbacks) {
       delete this._pendingPromises[id];
       if (code >= 200 && code < 400) {
@@ -1190,7 +1196,6 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
 
   // Generator of packets stubs
   this.initPacket = (type, topic) => {
-    var pkt = null;
     switch (type) {
       case 'hi':
         return {
@@ -1398,7 +1403,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
 
         // All messages received: "params":{"count":11,"what":"data"},
         if (pkt.ctrl.params && pkt.ctrl.params.what == 'data') {
-          let topic = cacheGet('topic', pkt.ctrl.topic);
+          const topic = cacheGet('topic', pkt.ctrl.topic);
           if (topic) {
             topic._allMessagesReceived(pkt.ctrl.params.count);
           }
@@ -1408,7 +1413,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
         // Handling a {meta} message.
 
         // Preferred API: Route meta to topic, if one is registered
-        let topic = cacheGet('topic', pkt.meta.topic);
+        const topic = cacheGet('topic', pkt.meta.topic);
         if (topic) {
           topic._routeMeta(pkt.meta);
         }
@@ -1421,7 +1426,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
         // Handling {data} message
 
         // Preferred API: Route data to topic, if one is registered
-        let topic = cacheGet('topic', pkt.data.topic);
+        const topic = cacheGet('topic', pkt.data.topic);
         if (topic) {
           topic._routeData(pkt.data);
         }
@@ -1434,7 +1439,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
         // Handling {pres} message
 
         // Preferred API: Route presence to topic, if one is registered
-        let topic = cacheGet('topic', pkt.pres.topic);
+        const topic = cacheGet('topic', pkt.pres.topic);
         if (topic) {
           topic._routePres(pkt.pres);
         }
@@ -1447,7 +1452,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
         // {info} message - read/received notifications and key presses
 
         // Preferred API: Route {info}} to topic, if one is registered
-        let topic = cacheGet('topic', pkt.info.topic);
+        const topic = cacheGet('topic', pkt.info.topic);
         if (topic) {
           topic._routeInfo(pkt.info);
         }
@@ -1474,7 +1479,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
     }
   }
 
-  this._connection.onDisconnect = (err) => {
+  this._connection.onDisconnect = (err, code) => {
     this._inPacketCount = 0;
     this._serverInfo = null;
     this._authenticated = false;
@@ -1483,7 +1488,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
     for (let key in this._pendingPromises) {
       let callbacks = this._pendingPromises[key];
       if (callbacks && callbacks.reject) {
-        callbacks.reject(new Error(NETWORK_ERROR_TEXT + ' (' + NETWORK_ERROR + ')'));
+        callbacks.reject(err);
       }
     }
     this._pendingPromises = {};
@@ -1543,15 +1548,14 @@ Tinode.credential = function(meth, val, params, resp) {
  * @returns {string} One of <tt>'me'</tt>, <tt>'grp'</tt>, <tt>'p2p'</tt> or <tt>undefined</tt>.
  */
 Tinode.topicType = function(name) {
-  var types = {
+  const types = {
     'me': 'me',
     'fnd': 'fnd',
     'grp': 'grp',
     'new': 'grp',
     'usr': 'p2p'
   };
-  var tp = (typeof name == 'string') ? name.substring(0, 3) : 'xxx';
-  return types[tp];
+  return types[(typeof name == 'string') ? name.substring(0, 3) : 'xxx'];
 };
 
 /**
@@ -1700,7 +1704,7 @@ Tinode.prototype = {
    * @param {Tinode.AccountParams=} params - User data to pass to the server.
    */
   account: function(uid, scheme, secret, login, params) {
-    var pkt = this.initPacket('acc');
+    const pkt = this.initPacket('acc');
     pkt.acc.user = uid;
     pkt.acc.scheme = scheme;
     pkt.acc.secret = secret;
@@ -1733,7 +1737,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
   createAccount: function(scheme, secret, login, params) {
-    var promise = this.account(USER_NEW, scheme, secret, login, params);
+    let promise = this.account(USER_NEW, scheme, secret, login, params);
     if (login) {
       promise = promise.then((ctrl) => {
         this.loginSuccessful(ctrl);
@@ -1788,7 +1792,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
   hello: function() {
-    var pkt = this.initPacket('hi');
+    const pkt = this.initPacket('hi');
 
     return this.send(pkt, pkt.hi.id)
       .then((ctrl) => {
@@ -1846,7 +1850,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
   login: function(scheme, secret, cred) {
-    var pkt = this.initPacket('login');
+    const pkt = this.initPacket('login');
     pkt.login.scheme = scheme;
     pkt.login.secret = secret;
     pkt.login.cred = cred;
@@ -1971,7 +1975,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   subscribe: function(topicName, getParams, setParams) {
-    var pkt = this.initPacket('sub', topicName)
+    const pkt = this.initPacket('sub', topicName)
     if (!topicName) {
       topicName = TOPIC_NEW;
     }
@@ -2006,7 +2010,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   leave: function(topic, unsub) {
-    var pkt = this.initPacket('leave', topic);
+    const pkt = this.initPacket('leave', topic);
     pkt.leave.unsub = unsub;
 
     return this.send(pkt, pkt.leave.id);
@@ -2023,7 +2027,7 @@ Tinode.prototype = {
    * @returns {Object} new message which can be sent to the server or otherwise used.
    */
   createMessage: function(topic, data, noEcho) {
-    let pkt = this.initPacket('pub', topic);
+    const pkt = this.initPacket('pub', topic);
 
     let dft = typeof data == 'string' ? Drafty.parse(data) : data;
     if (dft && !Drafty.isPlainText(dft)) {
@@ -2109,7 +2113,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   getMeta: function(topic, params) {
-    var pkt = this.initPacket('get', topic);
+    const pkt = this.initPacket('get', topic);
 
     pkt.get = mergeObj(pkt.get, params);
 
@@ -2125,8 +2129,8 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   setMeta: function(topic, params) {
-    var pkt = this.initPacket('set', topic);
-    var what = [];
+    const pkt = this.initPacket('set', topic);
+    const what = [];
 
     if (params) {
       ['desc', 'sub', 'tags'].map(function(key) {
@@ -2164,7 +2168,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   delMessages: function(topic, ranges, hard) {
-    var pkt = this.initPacket('del', topic);
+    const pkt = this.initPacket('del', topic);
 
     pkt.del.what = 'msg';
     pkt.del.delseq = ranges;
@@ -2181,7 +2185,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   delTopic: function(topic) {
-    var pkt = this.initPacket('del', topic);
+    const pkt = this.initPacket('del', topic);
     pkt.del.what = 'topic';
 
     return this.send(pkt, pkt.del.id).then((ctrl) => {
@@ -2199,7 +2203,7 @@ Tinode.prototype = {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   delSubscription: function(topic, user) {
-    var pkt = this.initPacket('del', topic);
+    const pkt = this.initPacket('del', topic);
     pkt.del.what = 'sub';
     pkt.del.user = user;
 
@@ -2219,7 +2223,7 @@ Tinode.prototype = {
       throw new Error("Invalid message id " + seq);
     }
 
-    var pkt = this.initPacket('note', topic);
+    const pkt = this.initPacket('note', topic);
     pkt.note.what = what;
     pkt.note.seq = seq;
     this.send(pkt);
@@ -2233,7 +2237,7 @@ Tinode.prototype = {
    * @param {String} topic - Name of the topic to broadcast to.
    */
   noteKeyPress: function(topic) {
-    var pkt = this.initPacket('note', topic);
+    const pkt = this.initPacket('note', topic);
     pkt.note.what = 'kp';
     this.send(pkt);
   },
@@ -2247,7 +2251,7 @@ Tinode.prototype = {
    * @returns {Tinode.Topic} Requested or newly created topic or <tt>undefined</tt> if topic name is invalid.
    */
   getTopic: function(name) {
-    var topic = this.cacheGet('topic', name);
+    let topic = this.cacheGet('topic', name);
     if (!topic && name) {
       if (name == TOPIC_ME) {
         topic = new TopicMe();
@@ -2272,7 +2276,7 @@ Tinode.prototype = {
    * @returns {Tinode.Topic} Newly created topic.
    */
   newTopic: function(callbacks) {
-    var topic = new Topic(TOPIC_NEW, callbacks);
+    const topic = new Topic(TOPIC_NEW, callbacks);
     this.attachCacheToTopic(topic);
     return topic;
   },
@@ -2296,7 +2300,7 @@ Tinode.prototype = {
    * @returns {Tinode.Topic} Newly created topic.
    */
   newTopicWith: function(peer, callbacks) {
-    var topic = new Topic(peer, callbacks);
+    const topic = new Topic(peer, callbacks);
     this.attachCacheToTopic(topic);
     return topic;
   },
@@ -2376,8 +2380,8 @@ Tinode.prototype = {
    * @returns {Boolean} true if topic is online, false otherwise.
    */
   isTopicOnline: function(name) {
-    var me = this.getMeTopic();
-    var cont = me && me.getContact(name);
+    const me = this.getMeTopic();
+    const cont = me && me.getContact(name);
     return cont && cont.online;
   },
 
@@ -2506,7 +2510,7 @@ Tinode.prototype = {
  */
 var MetaGetBuilder = function(parent) {
   this.topic = parent;
-  var me = parent._tinode.getMeTopic();
+  const me = parent._tinode.getMeTopic();
   this.contact = me && me.getContact(parent.name);
   this.what = {};
 }
@@ -2515,8 +2519,8 @@ MetaGetBuilder.prototype = {
 
   // Get latest timestamp
   _get_ims: function() {
-    let cupd = this.contact && this.contact.updated;
-    let tupd = this.topic._lastDescUpdate || 0;
+    const cupd = this.contact && this.contact.updated;
+    const tupd = this.topic._lastDescUpdate || 0;
     return cupd > tupd ? cupd : tupd;
   },
 
@@ -2598,7 +2602,7 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withSub: function(ims, limit, userOrTopic) {
-    var opts = {
+    const opts = {
       ims: ims,
       limit: limit
     };
@@ -2701,9 +2705,9 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.GetQuery} Get query
    */
   build: function() {
-    var params = {};
-    var what = [];
-    var instance = this;
+    const what = [];
+    const instance = this;
+    let params = {};
     ['data', 'sub', 'desc', 'tags', 'del'].map(function(key) {
       if (instance.what.hasOwnProperty(key)) {
         what.push(key);
@@ -2769,7 +2773,7 @@ AccessMode.decode = function(str) {
     return AccessMode._NONE;
   }
 
-  var bitmask = {
+  const bitmask = {
     'J': AccessMode._JOIN,
     'R': AccessMode._READ,
     'W': AccessMode._WRITE,
@@ -2780,11 +2784,10 @@ AccessMode.decode = function(str) {
     'O': AccessMode._OWNER
   };
 
-  var m0 = AccessMode._NONE;
+  let m0 = AccessMode._NONE;
 
-  for (var i = 0; i < str.length; i++) {
-    var c = str.charAt(i).toUpperCase();
-    var bit = bitmask[c];
+  for (let i = 0; i < str.length; i++) {
+    const bit = bitmask[str.charAt(i).toUpperCase()];
     if (!bit) {
       // Unrecognized bit, skip.
       continue;
@@ -2810,9 +2813,9 @@ AccessMode.encode = function(val) {
     return 'N';
   }
 
-  var bitmask = ['J', 'R', 'W', 'P', 'A', 'S', 'D', 'O'];
-  var res = '';
-  for (var i = 0; i < bitmask.length; i++) {
+  const bitmask = ['J', 'R', 'W', 'P', 'A', 'S', 'D', 'O'];
+  let res = '';
+  for (let i = 0; i < bitmask.length; i++) {
     if ((val & (1 << i)) != 0) {
       res = res + bitmask[i];
     }
@@ -2838,16 +2841,16 @@ AccessMode.update = function(val, upd) {
     return val;
   }
 
-  var action = upd.charAt(0);
+  let action = upd.charAt(0);
   if (action == '+' || action == '-') {
-    var val0 = val;
+    let val0 = val;
     // Split delta-string like '+ABC-DEF+Z' into an array of parts including + and -.
-    var parts = upd.split(/([-+])/);
+    const parts = upd.split(/([-+])/);
     // Starting iteration from 1 because String.split() creates an array with the first empty element.
     // Iterating by 2 because we parse pairs +/- then data.
-    for (var i = 1; i < parts.length - 1; i += 2) {
+    for (let i = 1; i < parts.length - 1; i += 2) {
       action = parts[i];
-      var m0 = AccessMode.decode(parts[i + 1]);
+      const m0 = AccessMode.decode(parts[i + 1]);
       if (m0 == AccessMode._INVALID) {
         return val;
       }
@@ -2863,7 +2866,7 @@ AccessMode.update = function(val, upd) {
     val = val0;
   } else {
     // The string is an explicit new value 'ABC' rather than delta.
-    var val0 = AccessMode.decode(upd);
+    const val0 = AccessMode.decode(upd);
     if (val0 != AccessMode._INVALID) {
       val = val0;
     }
@@ -2968,12 +2971,19 @@ AccessMode.prototype = {
    * Get 'want' value as a string.
    * @memberof Tinode.AccessMode
    *
-   * @returns {string} - <b>given</b> value.
+   * @returns {string} - <b>want</b> value.
    */
   getWant: function() {
     return AccessMode.encode(this.want);
   },
 
+  /**
+   * Update 'want', 'give', and 'mode' values.
+   * @memberof Tinode.AccessMode
+   *
+   * @param {AccessMode} val - new access mode value.
+   * @returns {AccessMode} - <b>this</b> AccessMode.
+   */
   updateAll: function(val) {
     if (val) {
       this.updateGiven(val.given);
@@ -3005,10 +3015,10 @@ AccessMode.prototype = {
     return ((this.mode & AccessMode._APPROVE) != 0);
   },
   isAdmin: function() {
-    return this.isOwner() || this.isApprover()
+    return this.isOwner() || this.isApprover();
   },
   isSharer: function() {
-    return ((this.mode & AccessMode._SHARE) != 0);
+    return this.isAdmin() || ((this.mode & AccessMode._SHARE) != 0);
   },
   isDeleter: function() {
     return ((this.mode & AccessMode._DELETE) != 0);
@@ -3128,11 +3138,10 @@ Topic.prototype = {
       return Promise.resolve(this);
     }
 
-    var name = this.name;
     // Send subscribe message, handle async response.
     // If topic name is explicitly provided, use it. If no name, then it's a new group topic,
     // use "new".
-    return this._tinode.subscribe(name || TOPIC_NEW, getParams, setParams).then((ctrl) => {
+    return this._tinode.subscribe(this.name || TOPIC_NEW, getParams, setParams).then((ctrl) => {
       if (ctrl.code >= 300) {
         // Do nothing ff the topic is already subscribed to.
         return ctrl;
@@ -3153,7 +3162,7 @@ Topic.prototype = {
         this._cachePutSelf();
 
         // Add the new topic to the list of contacts maintained by the 'me' topic.
-        var me = this._tinode.getMeTopic();
+        const me = this._tinode.getMeTopic();
         if (me) {
           me._processMetaSub([{
             _generated: true,
@@ -3346,13 +3355,13 @@ Topic.prototype = {
    * @param {boolean} forward if true, request newer messages.
    */
   getMessagesPage: function(limit, forward) {
-    var query = this.startMetaQuery();
+    const query = this.startMetaQuery();
     if (forward) {
       query.withLaterData(limit);
     } else {
       query.withEarlierData(limit);
     }
-    var promise = this.getMeta(query.build());
+    let promise = this.getMeta(query.build());
     if (!forward) {
       promise = promise.then((ctrl) => {
         if (ctrl && ctrl.params && !ctrl.params.count) {
@@ -3572,7 +3581,7 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
   delTopic: function() {
-    var topic = this;
+    const topic = this;
     return this._tinode.delTopic(this.name).then(function(ctrl) {
       topic._resetSub();
       topic._gone();
@@ -3611,7 +3620,7 @@ Topic.prototype = {
    * @param {Number} seq - ID or the message read or received.
    */
   note: function(what, seq) {
-    var user = this._users[this._tinode.getCurrentUserID()];
+    const user = this._users[this._tinode.getCurrentUserID()];
     if (user) {
       if (!user[what] || user[what] < seq) {
         if (this._subscribed) {
@@ -3626,7 +3635,7 @@ Topic.prototype = {
     }
 
     // Update locally cached contact with the new count
-    var me = this._tinode.getMeTopic();
+    const me = this._tinode.getMeTopic();
     if (me) {
       me.setMsgReadRecv(this.name, what, seq);
     }
@@ -3673,7 +3682,7 @@ Topic.prototype = {
   userDesc: function(uid) {
     // TODO(gene): handle asynchronous requests
 
-    var user = this._cacheGetUser(uid);
+    const user = this._cacheGetUser(uid);
     if (user) {
       return user; // Promise.resolve(user)
     }
@@ -3687,9 +3696,9 @@ Topic.prototype = {
    * @param {Object=} context - Value of `this` inside the `callback`.
    */
   subscribers: function(callback, context) {
-    var cb = (callback || this.onMetaSub);
+    const cb = (callback || this.onMetaSub);
     if (cb) {
-      for (var idx in this._users) {
+      for (let idx in this._users) {
         cb.call(context, this._users[idx], idx, this._users);
       }
     }
@@ -3724,7 +3733,7 @@ Topic.prototype = {
    * @param {Object} context - Value of `this` inside the `callback`.
    */
   messages: function(callback, sinceId, beforeId, context) {
-    var cb = (callback || this.onData);
+    const cb = (callback || this.onData);
     if (cb) {
       let startIdx = typeof sinceId == 'number' ? this._messages.find({
         seq: sinceId
@@ -3761,11 +3770,11 @@ Topic.prototype = {
    * @param {Number} seq - ID or the message read or received.
    */
   msgReceiptCount: function(what, seq) {
-    var count = 0;
-    var me = this._tinode.getCurrentUserID();
+    let count = 0;
     if (seq > 0) {
-      for (var idx in this._users) {
-        var user = this._users[idx];
+      const me = this._tinode.getCurrentUserID();
+      for (let idx in this._users) {
+        const user = this._users[idx];
         if (user.user !== me && user[what] >= seq) {
           count++;
         }
@@ -3846,7 +3855,7 @@ Topic.prototype = {
   flushMessageRange: function(fromId, untilId) {
     // start: find exact match.
     // end: find insertion point (nearest == true).
-    let since = this._messages.find({
+    const since = this._messages.find({
       seq: fromId
     });
     return since >= 0 ? this._messages.delRange(since, this._messages.find({
@@ -3863,12 +3872,12 @@ Topic.prototype = {
    * @returns {boolean} true if message was cancelled, false otherwise.
    */
   cancelSend: function(seqId) {
-    let idx = this._messages.find({
+    const idx = this._messages.find({
       seq: seqId
     });
     if (idx >= 0) {
-      let msg = this._messages.getAt(idx);
-      let status = this.msgStatus(msg);
+      const msg = this._messages.getAt(idx);
+      const status = this.msgStatus(msg);
       if (status == MESSAGE_STATUS_QUEUED || status == MESSAGE_STATUS_FAILED) {
         msg._cancelled = true;
         this._messages.delAt(idx);
@@ -3978,7 +3987,7 @@ Topic.prototype = {
     }
 
     // Update locally cached contact with the new message count
-    var me = this._tinode.getMeTopic();
+    const me = this._tinode.getMeTopic();
     if (me) {
       me.setMsgReadRecv(this.name, 'msg', data.seq, data.ts);
     }
@@ -4007,7 +4016,7 @@ Topic.prototype = {
 
   // Process presence change message
   _routePres: function(pres) {
-    var user;
+    let user;
     switch (pres.what) {
       case 'del':
         // Delete cached messages.
@@ -4028,7 +4037,7 @@ Topic.prototype = {
         user = this._users[uid];
         if (!user) {
           // Update for an unknown user
-          var acs = new AccessMode().updateAll(pres.dacs);
+          const acs = new AccessMode().updateAll(pres.dacs);
           if (acs && acs.mode != AccessMode._NONE) {
             user = this._cacheGetUser(uid);
             if (!user) {
@@ -4077,7 +4086,7 @@ Topic.prototype = {
   // Process {info} message
   _routeInfo: function(info) {
     if (info.what !== 'kp') {
-      var user = this._users[info.from];
+      const user = this._users[info.from];
       if (user) {
         user[info.what] = info.seq;
       }
@@ -4105,7 +4114,7 @@ Topic.prototype = {
 
     // Update relevant contact in the me topic, if available:
     if (this.name !== 'me' && !fromMe && !desc._generated) {
-      var me = this._tinode.getMeTopic();
+      const me = this._tinode.getMeTopic();
       if (me) {
         me._processMetaSub([{
           _generated: true,
@@ -4127,20 +4136,16 @@ Topic.prototype = {
   // Called by Tinode when meta.sub is recived or in response to received
   // {ctrl} after setMeta-sub.
   _processMetaSub: function(subs) {
-    var updatedDesc = undefined;
-    for (var idx in subs) {
-      var sub = subs[idx];
+    let updatedDesc = undefined;
+    for (let idx in subs) {
+      const sub = subs[idx];
       if (sub.user) { // Response to get.sub on 'me' topic does not have .user set
         // Save the object to global cache.
         sub.updated = new Date(sub.updated);
         sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
 
-        var user = null;
+        let user = null;
         if (!sub.deleted) {
-          user = this._users[sub.user];
-          if (!user) {
-            user = this._cacheGetUser(sub.user);
-          }
           user = this._updateCachedUser(sub.user, sub, sub._generated);
         } else {
           // Subscription is deleted, remove it from topic (but leave in Users cache)
@@ -4180,15 +4185,15 @@ Topic.prototype = {
   _processDelMessages: function(clear, delseq) {
     this._maxDel = Math.max(clear, this._maxDel);
     this.clear = Math.max(clear, this.clear);
-    var topic = this;
-    var count = 0;
+    const topic = this;
+    let count = 0;
     if (Array.isArray(delseq)) {
       delseq.map(function(range) {
         if (!range.hi) {
           count++;
           topic.flushMessage(range.low);
         } else {
-          for (var i = range.low; i < range.hi; i++) {
+          for (let i = range.low; i < range.hi; i++) {
             count++;
             topic.flushMessage(i);
           }
@@ -4223,7 +4228,7 @@ Topic.prototype = {
     this._minSeq = 0;
     this._subscribed = false;
 
-    var me = this._tinode.getMeTopic();
+    const me = this._tinode.getMeTopic();
     if (me) {
       me._routePres({
         _generated: true,
@@ -4242,7 +4247,7 @@ Topic.prototype = {
   _updateCachedUser: function(uid, obj, requestUpdate) {
     // Fetch user object from the global cache.
     // This is a clone of the stored object
-    var cached = this._cacheGetUser(uid);
+    let cached = this._cacheGetUser(uid);
     if (cached) {
       cached = mergeObj(cached, obj);
     } else {
@@ -4288,10 +4293,10 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   // Override the original Topic._processMetaSub
   _processMetaSub: {
     value: function(subs) {
-      var updateCount = 0;
-      for (var idx in subs) {
-        var sub = subs[idx];
-        var topicName = sub.topic;
+      let updateCount = 0;
+      for (let idx in subs) {
+        const sub = subs[idx];
+        const topicName = sub.topic;
         // Don't show 'me' and 'fnd' topics in the list of contacts.
         if (topicName == TOPIC_FND || topicName == TOPIC_ME) {
           continue;
@@ -4306,7 +4311,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         sub.read = sub.read | 0;
         sub.unread = sub.seq - sub.read;
 
-        var cont = null;
+        let cont = null;
         if (!sub.deleted) {
           if (sub.seen && sub.seen.when) {
             sub.seen.when = new Date(sub.seen.when);
@@ -4318,7 +4323,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
 
           // Notify topic of the update if it's a genuine event.
           if (!sub._generated) {
-            var topic = this._tinode.getTopic(topicName);
+            const topic = this._tinode.getTopic(topicName);
             if (topic) {
               topic._processMetaDesc(sub, true);
             }
@@ -4347,7 +4352,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   // Process presence change message
   _routePres: {
     value: function(pres) {
-      var cont = this._contacts[pres.src];
+      const cont = this._contacts[pres.src];
       if (cont) {
         switch (pres.what) {
           case 'on': // topic came online
@@ -4409,7 +4414,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         // New subscriptions and deleted/banned subscriptions have full
         // access mode (no + or - in the dacs string). Changes to known subscriptions are sent as
         // deltas, but they should not happen here.
-        var acs = new AccessMode(pres.dacs);
+        let acs = new AccessMode(pres.dacs);
         if (!acs || acs.mode == AccessMode._INVALID) {
           this._tinode.logger("Invalid access mode update", pres.src, pres.dacs);
           return;
@@ -4460,9 +4465,9 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   contacts: {
     value: function(callback, context) {
-      var cb = (callback || this.onMetaSub);
+      const cb = (callback || this.onMetaSub);
       if (cb) {
-        for (var idx in this._contacts) {
+        for (let idx in this._contacts) {
           cb.call(context, this._contacts[idx], idx, this._contacts);
         }
       }
@@ -4484,9 +4489,9 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   setMsgReadRecv: {
     value: function(contactName, what, seq, ts) {
-      var cont = this._contacts[contactName];
-      var oldVal, doUpdate = false;
-      var mode = null;
+      const cont = this._contacts[contactName];
+      let oldVal, doUpdate = false;
+      let mode = null;
       if (cont) {
         seq = seq | 0;
         switch (what) {
@@ -4551,7 +4556,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   getAccessMode: {
     value: function(name) {
-      var cont = this._contacts[name];
+      const cont = this._contacts[name];
       return cont ? cont.acs : null;
     },
     enumerable: true,
@@ -4580,12 +4585,12 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
   // Override the original Topic._processMetaSub
   _processMetaSub: {
     value: function(subs) {
-      var updateCount = Object.getOwnPropertyNames(this._contacts).length;
+      let updateCount = Object.getOwnPropertyNames(this._contacts).length;
       // Reset contact list.
       this._contacts = {};
-      for (var idx in subs) {
-        var sub = subs[idx];
-        var indexBy = sub.topic ? sub.topic : sub.user;
+      for (let idx in subs) {
+        let sub = subs[idx];
+        const indexBy = sub.topic ? sub.topic : sub.user;
 
         sub.updated = new Date(sub.updated);
         if (sub.seen && sub.seen.when) {
@@ -4629,7 +4634,7 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
    */
   setMeta: {
     value: function(params) {
-      var instance = this;
+      const instance = this;
       return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(function() {
         if (Object.keys(instance._contacts).length > 0) {
           instance._contacts = {};
@@ -4653,9 +4658,9 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
    */
   contacts: {
     value: function(callback, context) {
-      var cb = (callback || this.onMetaSub);
+      const cb = (callback || this.onMetaSub);
       if (cb) {
-        for (var idx in this._contacts) {
+        for (let idx in this._contacts) {
           cb.call(context, this._contacts[idx], idx, this._contacts);
         }
       }
@@ -4709,11 +4714,11 @@ LargeFileHelper.prototype = {
     if (!this._authToken) {
       throw new Error("Must authenticate first");
     }
-    var instance = this;
+    const instance = this;
     this.xhr.open('POST', '/v' + PROTOCOL_VERSION + '/file/u/', true);
     this.xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
     this.xhr.setRequestHeader('X-Tinode-Auth', 'Token ' + this._authToken.token);
-    var result = new Promise((resolve, reject) => {
+    const result = new Promise((resolve, reject) => {
       this.toResolve = resolve;
       this.toReject = reject;
     });
@@ -4729,7 +4734,7 @@ LargeFileHelper.prototype = {
     }
 
     this.xhr.onload = function() {
-      var pkt;
+      let pkt;
       try {
         pkt = JSON.parse(this.response, jsonParseHelper);
       } catch (err) {
@@ -4774,7 +4779,7 @@ LargeFileHelper.prototype = {
     };
 
     try {
-      var form = new FormData();
+      const form = new FormData();
       form.append('file', file);
       form.set('id', this._msgId);
       this.xhr.send(form);
@@ -4808,7 +4813,7 @@ LargeFileHelper.prototype = {
     if (!this._authToken) {
       throw new Error("Must authenticate first");
     }
-    var instance = this;
+    const instance = this;
     // Get data as blob (stored by the browser as a temporary file).
     this.xhr.open('GET', relativeUrl, true);
     this.xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
@@ -4824,7 +4829,7 @@ LargeFileHelper.prototype = {
       }
     };
 
-    var result = new Promise((resolve, reject) => {
+    const result = new Promise((resolve, reject) => {
       this.toResolve = resolve;
       this.toReject = reject;
     });
@@ -4833,7 +4838,7 @@ LargeFileHelper.prototype = {
     // save the blob as file other than to fake a click on an <a href... download=...>.
     this.xhr.onload = function() {
       if (this.status == 200) {
-        var link = document.createElement('a');
+        const link = document.createElement('a');
         link.href = window.URL.createObjectURL(new Blob([this.response], {
           type: mimetype
         }));
@@ -4850,10 +4855,10 @@ LargeFileHelper.prototype = {
         // The this.responseText is undefined, must use this.response which is a blob.
         // Need to convert this.response to JSON. The blob can only be accessed by the
         // FileReader.
-        var reader = new FileReader();
+        const reader = new FileReader();
         reader.onload = function() {
           try {
-            var pkt = JSON.parse(this.result, jsonParseHelper);
+            const pkt = JSON.parse(this.result, jsonParseHelper);
             instance.toReject(new Error(pkt.ctrl.text + " (" + pkt.ctrl.code + ")"));
           } catch (err) {
             instance._tinode.logger("Invalid server response in LargeFileHelper", this.result);
