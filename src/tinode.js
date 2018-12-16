@@ -187,6 +187,9 @@ function mergeObj(dst, src, ignore) {
   }
 
   if (typeof src != 'object') {
+    if (src === Tinode.DEL_CHAR) {
+      return undefined;
+    }
     return src ? src : dst;
   }
 
@@ -214,7 +217,11 @@ function mergeObj(dst, src, ignore) {
       (src[prop] || src[prop] === false) &&
       (!ignore || !ignore[prop]) &&
       (prop != '_generated')) {
-      dst[prop] = mergeObj(dst[prop], src[prop]);
+      if (prop == 'public' || prop == 'private') {
+        dst[prop] = mergeObj({}, src[prop]);
+      } else {
+        dst[prop] = mergeObj(dst[prop], src[prop]);
+      }
     }
   }
   return dst;

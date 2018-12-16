@@ -1,31 +1,36 @@
 /**
+ * @copyright 2015-2018 Tinode
+ * @summary Minimally rich text representation and formatting for Tinode.
+ * @license Apache 2.0
+ * @version 0.15
+ *
  * @file Basic parser and formatter for very simple text markup. Mostly targeted at
  * mobile use cases similar to Telegram, WhatsApp, and FB Messenger.
  *
- * Supports:
- *   *abc* -> <b>abc</b>
- *   _abc_ -> <i>abc</i>
- *   ~abc~ -> <del>abc</del>
- *   `abc` -> <tt>abc</tt>
- * Also forms and buttons.
+ * <p>Supports conversion of user keyboard input to formatted text:</p>
+ * <ul>
+ *   <li>*abc* &rarr; <b>abc</b></li>
+ *   <li>_abc_ &rarr; <i>abc</i></li>
+ *   <li>~abc~ &rarr; <del>abc</del></li>
+ *   <li>`abc` &rarr; <tt>abc</tt></li>
+ * </ul>
+ * Also supports forms and buttons.
  *
  * Nested formatting is supported, e.g. *abc _def_* -> <b>abc <i>def</i></b>
  * URLs, @mentions, and #hashtags are extracted and converted into links.
  * Forms and buttons can be added procedurally.
  * JSON data representation is inspired by Draft.js raw formatting.
  *
- * @copyright 2015-2018 Tinode
- * @summary Minimally rich text representation and formatting for Tinode.
- * @license Apache 2.0
- * @version 0.15
  *
  * @example
  * Text:
+ * <pre>
  *     this is *bold*, `code` and _italic_, ~strike~
  *     combined *bold and _italic_*
  *     an url: https://www.example.com/abc#fragment and another _www.tinode.co_
  *     this is a @mention and a #hashtag in a string
  *     second #hashtag
+ * </pre>
  *
  *  Sample JSON representation of the text above:
  *  {
