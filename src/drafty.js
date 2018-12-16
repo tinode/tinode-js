@@ -369,7 +369,6 @@ const DECORATORS = {
 /**
  * The main object which performs all the formatting actions.
  * @class Drafty
- * @memberof Tinode
  * @constructor
  */
 var Drafty = function() {}
@@ -616,7 +615,7 @@ function splice(src, at, insert) {
 
 /**
  * Parse plain text into structured representation.
- * @memberof Tinode.Drafty#
+ * @memberof Drafty
  * @static
  *
  * @param {String} content plain-text content to parse.
@@ -749,7 +748,7 @@ Drafty.parse = function(content) {
 
 /**
  * Insert inline image into Drafty content.
- * @memberof Tinode.Drafty#
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty} content object to add image to.
@@ -794,7 +793,7 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
 
 /**
  * Append image to Drafty content.
- * @memberof Tinode.Drafty#
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty} content object to add image to.
@@ -818,7 +817,7 @@ Drafty.appendImage = function(content, mime, base64bits, width, height, fname, s
 
 /**
  * Attach file to Drafty content. Either as a blob or as a reference.
- * @memberof Tinode.Drafty#
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty} content object to attach file to.
@@ -868,7 +867,7 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
 
 /**
  * Wraps content into an interactive form.
- * @memberof Tinode.Drafty#
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty|string} content to wrap into a form.
@@ -896,7 +895,7 @@ Drafty.wrapAsForm = function(content, at, len) {
 
 /**
  * Insert clickable button into Drafty document.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty|string} content is Drafty object to insert button to or a string to be used as button text.
@@ -952,7 +951,7 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue, 
 
 /**
  * Append clickable button to Drafty document.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty|string} content is Drafty object to insert button to or a string to be used as button text.
@@ -977,7 +976,7 @@ Drafty.appendButton = function(content, title, name, actionType, actionValue, re
  * Attach a generic JS object. The object is attached as a json string.
  * Intended for representing a form response.
  *
- * @memberof Tinode.Drafty#
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty} content object to attach file to.
@@ -1087,7 +1086,7 @@ Drafty.UNSAFE_toHTML = function(content) {
 /**
  * Callback for applying custom formatting/transformation to a Drafty object.
  * Called once for each syle span.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @callback Formatter
@@ -1099,7 +1098,7 @@ Drafty.UNSAFE_toHTML = function(content) {
 
 /**
  * Transform Drafty using custom formatting.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty} content - content to transform.
@@ -1181,7 +1180,7 @@ Drafty.format = function(content, formatter, context) {
 
 /**
  * Given structured representation of rich text, convert it to plain text.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty} content - content to convert to plain text.
@@ -1192,7 +1191,7 @@ Drafty.toPlainText = function(content) {
 
 /**
  * Returns true if content has no markup and no entities.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty} content - content to check for presence of markup.
@@ -1204,7 +1203,7 @@ Drafty.isPlainText = function(content) {
 
 /**
  * Check if the drafty content has attachments.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty} content - content to check for attachments.
@@ -1224,7 +1223,7 @@ Drafty.hasAttachments = function(content) {
 /**
  * Callback for applying custom formatting/transformation to a Drafty object.
  * Called once for each syle span.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @callback AttachmentCallback
@@ -1234,7 +1233,7 @@ Drafty.hasAttachments = function(content) {
 
 /**
  * Enumerate attachments.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty} content - drafty object to process for attachments.
@@ -1254,7 +1253,7 @@ Drafty.attachments = function(content, callback, context) {
 /**
  * Given the entity, get URL which can be used for downloading
  * entity data.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Object} entity.data to get the URl from.
@@ -1271,7 +1270,7 @@ Drafty.getDownloadUrl = function(entData) {
 
 /**
  * Check if the entity data is being uploaded to the server.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Object} entity.data to get the URl from.
@@ -1284,7 +1283,7 @@ Drafty.isUploading = function(entData) {
 /**
  * Given the entity, get URL which can be used for previewing
  * the entity.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Object} entity.data to get the URl from.
@@ -1297,7 +1296,7 @@ Drafty.getPreviewUrl = function(entData) {
 
 /**
  * Get approximate size of the entity.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Object} entity.data to get the size for.
@@ -1310,7 +1309,7 @@ Drafty.getEntitySize = function(entData) {
 
 /**
  * Get entity mime type.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Object} entity.data to get the type for.
@@ -1321,7 +1320,7 @@ Drafty.getEntityMimeType = function(entData) {
 
 /**
  * Get HTML tag for a given two-letter style name
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {string} style - two-letter style, like ST or LN
@@ -1336,7 +1335,7 @@ Drafty.tagName = function(style) {
  * For a given data bundle generate an object with HTML attributes,
  * for instance, given {url: "http://www.example.com/"} return
  * {href: "http://www.example.com/"}
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {string} style - tw-letter style to generate attributes for.
@@ -1354,7 +1353,7 @@ Drafty.attrValue = function(style, data) {
 
 /**
  * Drafty MIME type.
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @returns {string} HTTP Content-Type "text/x-drafty".
