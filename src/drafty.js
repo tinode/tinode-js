@@ -341,7 +341,7 @@ const DECORATORS = {
         'data-width': data.width,
         'data-height': data.height,
         'data-name': data.name,
-        'data-size': (data.val.length * 0.75) | 0,
+        'data-size': data.val ? (data.val.length * 0.75) | 0 : 0,
         'data-mime': data.mime
       };
     },
@@ -1114,11 +1114,15 @@ Drafty.format = function(content, formatter, context) {
     ent
   } = content;
 
+  // Assign default values.
   txt = txt || "";
+  if (!Array.isArray(ent)) {
+    ent = [];
+  }
 
   if (!Array.isArray(fmt)) {
     // Handle special case when all values in fmt are 0 and fmt is skipped.
-    if (Array.isArray(ent) && ent.length == 1) {
+    if (ent.length == 1) {
       fmt = [{
         at: 0,
         len: 0,
@@ -1162,11 +1166,12 @@ Drafty.format = function(content, formatter, context) {
       if (ent[s.key]) {
         data = ent[s.key].data;
         tp = ent[s.key].tp;
-      } else {
-        // Hide invalid element
-        tp = 'HD';
       }
     }
+
+    // Type still not defined? Hide invalid element.
+    tp = tp || 'HD';
+
     return {
       tp: tp,
       data: data,
