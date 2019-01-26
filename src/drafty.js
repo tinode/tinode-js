@@ -189,20 +189,21 @@ function base64toObjectUrl(b64, contentType) {
   let bin;
   try {
     bin = atob(b64);
+    let length = bin.length;
+    let buf = new ArrayBuffer(length);
+    let arr = new Uint8Array(buf);
+    for (let i = 0; i < length; i++) {
+      arr[i] = bin.charCodeAt(i);
+    }
+
+    return URL.createObjectURL(new Blob([buf], {
+      type: contentType
+    }));
   } catch (err) {
-    console.log("Drafty: failed to decode base64-encoded object", err.message);
-    bin = atob('');
-  }
-  let length = bin.length;
-  let buf = new ArrayBuffer(length);
-  let arr = new Uint8Array(buf);
-  for (let i = 0; i < length; i++) {
-    arr[i] = bin.charCodeAt(i);
+    console.log("Drafty: failed to convert object.", err.message);
   }
 
-  return URL.createObjectURL(new Blob([buf], {
-    type: contentType
-  }));
+  return null;
 }
 
 // Helpers for converting Drafty to HTML.
