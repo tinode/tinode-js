@@ -3948,6 +3948,16 @@ Topic.prototype = {
   },
 
   /**
+   * Check if topic is archived, i.e. private.arch == true.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} - true if topic is archived, false otherwise.
+   */
+  isArchived: function() {
+    return this.private && this.private.arch;
+  },
+
+  /**
    * Get status (queued, sent, received etc) of a given message in the context
    * of this topic.
    * @memberof Tinode.Topic#
