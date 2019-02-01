@@ -217,11 +217,8 @@ function mergeObj(dst, src, ignore) {
       (src[prop] || src[prop] === false) &&
       (!ignore || !ignore[prop]) &&
       (prop != '_generated')) {
-      if (prop == 'public' || prop == 'private') {
-        dst[prop] = mergeObj({}, src[prop]);
-      } else {
-        dst[prop] = mergeObj(dst[prop], src[prop]);
-      }
+
+      dst[prop] = mergeObj(dst[prop], src[prop]);
     }
   }
   return dst;
