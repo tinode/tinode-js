@@ -181,16 +181,11 @@ function b64EncodeUnicode(str) {
 // Ignore properties where ignore[property] is true.
 // Array and Date objects are shallow-copied.
 function mergeObj(dst, src, ignore) {
-  // Handle the 3 simple types, and null or undefined
-  if (src === null || src === undefined) {
-    return dst;
-  }
-
   if (typeof src != 'object') {
     if (src === Tinode.DEL_CHAR) {
       return undefined;
     }
-    return src ? src : dst;
+    return src;
   }
 
   // Handle Date
@@ -205,7 +200,7 @@ function mergeObj(dst, src, ignore) {
 
   // Handle Array
   if (src instanceof Array) {
-    return src.length > 0 ? src : dst;
+    return src;
   }
 
   if (!dst || dst === Tinode.DEL_CHAR) {
@@ -214,7 +209,6 @@ function mergeObj(dst, src, ignore) {
 
   for (let prop in src) {
     if (src.hasOwnProperty(prop) &&
-      (src[prop] || src[prop] === false) &&
       (!ignore || !ignore[prop]) &&
       (prop != '_generated')) {
 
@@ -4130,7 +4124,7 @@ Topic.prototype = {
       if (user) {
         user[info.what] = info.seq;
       }
-      
+
       // Update locally cached contact with the new count.
       const me = this._tinode.getMeTopic();
       if (me) {
