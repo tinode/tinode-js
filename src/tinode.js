@@ -3430,9 +3430,7 @@ Topic.prototype = {
             params.desc.acs = ctrl.params.acs;
             params.desc.updated = ctrl.ts;
           }
-          console.log("Before _processMetaDesc", this.private ? this.private.arch : 'no .private', this.isArchived());
           this._processMetaDesc(params.desc);
-          console.log("After _processMetaDesc", this.private ? this.private.arch : 'no .private', this.isArchived());
         }
 
         if (params.tags) {
@@ -4132,6 +4130,12 @@ Topic.prototype = {
       if (user) {
         user[info.what] = info.seq;
       }
+      
+      // Update locally cached contact with the new count.
+      const me = this._tinode.getMeTopic();
+      if (me) {
+        me.setMsgReadRecv(info.from, info.what, info.seq);
+      }
     }
     if (this.onInfo) {
       this.onInfo(info);
@@ -4156,6 +4160,7 @@ Topic.prototype = {
 
     // Update relevant contact in the me topic, if available:
     if (this.name !== 'me' && !fromMe && !desc._generated) {
+      console.log("_processMetaDesc routing to 'me'", this.private);
       const me = this._tinode.getMeTopic();
       if (me) {
         me._processMetaSub([{
