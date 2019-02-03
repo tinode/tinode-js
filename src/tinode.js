@@ -3430,7 +3430,9 @@ Topic.prototype = {
             params.desc.acs = ctrl.params.acs;
             params.desc.updated = ctrl.ts;
           }
+          console.log("Before _processMetaDesc", this.private ? this.private.arch : 'no .private', this.isArchived());
           this._processMetaDesc(params.desc);
+          console.log("After _processMetaDesc", this.private ? this.private.arch : 'no .private', this.isArchived());
         }
 
         if (params.tags) {
@@ -3442,7 +3444,7 @@ Topic.prototype = {
   },
 
   /**
-   * Create new topic subscription.
+   * Create new topic subscription. Wrapper for {@link Tinode#setMeta}.
    * @memberof Tinode.Topic#
    *
    * @param {String} uid - ID of the user to invite
@@ -3455,6 +3457,24 @@ Topic.prototype = {
       sub: {
         user: uid,
         mode: mode
+      }
+    });
+  },
+
+  /**
+   * Archive or un-archive the topic. Wrapper for {@link Tinode#setMeta}.
+   * @memberof Tinode.Topic#
+   *
+   * @param {Boolean} arch - true to archive the topic, false otherwise.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+   */
+  archive: function(arch) {
+    return this.setMeta({
+      desc: {
+        private: {
+          arch: arch ? true : Tinode.DEL_CHAR
+        }
       }
     });
   },
@@ -3951,7 +3971,7 @@ Topic.prototype = {
    * @returns {boolean} - true if topic is archived, false otherwise.
    */
   isArchived: function() {
-    return this.private && this.private.arch;
+    return this.private && this.private.arch ? true : false;
   },
 
   /**
