@@ -187,6 +187,10 @@ function mergeObj(dst, src, ignore) {
     }
     return src;
   }
+  // JS is crazy: typeof null is 'object'.
+  if (src === null) {
+    return src;
+  }
 
   // Handle Date
   if (src instanceof Date) {
