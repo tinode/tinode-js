@@ -4618,7 +4618,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   isArchived: {
     value: function(name) {
       const cont = this._contacts[name];
-      return cont ? (cont.private && const.private.arch ? true : false) : null;
+      return cont ? ((cont.private && cont.private.arch) ? true : false) : null;
     },
     enumerable: true,
     configurable: true,
