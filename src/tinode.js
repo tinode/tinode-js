@@ -4129,7 +4129,7 @@ Topic.prototype = {
         user[info.what] = info.seq;
       }
 
-      // Update locally cached contact with the new count.
+      // Update contact with the new count.
       const me = this._tinode.getMeTopic();
       if (me) {
         me.setMsgReadRecv(info.from, info.what, info.seq);
@@ -4158,7 +4158,6 @@ Topic.prototype = {
 
     // Update relevant contact in the me topic, if available:
     if (this.name !== 'me' && !fromMe && !desc._generated) {
-      console.log("_processMetaDesc routing to 'me'", this.private);
       const me = this._tinode.getMeTopic();
       if (me) {
         me._processMetaSub([{
@@ -4596,13 +4595,30 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    * Get access mode of a given contact from cache.
    * @memberof Tinode.TopicMe#
    *
-   * @param {String} name - Name of the contact to get access mode for, aither a UID (for p2p topics) or a topic name.
+   * @param {String} name - Name of the contact to get access mode for, either a UID (for p2p topics) or a topic name.
    * @returns {string} - access mode, such as `RWP`.
    */
   getAccessMode: {
     value: function(name) {
       const cont = this._contacts[name];
       return cont ? cont.acs : null;
+    },
+    enumerable: true,
+    configurable: true,
+    writable: true
+  },
+
+  /**
+   * Check if contact is archived, i.e. contact.private.arch == true.
+   * @memberof Tinode.TopicMe#
+   *
+   * @param {String} name - Name of the contact to check archived status, either a UID (for p2p topics) or a topic name.
+   * @returns {boolean} - true if contact is archived, false otherwise.
+   */
+  isArchived: {
+    value: function(name) {
+      const cont = this._contacts[name];
+      return cont ? (cont.private && const.private.arch ? true : false) : null;
     },
     enumerable: true,
     configurable: true,
