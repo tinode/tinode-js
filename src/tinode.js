@@ -4544,15 +4544,18 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       let mode = null;
       if (cont) {
         seq = seq | 0;
+        cont.seq = cont.seq | 0;
+        cont.read = cont.read | 0;
+        cont.recv = cont.recv | 0;
         switch (what) {
           case 'recv':
             oldVal = cont.recv;
-            cont.recv = cont.recv ? Math.max(cont.recv, seq) : seq;
+            cont.recv = Math.max(cont.recv, seq);
             doUpdate = (oldVal != cont.recv);
             break;
           case 'read':
             oldVal = cont.read;
-            cont.read = cont.read ? Math.max(cont.read, seq) : seq;
+            cont.read = Math.max(cont.read, seq);
             cont.unread = cont.seq - cont.read;
             doUpdate = (oldVal != cont.read);
             if (cont.recv < cont.read) {
@@ -4562,7 +4565,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             break;
           case 'msg':
             oldVal = cont.seq;
-            cont.seq = cont.seq ? Math.max(cont.seq, seq) : seq;
+            cont.seq = Math.max(cont.seq, seq);
             cont.unread = cont.seq - cont.read;
             if (!cont.touched || cont.touched < ts) {
               cont.touched = ts;
