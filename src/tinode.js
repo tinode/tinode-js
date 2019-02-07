@@ -3466,6 +3466,9 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   archive: function(arch) {
+    if (this.private && this.private.arch == arch) {
+      return Promise.resolve(arch);
+    }
     return this.setMeta({
       desc: {
         private: {
@@ -4127,6 +4130,9 @@ Topic.prototype = {
       const user = this._users[info.from];
       if (user) {
         user[info.what] = info.seq;
+        if (user.recv < user.read) {
+          user.recv = user.read;
+        }
       }
 
       // Update contact with the new count.
