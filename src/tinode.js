@@ -662,7 +662,8 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
           this.onAutoreconnectIteration(0, prom);
         } else {
           // Suppress error if it's not used.
-          prom.catch(() => { /* do nothing */ });
+          prom.catch(() => {
+            /* do nothing */ });
         }
       } else if (this.onAutoreconnectIteration) {
         this.onAutoreconnectIteration(-1);
