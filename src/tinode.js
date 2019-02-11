@@ -663,7 +663,8 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
         } else {
           // Suppress error if it's not used.
           prom.catch(() => {
-            /* do nothing */ });
+            /* do nothing */
+          });
         }
       } else if (this.onAutoreconnectIteration) {
         this.onAutoreconnectIteration(-1);

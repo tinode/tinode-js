@@ -859,7 +859,8 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
         ex.data.ref = url;
       },
       (err) => {
-        /* catch the error, otherwise it will appear in the console. */ }
+        /* catch the error, otherwise it will appear in the console. */
+      }
     );
   }
   content.ent.push(ex);
