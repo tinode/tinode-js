@@ -214,7 +214,7 @@ function mergeObj(dst, src, ignore) {
   for (let prop in src) {
     if (src.hasOwnProperty(prop) &&
       (!ignore || !ignore[prop]) &&
-      (prop != '_generated')) {
+      (prop != '_noForwarding')) {
 
       dst[prop] = mergeObj(dst[prop], src[prop]);
     }
@@ -3208,7 +3208,7 @@ Topic.prototype = {
         const me = this._tinode.getMeTopic();
         if (me) {
           me._processMetaSub([{
-            _generated: true,
+            _noForwarding: true,
             topic: this.name,
             created: ctrl.ts,
             updated: ctrl.ts,
@@ -3218,7 +3218,7 @@ Topic.prototype = {
         }
 
         if (setParams && setParams.desc) {
-          setParams.desc._generated = true;
+          setParams.desc._noForwarding = true;
           this._processMetaDesc(setParams.desc);
         }
       }
@@ -3308,11 +3308,11 @@ Topic.prototype = {
     }
 
     let seq = pub.seq || this._getQueuedSeqId();
-    if (!pub._generated) {
+    if (!pub._noForwarding) {
       // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
       // before the message is sent.
 
-      pub._generated = true;
+      pub._noForwarding = true;
       pub.seq = seq;
       pub.ts = new Date();
       pub.from = this._tinode.getCurrentUserID();
@@ -3445,7 +3445,7 @@ Topic.prototype = {
               params.desc = {};
             }
           }
-          params.sub._generated = true;
+          params.sub._noForwarding = true;
           this._processMetaSub([params.sub]);
         }
 
@@ -4037,7 +4037,7 @@ Topic.prototype = {
         this.touched = data.ts;
       }
 
-      if (!data._generated) {
+      if (!data._noForwarding) {
         this._messages.put(data);
       }
     }
@@ -4100,7 +4100,8 @@ Topic.prototype = {
         }
         break;
       case 'acs':
-        let uid = pres.src == 'me' ? this._tinode.getCurrentUserID() : pres.src;
+        const isMe = pres.src == 'me' || pres.src == this._tinode.getCurrentUserID();
+        const uid = isMe ? this._tinode.getCurrentUserID() : pres.src;
         user = this._users[uid];
         if (!user) {
           // Update for an unknown user
@@ -4116,37 +4117,41 @@ Topic.prototype = {
             } else {
               user.acs = acs;
             }
-            user._generated = true;
+            user._noForwarding = true;
             user.updated = new Date();
             this._processMetaSub([user]);
           }
         } else {
           // Known user
           user.acs.updateAll(pres.dacs);
-          if (uid == this._tinode.getCurrentUserID()) {
-            this.acs.updateAll(pres.dacs);
-          }
           // User left topic.
           if (!user.acs || user.acs.mode == AccessMode._NONE) {
-            /*
-            // FIXME: this probably should not be done here.
+            // FIXME: this probably should not be done here. 'me' topic should be
+            // notified instead.
             if (this.getType() == 'p2p') {
               // If the second user unsubscribed from the topic, then the topic is no longer
               // useful.
               this.leave();
             }
-            */
+
             this._processMetaSub([{
               user: uid,
               deleted: new Date(),
-              _generated: true
+              _noForwarding: true
             }]);
+          } else if (isMe) {
+            // Allow forwarding (_noForwarding=undefined), otherwise contact in 'me' won't be updated.
+            this._processMetaDesc({
+              updated: new Date(),
+              acs: user.acs
+            });
           } else {
-            // Clone user object and process the change in access mode.
-            user = mergeObj({}, user);
-            user._generated = true;
-            user.updated = new Date();
-            this._processMetaSub([user]);
+            this._processMetaSub([{
+              user: uid,
+              updated: new Date(),
+              acs: user.acs,
+              _noForwarding: true
+            }]);
           }
         }
         break;
@@ -4198,11 +4203,11 @@ Topic.prototype = {
     }
 
     // Update relevant contact in the me topic, if available:
-    if (this.name !== 'me' && !fromMe && !desc._generated) {
+    if (this.name !== 'me' && !fromMe && !desc._noForwarding) {
       const me = this._tinode.getMeTopic();
       if (me) {
         me._processMetaSub([{
-          _generated: true,
+          _noForwarding: true,
           topic: this.name,
           updated: this.updated,
           touched: this.touched,
@@ -4231,7 +4236,7 @@ Topic.prototype = {
 
         let user = null;
         if (!sub.deleted) {
-          user = this._updateCachedUser(sub.user, sub, sub._generated);
+          user = this._updateCachedUser(sub.user, sub);
         } else {
           // Subscription is deleted, remove it from topic (but leave in Users cache)
           delete this._users[sub.user];
@@ -4241,7 +4246,8 @@ Topic.prototype = {
         if (this.onMetaSub) {
           this.onMetaSub(user);
         }
-      } else if (!sub._generated) {
+      } else if (!sub._noForwarding) {
+        console.log("SHOULD NOT HAPPEN!!");
         updatedDesc = sub;
       }
     }
@@ -4316,7 +4322,7 @@ Topic.prototype = {
     const me = this._tinode.getMeTopic();
     if (me) {
       me._routePres({
-        _generated: true,
+        _noForwarding: true,
         what: 'gone',
         topic: 'me',
         src: this.name
@@ -4329,19 +4335,11 @@ Topic.prototype = {
 
   // Update global user cache and local subscribers cache.
   // Don't call this method for non-subscribers.
-  _updateCachedUser: function(uid, obj, requestUpdate) {
+  _updateCachedUser: function(uid, obj) {
     // Fetch user object from the global cache.
     // This is a clone of the stored object
     let cached = this._cacheGetUser(uid);
-    if (cached) {
-      cached = mergeObj(cached, obj);
-    } else {
-      // Cached object is not found. Issue a request for public/private.
-      if (requestUpdate) {
-        this.getMeta(this.startMetaQuery().withLaterOneSub(uid).build());
-      }
-      cached = mergeObj({}, obj);
-    }
+    cached = mergeObj(cached || {}, obj);
     // Save to global cache
     this._cachePutUser(uid, cached);
     // Save to the list of topic subsribers.
@@ -4407,7 +4405,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           }
 
           // Notify topic of the update if it's a genuine event.
-          if (!sub._generated) {
+          if (!sub._noForwarding) {
             const topic = this._tinode.getTopic(topicName);
             if (topic) {
               topic._processMetaDesc(sub, true);
