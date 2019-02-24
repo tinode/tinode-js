@@ -2894,6 +2894,14 @@ AccessMode.update = function(val, upd) {
  */
 AccessMode.prototype = {
   /**
+   * Custom formatter
+   */
+  toString: function() {
+    return '{mode: "' + AccessMode.encode(this.mode) +
+      '", given: "' + AccessMode.encode(this.given) +
+      '", want: "' + AccessMode.encode(this.want) + '"}';
+  },
+  /**
    * Assign value to 'mode'.
    * @memberof Tinode.AccessMode
    *
@@ -2987,6 +2995,29 @@ AccessMode.prototype = {
    */
   getWant: function() {
     return AccessMode.encode(this.want);
+  },
+
+  /**
+   * Get permissions present in 'want' but missing in 'given'.
+   * Inverse of {@link Tinode.AccessMode#getExcessive}
+   *
+   * @memberof Tinode.AccessMode
+   *
+   * @returns {string} - <b>want</b> value.
+   */
+  getMissing: function() {
+    return AccessMode.encode(this.want & ~this.given);
+  },
+
+  /**
+   * Get permissions present in 'given' but missing in 'want'.
+   * Inverse of {@link Tinode.AccessMode#getMissing}
+   * @memberof Tinode.AccessMode
+   *
+   * @returns {string} - <b>want</b> value.
+   */
+  getExcessive: function() {
+    return AccessMode.encode(this.given & ~this.want);
   },
 
   /**
@@ -3352,9 +3383,6 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   getMeta: function(params) {
-    if (!this._subscribed) {
-      return Promise.reject(new Error("Cannot query inactive topic"));
-    }
     // Send {get} message, return promise.
     return this._tinode.getMeta(this.name, params);
   },
@@ -3392,10 +3420,6 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   setMeta: function(params) {
-    if (!this._subscribed) {
-      return Promise.reject(new Error("Cannot update inactive topic"));
-    }
-
     if (params.tags) {
       params.tags = normalizeArray(params.tags);
     }
@@ -4104,16 +4128,25 @@ Topic.prototype = {
           }
           // User left topic.
           if (!user.acs || user.acs.mode == AccessMode._NONE) {
+            /*
+            // FIXME: this probably should not be done here.
             if (this.getType() == 'p2p') {
               // If the second user unsubscribed from the topic, then the topic is no longer
               // useful.
               this.leave();
             }
+            */
             this._processMetaSub([{
               user: uid,
               deleted: new Date(),
               _generated: true
             }]);
+          } else {
+            // Clone user object and process the change in access mode.
+            user = mergeObj({}, user);
+            user._generated = true;
+            user.updated = new Date();
+            this._processMetaSub([user]);
           }
         }
         break;
