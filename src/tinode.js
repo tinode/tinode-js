@@ -1413,8 +1413,14 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
           execPromise(pkt.ctrl.id, pkt.ctrl.code, pkt.ctrl, pkt.ctrl.text);
         }
 
-        // All messages received: "params":{"count":11,"what":"data"},
-        if (pkt.ctrl.params && pkt.ctrl.params.what == 'data') {
+        if (pkt.ctrl.code == 205 && pkt.ctrl.text == 'evicted') {
+          // User evicted from topic.
+          const topic = cacheGet('topic', pkt.ctrl.topic);
+          if (topic) {
+            topic._resetSub();
+          }
+        } else if (pkt.ctrl.params && pkt.ctrl.params.what == 'data') {
+          // All messages received: "params":{"count":11,"what":"data"},
           const topic = cacheGet('topic', pkt.ctrl.topic);
           if (topic) {
             topic._allMessagesReceived(pkt.ctrl.params.count);
@@ -3275,8 +3281,9 @@ Topic.prototype = {
       pub.head.attachments = attachments;
     }
 
-    // Send data
+    // Send data.
     pub._sending = true;
+    pub._failed = false;
     return this._tinode.publishMessage(pub).then((ctrl) => {
       pub._sending = false;
       pub.seq = ctrl.params.seq;
@@ -3284,8 +3291,12 @@ Topic.prototype = {
       this._routeData(pub);
       return ctrl;
     }).catch((err) => {
+      console.log("Message rejected by the server", err);
       pub._sending = false;
       pub._failed = true;
+      if (this.onData) {
+        this.onData();
+      }
     });
   },
 
@@ -3340,7 +3351,9 @@ Topic.prototype = {
         return this.publishMessage(pub);
       },
       (err) => {
+        console.log("Message draft rejected by the server", err);
         pub._sending = false;
+        pub._failed = true;
         this._messages.delAt(this._messages.find(pub));
         if (this.onData) {
           this.onData();
@@ -3436,6 +3449,7 @@ Topic.prototype = {
             params.sub.acs = ctrl.params.acs;
             params.sub.updated = ctrl.ts;
           }
+
           if (!params.sub.user) {
             // This is a subscription update of the current user.
             // Assign user ID otherwise the update will be ignored by _processMetaSub.
@@ -4124,15 +4138,18 @@ Topic.prototype = {
         } else {
           // Known user
           user.acs.updateAll(pres.dacs);
-          // User left topic.
-          if (!user.acs || user.acs.mode == AccessMode._NONE) {
+          // User left topic or banned/was banned.
+          if (!user.acs || !user.acs.isJoiner()) {
+            console.log("User's access mode is non-joiner", user.acs);
             // FIXME: this probably should not be done here. 'me' topic should be
-            // notified instead.
+            // notified instead, and the app or user should make the decision.
+            /*
             if (this.getType() == 'p2p') {
               // If the second user unsubscribed from the topic, then the topic is no longer
               // useful.
               this.leave();
             }
+            */
 
             this._processMetaSub([{
               user: uid,
@@ -4203,9 +4220,11 @@ Topic.prototype = {
     }
 
     // Update relevant contact in the me topic, if available:
+    console.log("About to call me._processMetaSub from _processMetaDesc");
     if (this.name !== 'me' && !fromMe && !desc._noForwarding) {
       const me = this._tinode.getMeTopic();
       if (me) {
+        console.log("Calling me._processMetaSub");
         me._processMetaSub([{
           _noForwarding: true,
           topic: this.name,
@@ -4230,6 +4249,7 @@ Topic.prototype = {
     for (let idx in subs) {
       const sub = subs[idx];
       if (sub.user) { // Response to get.sub on 'me' topic does not have .user set
+        console.log("Topic._processMetaSub", sub.user, sub.deleted, new Error());
         // Save the object to global cache.
         sub.updated = new Date(sub.updated);
         sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
@@ -4388,14 +4408,21 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         sub.touched = sub.touched ? new Date(sub.touched) : null;
         sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
 
-        // Ensure the values are integer.
-        sub.seq = sub.seq | 0;
-        sub.recv = sub.recv | 0;
-        sub.read = sub.read | 0;
-        sub.unread = sub.seq - sub.read;
-
         let cont = null;
-        if (!sub.deleted) {
+        if (sub.deleted) {
+          cont = sub;
+          delete this._contacts[topicName];
+        } else if (sub.acs && !sub.acs.isJoiner()) {
+          cont = sub;
+          cont.deleted = new Date();
+          delete this._contacts[topicName];
+        } else {
+          // Ensure the values are integer.
+          sub.seq = sub.seq | 0;
+          sub.recv = sub.recv | 0;
+          sub.read = sub.read | 0;
+          sub.unread = sub.seq - sub.read;
+
           if (sub.seen && sub.seen.when) {
             sub.seen.when = new Date(sub.seen.when);
           }
@@ -4411,9 +4438,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
               topic._processMetaDesc(sub, true);
             }
           }
-        } else {
-          cont = sub;
-          delete this._contacts[topicName];
         }
 
         updateCount++;
@@ -4497,7 +4521,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         // New subscriptions and deleted/banned subscriptions have full
         // access mode (no + or - in the dacs string). Changes to known subscriptions are sent as
         // deltas, but they should not happen here.
-        let acs = new AccessMode(pres.dacs);
+        const acs = new AccessMode(pres.dacs);
         if (!acs || acs.mode == AccessMode._INVALID) {
           this._tinode.logger("Invalid access mode update", pres.src, pres.dacs);
           return;
