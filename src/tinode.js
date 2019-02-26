@@ -2774,6 +2774,14 @@ AccessMode._BITMASK = AccessMode._JOIN | AccessMode._READ | AccessMode._WRITE | 
   AccessMode._APPROVE | AccessMode._SHARE | AccessMode._DELETE | AccessMode._OWNER;
 AccessMode._INVALID = 0x100000;
 
+AccessMode._checkFlag = function(val, side, flag) {
+  side = side || 'mode';
+  if (['given', 'want', 'mode'].includes(side)) {
+    return ((val[side] & flag) != 0);
+  }
+  throw new Error("Invalid AccessMode component '" + side + "'");
+}
+
 /**
  * Parse string into an access mode value.
  * @memberof Tinode.AccessMode
@@ -3042,35 +3050,104 @@ AccessMode.prototype = {
     return this;
   },
 
-  isOwner: function() {
-    return ((this.mode & AccessMode._OWNER) != 0);
+  /**
+   * Check if Owner (O) flag is set.
+   * @memberof Tinode.AccessMode
+   * @param {string=} side - which permission to check: given, want, mode; default: mode.
+   * @returns {boolean} - true if flag is set.
+   */
+  isOwner: function(side) {
+    return AccessMode._checkFlag(this, side, AccessMode._OWNER);
   },
-  isMuted: function() {
-    return ((this.mode & AccessMode._PRES) == 0);
+
+  /**
+   * Check if Presence (P) flag is set.
+   * @memberof Tinode.AccessMode
+   * @param {string=} side - which permission to check: given, want, mode; default: mode.
+   * @returns {boolean} - true if flag is set.
+   */
+  isPresencer: function(side) {
+    return AccessMode._checkFlag(this, side, AccessMode._PRES);
   },
-  isPresencer: function() {
-    return ((this.mode & AccessMode._PRES) != 0);
+
+  /**
+   * Check if Presence (P) flag is NOT set.
+   * @memberof Tinode.AccessMode
+   * @param {string=} side - which permission to check: given, want, mode; default: mode.
+   * @returns {boolean} - true if flag is set.
+   */
+  isMuted: function(side) {
+    return !this.isPresencer(side);
   },
-  isJoiner: function() {
-    return ((this.mode & AccessMode._JOIN) != 0);
+
+  /**
+   * Check if Join (J) flag is set.
+   * @memberof Tinode.AccessMode
+   * @param {string=} side - which permission to check: given, want, mode; default: mode.
+   * @returns {boolean} - true if flag is set.
+   */
+  isJoiner: function(side) {
+    return AccessMode._checkFlag(this, side, AccessMode._JOIN);
   },
-  isReader: function() {
-    return ((this.mode & AccessMode._READ) != 0);
+
+  /**
+   * Check if Reader (R) flag is set.
+   * @memberof Tinode.AccessMode
+   * @param {string=} side - which permission to check: given, want, mode; default: mode.
+   * @returns {boolean} - true if flag is set.
+   */
+  isReader: function(side) {
+    return AccessMode._checkFlag(this, side, AccessMode._READ);
   },
-  isWriter: function() {
-    return ((this.mode & AccessMode._WRITE) != 0);
+
+  /**
+   * Check if Writer (W) flag is set.
+   * @memberof Tinode.AccessMode
+   * @param {string=} side - which permission to check: given, want, mode; default: mode.
+   * @returns {boolean} - true if flag is set.
+   */
+  isWriter: function(side) {
+    return AccessMode._checkFlag(this, side, AccessMode._WRITE);
   },
-  isApprover: function() {
-    return ((this.mode & AccessMode._APPROVE) != 0);
+
+  /**
+   * Check if Approver (A) flag is set.
+   * @memberof Tinode.AccessMode
+   * @param {string=} side - which permission to check: given, want, mode; default: mode.
+   * @returns {boolean} - true if flag is set.
+   */
+  isApprover: function(side) {
+    return AccessMode._checkFlag(this, side, AccessMode._APPROVE);
   },
-  isAdmin: function() {
-    return this.isOwner() || this.isApprover();
+
+  /**
+   * Check if either one of Owner (O) or Approver (A) flags is set.
+   * @memberof Tinode.AccessMode
+   * @param {string=} side - which permission to check: given, want, mode; default: mode.
+   * @returns {boolean} - true if flag is set.
+   */
+  isAdmin: function(side) {
+    return this.isOwner(side) || this.isApprover(side);
   },
-  isSharer: function() {
-    return this.isAdmin() || ((this.mode & AccessMode._SHARE) != 0);
+
+  /**
+   * Check if either one of Owner (O), Approver (A), or Sharer (S) flags is set.
+   * @memberof Tinode.AccessMode
+   * @param {string=} side - which permission to check: given, want, mode; default: mode.
+   * @returns {boolean} - true if flag is set.
+   */
+  isSharer: function(side) {
+    return this.isAdmin(side) || AccessMode._checkFlag(this, side, AccessMode._SHARE);
   },
-  isDeleter: function() {
-    return ((this.mode & AccessMode._DELETE) != 0);
+
+  /**
+   * Check if Deleter (D) flag is set.
+   * @memberof Tinode.AccessMode
+   * @param {string=} side - which permission to check: given, want, mode; default: mode.
+   * @returns {boolean} - true if flag is set.
+   */
+  isDeleter: function(side) {
+    return AccessMode._checkFlag(this, side, AccessMode._DELETE);
   }
 };
 
