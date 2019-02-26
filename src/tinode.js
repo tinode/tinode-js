@@ -4217,17 +4217,6 @@ Topic.prototype = {
           user.acs.updateAll(pres.dacs);
           // User left topic or banned/was banned.
           if (!user.acs || !user.acs.isJoiner()) {
-            console.log("User's access mode is non-joiner", user.acs);
-            // FIXME: this probably should not be done here. 'me' topic should be
-            // notified instead, and the app or user should make the decision.
-            /*
-            if (this.getType() == 'p2p') {
-              // If the second user unsubscribed from the topic, then the topic is no longer
-              // useful.
-              this.leave();
-            }
-            */
-
             this._processMetaSub([{
               user: uid,
               deleted: new Date(),
@@ -4297,11 +4286,9 @@ Topic.prototype = {
     }
 
     // Update relevant contact in the me topic, if available:
-    console.log("About to call me._processMetaSub from _processMetaDesc");
     if (this.name !== 'me' && !fromMe && !desc._noForwarding) {
       const me = this._tinode.getMeTopic();
       if (me) {
-        console.log("Calling me._processMetaSub");
         me._processMetaSub([{
           _noForwarding: true,
           topic: this.name,
@@ -4326,7 +4313,6 @@ Topic.prototype = {
     for (let idx in subs) {
       const sub = subs[idx];
       if (sub.user) { // Response to get.sub on 'me' topic does not have .user set
-        console.log("Topic._processMetaSub", sub.user, sub.deleted, new Error());
         // Save the object to global cache.
         sub.updated = new Date(sub.updated);
         sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
@@ -4343,14 +4329,7 @@ Topic.prototype = {
         if (this.onMetaSub) {
           this.onMetaSub(user);
         }
-      } else if (!sub._noForwarding) {
-        console.log("SHOULD NOT HAPPEN!!");
-        updatedDesc = sub;
       }
-    }
-
-    if (updatedDesc && this.onMetaDesc) {
-      this.onMetaDesc(updatedDesc);
     }
 
     if (this.onSubsUpdated) {
