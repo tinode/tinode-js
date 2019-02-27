@@ -3219,7 +3219,7 @@ var Topic = function(name, callbacks) {
   this._lastDescUpdate = null;
   // Timestap when topic meta-subs update was recived.
   this._lastSubsUpdate = null;
-  // Used only during initialization
+  // Topic created but not yet synced with the server. Used only during initialization.
   this._new = true;
 
   // Callbacks
@@ -4473,11 +4473,13 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           cont.deleted = new Date();
           delete this._contacts[topicName];
         } else {
-          // Ensure the values are integer.
-          sub.seq = sub.seq | 0;
-          sub.recv = sub.recv | 0;
-          sub.read = sub.read | 0;
-          sub.unread = sub.seq - sub.read;
+          // Ensure the values are defined and are integers.
+          if (typeof sub.seq != 'undefined') {
+            sub.seq = sub.seq | 0;
+            sub.recv = sub.recv | 0;
+            sub.read = sub.read | 0;
+            sub.unread = sub.seq - sub.read;
+          }
 
           if (sub.seen && sub.seen.when) {
             sub.seen.when = new Date(sub.seen.when);
