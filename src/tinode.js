@@ -4156,7 +4156,7 @@ Topic.prototype = {
     if (me) {
       // Messages from the current user are considered to be read already.
       me.setMsgReadRecv(this.name,
-        msg.from == this._tinode.getCurrentUserID() ? 'read' : 'msg',
+        data.from == this._tinode.getCurrentUserID() ? 'read' : 'msg',
         data.seq, data.ts);
     }
   },
