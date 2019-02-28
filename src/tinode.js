@@ -3783,8 +3783,9 @@ Topic.prototype = {
         } else {
           this._tinode.logger("Not sending {note} on inactive topic");
         }
+
+        user[what] = seq;
       }
-      user[what] = seq;
     } else {
       this._tinode.logger("note(): user not found " + this._tinode.getCurrentUserID());
     }
@@ -4268,10 +4269,12 @@ Topic.prototype = {
         }
       }
 
-      // Update contact with the new count.
-      const me = this._tinode.getMeTopic();
-      if (me) {
-        me.setMsgReadRecv(info.from, info.what, info.seq);
+      // If this is an update from the current user, update the contact with the new count too.
+      if (info.from == this._time.getCurrentUserID()) {
+        const me = this._tinode.getMeTopic();
+        if (me) {
+          me.setMsgReadRecv(info.topic, info.what, info.seq);
+        }
       }
     }
     if (this.onInfo) {
