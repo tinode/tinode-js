@@ -2005,9 +2005,14 @@ Tinode.prototype = {
         pkt.sub.set.sub = setParams.sub;
       }
 
-      if (Tinode.isNewGroupTopicName(topicName) && setParams.desc) {
-        // set.desc params are used for new topics only
-        pkt.sub.set.desc = setParams.desc
+      if (setParams.desc) {
+        if (Tinode.isNewGroupTopicName(topicName)) {
+          // Full set.desc params are used for new topics only
+          pkt.sub.set.desc = setParams.desc;
+        } else if (Tinode.topicType(topicName) == 'p2p' && setParams.desc.defacs) {
+          // Use optional default permissions only.
+          pkt.sub.set.desc = {defacs: setParams.desc.defacs};
+        }
       }
 
       if (setParams.tags) {
