@@ -4270,7 +4270,7 @@ Topic.prototype = {
       }
 
       // If this is an update from the current user, update the contact with the new count too.
-      if (info.from == this._time.getCurrentUserID()) {
+      if (info.from == this._tinode.getCurrentUserID()) {
         const me = this._tinode.getMeTopic();
         if (me) {
           me.setMsgReadRecv(info.topic, info.what, info.seq);
