@@ -2011,7 +2011,9 @@ Tinode.prototype = {
           pkt.sub.set.desc = setParams.desc;
         } else if (Tinode.topicType(topicName) == 'p2p' && setParams.desc.defacs) {
           // Use optional default permissions only.
-          pkt.sub.set.desc = {defacs: setParams.desc.defacs};
+          pkt.sub.set.desc = {
+            defacs: setParams.desc.defacs
+          };
         }
       }
 
@@ -4277,6 +4279,12 @@ Topic.prototype = {
   // Called by Tinode when meta.desc packet is received.
   // Called by 'me' topic on contact update (fromMe is true).
   _processMetaDesc: function(desc, fromMe) {
+    // Synthetic desc may include defacs for p2p topics which is useless.
+    // Remove it.
+    if (this.getType() == 'p2p') {
+      delete desc.defacs;
+    }
+
     // Copy parameters from desc object to this topic.
     mergeObj(this, desc);
 
