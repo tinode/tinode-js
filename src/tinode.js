@@ -3402,7 +3402,7 @@ Topic.prototype = {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
     }
 
-    let seq = pub.seq || this._getQueuedSeqId();
+    const seq = pub.seq || this._getQueuedSeqId();
     if (!pub._noForwarding) {
       // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
       // before the message is sent.
@@ -4151,10 +4151,13 @@ Topic.prototype = {
       this.onData(data);
     }
 
-    // Update locally cached contact with the new message count
+    // Update locally cached contact with the new message count.
     const me = this._tinode.getMeTopic();
     if (me) {
-      me.setMsgReadRecv(this.name, 'msg', data.seq, data.ts);
+      // Messages from the current user are considered to be read already.
+      me.setMsgReadRecv(this.name,
+        msg.from == this._tinode.getCurrentUserID() ? 'read' : 'msg',
+        data.seq, data.ts);
     }
   },
 
@@ -4684,23 +4687,28 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           case 'read':
             oldVal = cont.read;
             cont.read = Math.max(cont.read, seq);
-            cont.unread = cont.seq - cont.read;
             doUpdate = (oldVal != cont.read);
-            if (cont.recv < cont.read) {
-              cont.recv = cont.read;
-              doUpdate = true;
-            }
             break;
           case 'msg':
             oldVal = cont.seq;
             cont.seq = Math.max(cont.seq, seq);
-            cont.unread = cont.seq - cont.read;
             if (!cont.touched || cont.touched < ts) {
               cont.touched = ts;
             }
             doUpdate = (oldVal != cont.seq);
             break;
         }
+
+        // Sanity checks.
+        if (cont.recv < cont.read) {
+          cont.recv = cont.read;
+          doUpdate = true;
+        }
+        if (cont.seq < cont.recv) {
+          cont.seq = cont.recv;
+          doUpdate = true;
+        }
+        cont.unread = cont.seq - cont.read;
 
         if (doUpdate && (!cont.acs || !cont.acs.isMuted()) && this.onContactUpdate) {
           this.onContactUpdate(what, cont);
