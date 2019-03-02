@@ -185,6 +185,9 @@ function mergeObj(dst, src, ignore) {
     if (src === Tinode.DEL_CHAR) {
       return undefined;
     }
+    if (src === undefined) {
+      return dst;
+    }
     return src;
   }
   // JS is crazy: typeof null is 'object'.
@@ -877,8 +880,8 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
               instance.onMessage(poller.responseText);
             }
             if (instance.onDisconnect) {
-              let code = poller.status || (_boffClosed ? NETWORK_USER : NETWORK_ERROR);
-              let text = poller.responseText || (_boffClosed ? NETWORK_USER_TEXT : NETWORK_ERROR_TEXT);
+              const code = poller.status || (_boffClosed ? NETWORK_USER : NETWORK_ERROR);
+              const text = poller.responseText || (_boffClosed ? NETWORK_USER_TEXT : NETWORK_ERROR_TEXT);
               instance.onDisconnect(new Error(text + ' (' + code + ')'), code);
             }
 
@@ -1502,6 +1505,13 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
     this._serverInfo = null;
     this._authenticated = false;
 
+    // Mark all topics as unsubscribed
+    cacheMap((obj, key) => {
+      if (key.lastIndexOf('topic:', 0) === 0) {
+        obj._resetSub();
+      }
+    });
+
     // Reject all pending promises
     for (let key in this._pendingPromises) {
       let callbacks = this._pendingPromises[key];
@@ -1510,12 +1520,6 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
       }
     }
     this._pendingPromises = {};
-
-    cacheMap((obj, key) => {
-      if (key.lastIndexOf('topic:', 0) === 0) {
-        obj._resetSub();
-      }
-    });
 
     if (this.onDisconnect) {
       this.onDisconnect(err);
@@ -3830,10 +3834,12 @@ Topic.prototype = {
   },
 
   /**
-   * Get user description from cache.
+   * Get user description from global cache. The user does not need to be a
+   * subscriber of this topic.
    * @memberof Tinode.Topic#
    *
    * @param {String} uid - ID of the user to fetch.
+   * @return {Object} user description or undefined.
    */
   userDesc: function(uid) {
     // TODO(gene): handle asynchronous requests
@@ -3842,6 +3848,19 @@ Topic.prototype = {
     if (user) {
       return user; // Promise.resolve(user)
     }
+  },
+
+  /**
+   * Get description of the p2p peer from subscription cache.
+   * @memberof Tinode.Topic#
+   *
+   * @return {Object} peer's description or undefined.
+   */
+  p2pPeerDesc: function() {
+    if (this.getType() != 'p2p') {
+      return undefined;
+    }
+    return this._users[this.name];
   },
 
   /**
@@ -3863,6 +3882,7 @@ Topic.prototype = {
   /**
    * Get a copy of cached tags.
    * @memberof Tinode.Topic#
+   * @return a copy of tags
    */
   tags: function() {
     // Return a copy.
@@ -3874,6 +3894,7 @@ Topic.prototype = {
    * @memberof Tinode.Topic#
    *
    * @param {String} uid - id of the user to query for
+   * @return user description or undefined.
    */
   subscriber: function(uid) {
     return this._users[uid];
@@ -4206,7 +4227,7 @@ Topic.prototype = {
         const uid = isMe ? this._tinode.getCurrentUserID() : pres.src;
         user = this._users[uid];
         if (!user) {
-          // Update for an unknown user
+          // Update for an unknown user: notification of a new subscription.
           const acs = new AccessMode().updateAll(pres.dacs);
           if (acs && acs.mode != AccessMode._NONE) {
             user = this._cacheGetUser(uid);
@@ -4219,34 +4240,18 @@ Topic.prototype = {
             } else {
               user.acs = acs;
             }
-            user._noForwarding = true;
             user.updated = new Date();
             this._processMetaSub([user]);
           }
         } else {
           // Known user
           user.acs.updateAll(pres.dacs);
-          // User left topic or banned/was banned.
-          if (!user.acs || !user.acs.isJoiner()) {
-            this._processMetaSub([{
-              user: uid,
-              deleted: new Date(),
-              _noForwarding: true
-            }]);
-          } else if (isMe) {
-            // Allow forwarding (_noForwarding=undefined), otherwise contact in 'me' won't be updated.
-            this._processMetaDesc({
-              updated: new Date(),
-              acs: user.acs
-            });
-          } else {
-            this._processMetaSub([{
-              user: uid,
-              updated: new Date(),
-              acs: user.acs,
-              _noForwarding: true
-            }]);
-          }
+          // Update user's access mode.
+          this._processMetaSub([{
+            user: uid,
+            updated: new Date(),
+            acs: user.acs
+          }]);
         }
         break;
       default:
@@ -4283,8 +4288,8 @@ Topic.prototype = {
   },
 
   // Called by Tinode when meta.desc packet is received.
-  // Called by 'me' topic on contact update (fromMe is true).
-  _processMetaDesc: function(desc, fromMe) {
+  // Called by 'me' topic on contact update (desc._noForwarding is true).
+  _processMetaDesc: function(desc) {
     // Synthetic desc may include defacs for p2p topics which is useless.
     // Remove it.
     if (this.getType() == 'p2p') {
@@ -4305,7 +4310,7 @@ Topic.prototype = {
     }
 
     // Update relevant contact in the me topic, if available:
-    if (this.name !== 'me' && !fromMe && !desc._noForwarding) {
+    if (this.name !== 'me' && !desc._noForwarding) {
       const me = this._tinode.getMeTopic();
       if (me) {
         me._processMetaSub([{
@@ -4338,6 +4343,15 @@ Topic.prototype = {
 
         let user = null;
         if (!sub.deleted) {
+          // If this is a change to user's own permissions, update them in topic too.
+          // Desc will update 'me' topic.
+          if (sub.user == this._tinode.getCurrentUserID() && sub.acs) {
+            this._processMetaDesc({
+              updated: sub.updated || new Date(),
+              touched: sub.updated,
+              acs: sub.acs
+            });
+          }
           user = this._updateCachedUser(sub.user, sub);
         } else {
           // Subscription is deleted, remove it from topic (but leave in Users cache)
@@ -4475,12 +4489,13 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       for (let idx in subs) {
         const sub = subs[idx];
         const topicName = sub.topic;
+
         // Don't show 'me' and 'fnd' topics in the list of contacts.
         if (topicName == TOPIC_FND || topicName == TOPIC_ME) {
           continue;
         }
         sub.updated = new Date(sub.updated);
-        sub.touched = sub.touched ? new Date(sub.touched) : null;
+        sub.touched = sub.touched ? new Date(sub.touched) : undefined;
         sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
 
         let cont = null;
@@ -4507,12 +4522,12 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           if (Tinode.topicType(topicName) == 'p2p') {
             this._cachePutUser(topicName, cont);
           }
-
-          // Notify topic of the update if it's a genuine event.
+          // Notify topic of the update if it's an external update.
           if (!sub._noForwarding) {
             const topic = this._tinode.getTopic(topicName);
             if (topic) {
-              topic._processMetaDesc(sub, true);
+              sub._noForwarding = true;
+              topic._processMetaDesc(sub);
             }
           }
         }
@@ -4569,6 +4584,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             } else {
               cont.acs = new AccessMode().updateAll(pres.dacs);
             }
+            cont.touched = new Date();
             break;
           case 'ua': // user agent changed
             cont.seen = {
@@ -4611,6 +4627,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
           // Create a dummy entry to catch online status update.
           this._contacts[pres.src] = {
+            touched: new Date(),
             topic: pres.src,
             online: false,
             acs: acs
@@ -4645,13 +4662,21 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    * @function
    * @memberof Tinode.TopicMe#
    * @param {TopicMe.ContactCallback=} callback - Callback to call for each contact.
+   * @param {boolean=} includeBanned - Include banned contacts.
    * @param {Object=} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
    */
   contacts: {
-    value: function(callback, context) {
+    value: function(callback, includeBanned, context) {
       const cb = (callback || this.onMetaSub);
       if (cb) {
         for (let idx in this._contacts) {
+          if (!includeBanned &&
+            (!this._contacts[idx] ||
+              !this._contacts[idx].acs ||
+              !this._contacts[idx].acs.isJoiner())) {
+
+            continue;
+          }
           cb.call(context, this._contacts[idx], idx, this._contacts);
         }
       }
