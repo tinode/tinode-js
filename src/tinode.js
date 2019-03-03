@@ -197,7 +197,7 @@ function mergeObj(dst, src, ignore) {
 
   // Handle Date
   if (src instanceof Date) {
-    return src;
+    return (!dst || !(dst instanceof Date) || dst < src) ? src : dst;
   }
 
   // Access mode
@@ -2324,7 +2324,7 @@ Tinode.prototype = {
    * Instantiate a new P2P topic with a given peer.
    * @memberof Tinode#
    *
-   * @param {string} peer - UId of the peer to start topic with.
+   * @param {string} peer - UID of the peer to start topic with.
    * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
    * @returns {Tinode.Topic} Newly created topic.
    */
@@ -2371,6 +2371,16 @@ Tinode.prototype = {
    */
   getCurrentUserID: function() {
     return this._myUID;
+  },
+
+  /**
+   * Check if the given user ID is equal to the current user's UID.
+   * @memberof Tinode#
+   * @param {string} uid - UID to check.
+   * @returns {boolean} true if the given UID belongs to the current logged in user.
+   */
+  isMe: function(uid) {
+    return this._myUID === uid;
   },
 
   /**
@@ -4129,7 +4139,7 @@ Topic.prototype = {
    */
   msgStatus: function(msg) {
     let status = MESSAGE_STATUS_NONE;
-    if (msg.from == this._tinode.getCurrentUserID()) {
+    if (this._tinode.isMe(msg.from)) {
       if (msg._sending) {
         status = MESSAGE_STATUS_SENDING;
       } else if (msg._failed) {
@@ -4178,7 +4188,7 @@ Topic.prototype = {
     if (me) {
       // Messages from the current user are considered to be read already.
       me.setMsgReadRecv(this.name,
-        data.from == this._tinode.getCurrentUserID() ? 'read' : 'msg',
+        this._tinode.isMe(data.from) ? 'read' : 'msg',
         data.seq, data.ts);
     }
   },
@@ -4223,20 +4233,18 @@ Topic.prototype = {
         }
         break;
       case 'acs':
-        const isMe = pres.src == 'me' || pres.src == this._tinode.getCurrentUserID();
-        const uid = isMe ? this._tinode.getCurrentUserID() : pres.src;
-        user = this._users[uid];
+        user = this._users[pres.src];
         if (!user) {
           // Update for an unknown user: notification of a new subscription.
           const acs = new AccessMode().updateAll(pres.dacs);
           if (acs && acs.mode != AccessMode._NONE) {
-            user = this._cacheGetUser(uid);
+            user = this._cacheGetUser(pres.src);
             if (!user) {
               user = {
-                user: uid,
+                user: pres.src,
                 acs: acs
               };
-              this.getMeta(this.startMetaQuery().withOneSub(undefined, uid).build());
+              this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
             } else {
               user.acs = acs;
             }
@@ -4248,7 +4256,7 @@ Topic.prototype = {
           user.acs.updateAll(pres.dacs);
           // Update user's access mode.
           this._processMetaSub([{
-            user: uid,
+            user: pres.src,
             updated: new Date(),
             acs: user.acs
           }]);
@@ -4275,7 +4283,7 @@ Topic.prototype = {
       }
 
       // If this is an update from the current user, update the contact with the new count too.
-      if (info.from == this._tinode.getCurrentUserID()) {
+      if (this._tinode.isMe(info.from)) {
         const me = this._tinode.getMeTopic();
         if (me) {
           me.setMsgReadRecv(info.topic, info.what, info.seq);
@@ -4333,35 +4341,32 @@ Topic.prototype = {
   // Called by Tinode when meta.sub is recived or in response to received
   // {ctrl} after setMeta-sub.
   _processMetaSub: function(subs) {
-    let updatedDesc = undefined;
     for (let idx in subs) {
       const sub = subs[idx];
-      if (sub.user) { // Response to get.sub on 'me' topic does not have .user set
-        // Save the object to global cache.
-        sub.updated = new Date(sub.updated);
-        sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
 
-        let user = null;
-        if (!sub.deleted) {
-          // If this is a change to user's own permissions, update them in topic too.
-          // Desc will update 'me' topic.
-          if (sub.user == this._tinode.getCurrentUserID() && sub.acs) {
-            this._processMetaDesc({
-              updated: sub.updated || new Date(),
-              touched: sub.updated,
-              acs: sub.acs
-            });
-          }
-          user = this._updateCachedUser(sub.user, sub);
-        } else {
-          // Subscription is deleted, remove it from topic (but leave in Users cache)
-          delete this._users[sub.user];
-          user = sub;
-        }
+      sub.updated = new Date(sub.updated);
+      sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
 
-        if (this.onMetaSub) {
-          this.onMetaSub(user);
+      let user = null;
+      if (!sub.deleted) {
+        // If this is a change to user's own permissions, update them in topic too.
+        // Desc will update 'me' topic.
+        if (this._tinode.isMe(sub.user) && sub.acs) {
+          this._processMetaDesc({
+            updated: sub.updated || new Date(),
+            touched: sub.updated,
+            acs: sub.acs
+          });
         }
+        user = this._updateCachedUser(sub.user, sub);
+      } else {
+        // Subscription is deleted, remove it from topic (but leave in Users cache)
+        delete this._users[sub.user];
+        user = sub;
+      }
+
+      if (this.onMetaSub) {
+        this.onMetaSub(user);
       }
     }
 
