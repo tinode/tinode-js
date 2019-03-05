@@ -3301,10 +3301,12 @@ Topic.prototype = {
       if (this._new) {
         this._new = false;
 
+        // Name may change new123456 -> grpAbCdEf
         this.name = ctrl.topic;
+
         this.created = ctrl.ts;
         this.updated = ctrl.ts;
-        this.touched = ctrl.ts;
+        // Don't assign touched, otherwise topic will be put on top of the list on subscribe.
 
         this._cachePutSelf();
 
@@ -3316,7 +3318,6 @@ Topic.prototype = {
             topic: this.name,
             created: ctrl.ts,
             updated: ctrl.ts,
-            touched: ctrl.ts,
             acs: this.acs
           }]);
         }
