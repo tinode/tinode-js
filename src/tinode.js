@@ -3038,7 +3038,7 @@ AccessMode.prototype = {
    *
    * @memberof Tinode.AccessMode
    *
-   * @returns {string} - <b>want</b> value.
+   * @returns {string} permissions present in <b>want</b> but missing in <b>given</b>.
    */
   getMissing: function() {
     return AccessMode.encode(this.want & ~this.given);
@@ -3049,7 +3049,7 @@ AccessMode.prototype = {
    * Inverse of {@link Tinode.AccessMode#getMissing}
    * @memberof Tinode.AccessMode
    *
-   * @returns {string} - <b>want</b> value.
+   * @returns {string} permissions present in <b>given</b> but missing in <b>want</b>.
    */
   getExcessive: function() {
     return AccessMode.encode(this.given & ~this.want);
