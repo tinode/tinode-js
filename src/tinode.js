@@ -4322,14 +4322,15 @@ Topic.prototype = {
     if (this.name !== 'me' && !desc._noForwarding) {
       const me = this._tinode.getMeTopic();
       if (me) {
+        // Must use original 'desc' instead of 'this' so not to lose DEL_CHAR.
         me._processMetaSub([{
           _noForwarding: true,
           topic: this.name,
           updated: this.updated,
           touched: this.touched,
-          acs: this.acs,
-          public: this.public,
-          private: this.private
+          acs: desc.acs,
+          public: desc.public,
+          private: desc.private
         }]);
       }
     }
@@ -4525,6 +4526,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             sub.seen.when = new Date(sub.seen.when);
           }
           cont = mergeToCache(this._contacts, topicName, sub);
+
           if (Tinode.topicType(topicName) == 'p2p') {
             this._cachePutUser(topicName, cont);
           }
