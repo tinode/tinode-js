@@ -1415,75 +1415,79 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
         if (pkt.ctrl.id) {
           execPromise(pkt.ctrl.id, pkt.ctrl.code, pkt.ctrl, pkt.ctrl.text);
         }
-
-        if (pkt.ctrl.code == 205 && pkt.ctrl.text == 'evicted') {
-          // User evicted from topic.
-          const topic = cacheGet('topic', pkt.ctrl.topic);
-          if (topic) {
-            topic._resetSub();
+        setTimeout(() => {
+          if (pkt.ctrl.code == 205 && pkt.ctrl.text == 'evicted') {
+            // User evicted from topic.
+            const topic = cacheGet('topic', pkt.ctrl.topic);
+            if (topic) {
+              topic._resetSub();
+            }
+          } else if (pkt.ctrl.params && pkt.ctrl.params.what == 'data') {
+            // All messages received: "params":{"count":11,"what":"data"},
+            const topic = cacheGet('topic', pkt.ctrl.topic);
+            if (topic) {
+              topic._allMessagesReceived(pkt.ctrl.params.count);
+            }
           }
-        } else if (pkt.ctrl.params && pkt.ctrl.params.what == 'data') {
-          // All messages received: "params":{"count":11,"what":"data"},
-          const topic = cacheGet('topic', pkt.ctrl.topic);
-          if (topic) {
-            topic._allMessagesReceived(pkt.ctrl.params.count);
-          }
-        }
-
-      } else if (pkt.meta) {
-        // Handling a {meta} message.
-
-        // Preferred API: Route meta to topic, if one is registered
-        const topic = cacheGet('topic', pkt.meta.topic);
-        if (topic) {
-          topic._routeMeta(pkt.meta);
-        }
-
-        // Secondary API: callback
-        if (this.onMetaMessage) {
-          this.onMetaMessage(pkt.meta);
-        }
-      } else if (pkt.data) {
-        // Handling {data} message
-
-        // Preferred API: Route data to topic, if one is registered
-        const topic = cacheGet('topic', pkt.data.topic);
-        if (topic) {
-          topic._routeData(pkt.data);
-        }
-
-        // Secondary API: Call callback
-        if (this.onDataMessage) {
-          this.onDataMessage(pkt.data);
-        }
-      } else if (pkt.pres) {
-        // Handling {pres} message
-
-        // Preferred API: Route presence to topic, if one is registered
-        const topic = cacheGet('topic', pkt.pres.topic);
-        if (topic) {
-          topic._routePres(pkt.pres);
-        }
-
-        // Secondary API - callback
-        if (this.onPresMessage) {
-          this.onPresMessage(pkt.pres);
-        }
-      } else if (pkt.info) {
-        // {info} message - read/received notifications and key presses
-
-        // Preferred API: Route {info}} to topic, if one is registered
-        const topic = cacheGet('topic', pkt.info.topic);
-        if (topic) {
-          topic._routeInfo(pkt.info);
-        }
-
-        // Secondary API - callback
-        if (this.onInfoMessage) {
-          this.onInfoMessage(pkt.info);
-        }
+        }, 0);
       } else {
-        this.logger("ERROR: Unknown packet received.");
+        setTimeout(() => {
+          if (pkt.meta) {
+            // Handling a {meta} message.
+
+            // Preferred API: Route meta to topic, if one is registered
+            const topic = cacheGet('topic', pkt.meta.topic);
+            if (topic) {
+              topic._routeMeta(pkt.meta);
+            }
+
+            // Secondary API: callback
+            if (this.onMetaMessage) {
+              this.onMetaMessage(pkt.meta);
+            }
+          } else if (pkt.data) {
+            // Handling {data} message
+
+            // Preferred API: Route data to topic, if one is registered
+            const topic = cacheGet('topic', pkt.data.topic);
+            if (topic) {
+              topic._routeData(pkt.data);
+            }
+
+            // Secondary API: Call callback
+            if (this.onDataMessage) {
+              this.onDataMessage(pkt.data);
+            }
+          } else if (pkt.pres) {
+            // Handling {pres} message
+
+            // Preferred API: Route presence to topic, if one is registered
+            const topic = cacheGet('topic', pkt.pres.topic);
+            if (topic) {
+              topic._routePres(pkt.pres);
+            }
+
+            // Secondary API - callback
+            if (this.onPresMessage) {
+              this.onPresMessage(pkt.pres);
+            }
+          } else if (pkt.info) {
+            // {info} message - read/received notifications and key presses
+
+            // Preferred API: Route {info}} to topic, if one is registered
+            const topic = cacheGet('topic', pkt.info.topic);
+            if (topic) {
+              topic._routeInfo(pkt.info);
+            }
+
+            // Secondary API - callback
+            if (this.onInfoMessage) {
+              this.onInfoMessage(pkt.info);
+            }
+          } else {
+            this.logger("ERROR: Unknown packet received.");
+          }
+        }, 0);
       }
     }
   }
