@@ -4945,6 +4945,103 @@ LargeFileHelper.prototype = {
    *
    * @memberof Tinode.LargeFileHelper#
    *
+   * @param {String} basePath to upload
+   * @param {File} file to upload
+   * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
+   * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
+   * @param {Callback} onFailure callback. Called in case of a failure.
+   *
+   * @returns {Promise} resolved/rejected when the upload is completed/failed.
+   */
+  uploadByBasePath: function(basePath, file, onProgress, onSuccess, onFailure) {
+      if (!this._authToken) {
+          throw new Error("Must authenticate first");
+      }
+      const instance = this;
+      this.xhr.open('POST', basePath + '/v' + PROTOCOL_VERSION + '/file/u/', true);
+      this.xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
+      this.xhr.setRequestHeader('X-Tinode-Auth', 'Token ' + this._authToken.token);
+      const result = new Promise((resolve, reject) => {
+          this.toResolve = resolve;
+          this.toReject = reject;
+      });
+
+      this.onProgress = onProgress;
+      this.onSuccess = onSuccess;
+      this.onFailure = onFailure;
+
+      this.xhr.upload.onprogress = function(e) {
+          if (e.lengthComputable && instance.onProgress) {
+              instance.onProgress(e.loaded / e.total);
+          }
+      }
+
+      this.xhr.onload = function() {
+          let pkt;
+          try {
+              pkt = JSON.parse(this.response, jsonParseHelper);
+          } catch (err) {
+              instance._tinode.logger("Invalid server response in LargeFileHelper", this.response);
+          }
+
+          if (this.status >= 200 && this.status < 300) {
+              if (instance.toResolve) {
+                  instance.toResolve(pkt.ctrl.params.url);
+              }
+              if (instance.onSuccess) {
+                  instance.onSuccess(pkt.ctrl);
+              }
+          } else if (this.status >= 400) {
+              if (instance.toReject) {
+                  instance.toReject(new Error(pkt.ctrl.text + " (" + pkt.ctrl.code + ")"));
+              }
+              if (instance.onFailure) {
+                  instance.onFailure(pkt.ctrl)
+              }
+          } else {
+              instance._tinode.logger("Unexpected server response status", this.status, this.response);
+          }
+      };
+
+      this.xhr.onerror = function(e) {
+          if (instance.toReject) {
+              instance.toReject(new Error("failed"));
+          }
+          if (instance.onFailure) {
+              instance.onFailure(null);
+          }
+      };
+
+      this.xhr.onabort = function(e) {
+          if (instance.toReject) {
+              instance.toReject(new Error("upload cancelled by user"));
+          }
+          if (instance.onFailure) {
+              instance.onFailure(null);
+          }
+      };
+
+      try {
+          const form = new FormData();
+          form.append('file', file);
+          form.set('id', this._msgId);
+          this.xhr.send(form);
+      } catch (err) {
+          if (this.toReject) {
+              this.toReject(err);
+          }
+          if (this.onFailure) {
+              this.onFailure(null);
+          }
+      }
+
+      return result;
+  },
+  /**
+   * Start uploading the file.
+   *
+   * @memberof Tinode.LargeFileHelper#
+   *
    * @param {File} file to upload
    * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
    * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
