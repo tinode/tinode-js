@@ -4877,6 +4877,8 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
   /**
    * setMeta to TopicFnd resets contact list in addition to sending the message.
    * @memberof Tinode.TopicFnd#
+   * @param {Tinode.SetParams} params parameters to update.
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   setMeta: {
     value: function(params) {
