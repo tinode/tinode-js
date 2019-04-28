@@ -402,7 +402,7 @@ function chunkify(line, start, end, spans) {
     var chunk = {
       type: span.type
     };
-    var chld = chunkify(line, span.start + 1, span.end - 1, span.children);
+    var chld = chunkify(line, span.start + 1, span.end, span.children);
     if (chld.length > 0) {
       chunk.children = chld;
     } else {
