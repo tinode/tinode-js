@@ -4333,6 +4333,9 @@ Topic.prototype = {
           updated: this.updated,
           touched: this.touched,
           acs: desc.acs,
+          seq: desc.seq,
+          read: desc.read,
+          recv: desc.recv,
           public: desc.public,
           private: desc.private
         }]);
