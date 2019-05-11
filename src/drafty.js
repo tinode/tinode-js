@@ -64,20 +64,20 @@ const INLINE_STYLES = [
   // Strong = bold, *bold text*
   {
     name: 'ST',
-    start: /(?:^|\W)(\*)[^\s*]/,
-    end: /[^\s*](\*)(?=$|\W)/
+    start: /(?:^|[\W_])(\*)[^\s*]/,
+    end: /[^\s*](\*)(?=$|[\W_])/
   },
   // Emphesized = italic, _italic text_
   {
     name: 'EM',
-    start: /(?:^|[\W_])(_)[^\s_]/,
-    end: /[^\s_](_)(?=$|[\W_])/
+    start: /(?:^|\W)(_)[^\s_]/,
+    end: /[^\s_](_)(?=$|\W)/
   },
   // Deleted, ~strike this though~
   {
     name: 'DL',
-    start: /(?:^|\W)(~)[^\s~]/,
-    end: /[^\s~](~)(?=$|\W)/
+    start: /(?:^|[\W_])(~)[^\s~]/,
+    end: /[^\s~](~)(?=$|[\W_])/
   },
   // Code block `this is monospace`
   {
