@@ -1428,6 +1428,13 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
             if (topic) {
               topic._allMessagesReceived(pkt.ctrl.params.count);
             }
+          } else if (pkt.ctrl.params && pkt.ctrl.params.what == 'sub') {
+            // The topic has no subscriptions.
+            const topic = cacheGet('topic', pkt.ctrl.topic);
+            if (topic) {
+              // Trigger topic.onSubsUpdated.
+              topic._processMetaSub([]);
+            }
           }
         }, 0);
       } else {
@@ -4554,8 +4561,8 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         }
       }
 
-      if (updateCount > 0 && this.onSubsUpdated) {
-        this.onSubsUpdated(Object.keys(this._contacts));
+      if (this.onSubsUpdated) {
+        this.onSubsUpdated(Object.keys(this._contacts), updateCount);
       }
     },
     enumerable: true,
