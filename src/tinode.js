@@ -85,6 +85,11 @@ const MESSAGE_STATUS_TO_ME = 7; // Message from another user.
 const NETWORK_ERROR = 503;
 const NETWORK_ERROR_TEXT = "Connection failed";
 
+// Reject unresolved futures after this many milliseconds.
+const EXPIRE_PROMISES_TIMEOUT = 5000;
+// Periodicity of garbage collection of unresolved futures.
+const EXPIRE_PROMISES_PERIOD = 1000;
+
 // Error code to return when user disconnected from server.
 const NETWORK_USER = 418;
 const NETWORK_USER_TEXT = "Disconnected by client";
@@ -1184,7 +1189,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
     }
   }
 
-  // Generator of default promises for sent packets
+  // Generator of default promises for sent packets.
   let makePromise = (id) => {
     let promise = null;
     if (id) {
@@ -1192,12 +1197,28 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
         // Stored callbacks will be called when the response packet with this Id arrives
         this._pendingPromises[id] = {
           'resolve': resolve,
-          'reject': reject
+          'reject': reject,
+          'ts': new Date()
         };
       })
     }
     return promise;
   }
+
+  // Reject promises which have not been resolved for too long.
+  let expirePromises = setInterval(() => {
+    let err = new Error("Error: timeout (504)");
+    let expires = new Date(new Date().getTime() - EXPIRE_PROMISES_TIMEOUT);
+    for (let id in this._pendingPromises) {
+      let callbacks = this._pendingPromises[id];
+      if (callbacks && callbacks.ts < expires) {
+        delete this._pendingPromises[id];
+        if (callbacks.reject) {
+          callbacks.reject(err);
+        }
+      }
+    }
+  }, EXPIRE_PROMISES_PERIOD);
 
   // Generates unique message IDs
   let getNextUniqueId = this.getNextUniqueId = () => {
