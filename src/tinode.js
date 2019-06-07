@@ -1207,11 +1207,12 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
 
   // Reject promises which have not been resolved for too long.
   let expirePromises = setInterval(() => {
-    let err = new Error("Error: timeout (504)");
-    let expires = new Date(new Date().getTime() - EXPIRE_PROMISES_TIMEOUT);
+    const err = new Error("Error: timeout (504)");
+    const expires = new Date(new Date().getTime() - EXPIRE_PROMISES_TIMEOUT);
     for (let id in this._pendingPromises) {
       let callbacks = this._pendingPromises[id];
       if (callbacks && callbacks.ts < expires) {
+        console.log("expiring promise", id);
         delete this._pendingPromises[id];
         if (callbacks.reject) {
           callbacks.reject(err);
@@ -2272,6 +2273,25 @@ Tinode.prototype = {
   },
 
   /**
+   * Delete credential. Must be 'me' topic.
+   * @memberof Tinode#
+   *
+   * @param {String} topic - 'me'.
+   * @param {String} method - validation method such as 'email' or 'tel'.
+   * @param {String} value - validation value, i.e. 'alice@example.com'.
+   * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+   */
+   delCredential: function(topic, method, value) {
+     if (topic != 'me') {
+         throw new Error("Invalid topic for deleting credentials '" + topic + "'");
+     }
+     const pkt = this.initPacket('del', topic);
+     pkt.del.what = 'cred';
+     pkt.del.cred = {meth: method, val: value};
+     this.send(pkt);
+   },
+
+  /**
    * Notify server that a message or messages were read or received. Does NOT return promise.
    * @memberof Tinode#
    *
@@ -2737,6 +2757,21 @@ MetaGetBuilder.prototype = {
   },
 
   /**
+   * Add query parameters to fetch user's credentials. 'me' topic only.
+   * @memberof Tinode.MetaGetBuilder#
+   *
+   * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
+   */
+  withCreds: function() {
+    if (this.topic.getType() == 'me') {
+      this.what['cred'] = true;
+    } else {
+      console.log("Invalid topic type for MetaGetBuilder.withCreds", this.topic.getType());
+    }
+    return this;
+  },
+
+  /**
    * Add query parameters to fetch deleted messages within explicit limits. Any/all parameters can be null.
    * @memberof Tinode.MetaGetBuilder#
    *
@@ -2779,7 +2814,7 @@ MetaGetBuilder.prototype = {
     const what = [];
     const instance = this;
     let params = {};
-    ['data', 'sub', 'desc', 'tags', 'del'].map(function(key) {
+    ['data', 'sub', 'desc', 'tags', 'cred', 'del'].map(function(key) {
       if (instance.what.hasOwnProperty(key)) {
         what.push(key);
         if (Object.getOwnPropertyNames(instance.what[key]).length > 0) {
@@ -3262,6 +3297,8 @@ var Topic = function(name, callbacks) {
   this._maxDel = 0;
   // User discovery tags
   this._tags = [];
+  // Credentials such as email or phone number.
+  this._credentials = [];
   // Message cache, sorted by message seq values, from old to new.
   this._messages = CBuffer(function(a, b) {
     return a.seq - b.seq;
@@ -3288,6 +3325,7 @@ var Topic = function(name, callbacks) {
     // All subscription records received;
     this.onSubsUpdated = callbacks.onSubsUpdated;
     this.onTagsUpdated = callbacks.onTagsUpdated;
+    this.onCredsUpdated = callbacls.onCredsUpdated;
     this.onDeleteTopic = callbacks.onDeleteTopic;
     this.onAllMessagesReceived = callbacks.onAllMessagesReceived;
   }
@@ -3604,6 +3642,9 @@ Topic.prototype = {
 
         if (params.tags) {
           this._processMetaTags(params.tags);
+        }
+        if (params.cred) {
+          this._processMetaCreds(params.cred);
         }
 
         return ctrl;
@@ -4242,6 +4283,9 @@ Topic.prototype = {
     if (meta.tags) {
       this._processMetaTags(meta.tags);
     }
+    if (meta.cred) {
+      this._processMetaCreds(meta.cred);
+    }
     if (this.onMeta) {
       this.onMeta(meta);
     }
@@ -4412,7 +4456,7 @@ Topic.prototype = {
     }
   },
 
-  // Called by Tinode when meta.sub is recived.
+  // Called by Tinode when meta.tags is recived.
   _processMetaTags: function(tags) {
     if (tags.length == 1 && tags[0] == Tinode.DEL_CHAR) {
       tags = [];
@@ -4422,6 +4466,9 @@ Topic.prototype = {
       this.onTagsUpdated(tags);
     }
   },
+
+  // Do nothing for topics other than 'me'
+  _processMetaCreds: function(creds) {},
 
   // Delete cached messages and update cached transaction IDs
   _processDelMessages: function(clear, delseq) {
@@ -4591,6 +4638,22 @@ TopicMe.prototype = Object.create(Topic.prototype, {
     writable: false
   },
 
+  // Called by Tinode when meta.sub is recived.
+  _processMetaCreds: {
+    value: function(creds) {
+      if (creds.length == 1 && creds[0] == Tinode.DEL_CHAR) {
+        creds = [];
+      }
+      this._credentials = creds;
+      if (this.onCredsUpdated) {
+        this.onCredsUpdated(creds);
+      }
+    },
+    enumerable: true,
+    configurable: true,
+    writable: false
+  },
+
   // Process presence change message
   _routePres: {
     value: function(pres) {
@@ -4694,6 +4757,36 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   publish: {
     value: function() {
       return Promise.reject(new Error("Publishing to 'me' is not supported"));
+    },
+    enumerable: true,
+    configurable: true,
+    writable: false
+  },
+
+  /**
+   * Delete validation credential.
+   * @memberof Tinode.TopicMe#
+   *
+   * @param {String} topic - Name of the topic to delete
+   * @param {String} user - User ID to remove.
+   * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+   */
+  delCredential: {
+    value: function(method, value) {
+      if (!this._subscribed) {
+        return Promise.reject(new Error("Cannot delete credential in inactive 'me' topic"));
+      }
+      // Send {del} message, return promise
+      return this._tinode.delCredential(this.name, method, value).then((ctrl) => {
+        // Remove the object from the subscription cache;
+        delete this._users[user];
+        // Notify listeners
+        if (this.onCredsUpdated) {
+          this.onCredsUpdated(this._credentials);
+        }
+        return ctrl;
+      });
+
     },
     enumerable: true,
     configurable: true,
@@ -4835,6 +4928,29 @@ TopicMe.prototype = Object.create(Topic.prototype, {
     value: function(name) {
       const cont = this._contacts[name];
       return cont ? ((cont.private && cont.private.arch) ? true : false) : null;
+    },
+    enumerable: true,
+    configurable: true,
+    writable: true
+  },
+
+  /**
+   * @typedef Tinode.Credential
+   * @memberof Tinode
+   * @type Object
+   * @property {string} meth - validation method such as 'email' or 'tel'.
+   * @property {string} val - credential value, i.e. 'jdoe@example.com' or '+17025551234'
+   * @property {boolean} done - true if credential is validated.
+   */
+  /**
+   * Get the user's credentials: email, phone, etc.
+   * @memberof Tinode.TopicMe#
+   *
+   * @returns {Tinode.Credential[]} - array of credentials.
+   */
+  getCredentials: {
+    value: function() {
+      return this._credentials;
     },
     enumerable: true,
     configurable: true,
