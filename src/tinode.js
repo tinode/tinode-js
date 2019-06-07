@@ -2281,15 +2281,18 @@ Tinode.prototype = {
    * @param {String} value - validation value, i.e. 'alice@example.com'.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-   delCredential: function(topic, method, value) {
-     if (topic != 'me') {
-         throw new Error("Invalid topic for deleting credentials '" + topic + "'");
-     }
-     const pkt = this.initPacket('del', topic);
-     pkt.del.what = 'cred';
-     pkt.del.cred = {meth: method, val: value};
-     this.send(pkt);
-   },
+  delCredential: function(topic, method, value) {
+    if (topic != 'me') {
+      throw new Error("Invalid topic for deleting credentials '" + topic + "'");
+    }
+    const pkt = this.initPacket('del', topic);
+    pkt.del.what = 'cred';
+    pkt.del.cred = {
+      meth: method,
+      val: value
+    };
+    this.send(pkt);
+  },
 
   /**
    * Notify server that a message or messages were read or received. Does NOT return promise.
