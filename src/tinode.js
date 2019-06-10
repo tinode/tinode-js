@@ -2195,7 +2195,7 @@ Tinode.prototype = {
     const what = [];
 
     if (params) {
-      ['desc', 'sub', 'tags'].map(function(key) {
+      ['desc', 'sub', 'tags', 'cred'].map(function(key) {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];
@@ -2291,7 +2291,7 @@ Tinode.prototype = {
       meth: method,
       val: value
     };
-    this.send(pkt);
+    return this.send(pkt, pkt.del.id);
   },
 
   /**
@@ -2765,7 +2765,7 @@ MetaGetBuilder.prototype = {
    *
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
-  withCreds: function() {
+  withCred: function() {
     if (this.topic.getType() == 'me') {
       this.what['cred'] = true;
     } else {
@@ -3647,7 +3647,7 @@ Topic.prototype = {
           this._processMetaTags(params.tags);
         }
         if (params.cred) {
-          this._processMetaCreds(params.cred);
+          this._processMetaCreds([params.cred], true);
         }
 
         return ctrl;
@@ -4643,13 +4643,24 @@ TopicMe.prototype = Object.create(Topic.prototype, {
 
   // Called by Tinode when meta.sub is recived.
   _processMetaCreds: {
-    value: function(creds) {
+    value: function(creds, upd) {
       if (creds.length == 1 && creds[0] == Tinode.DEL_CHAR) {
         creds = [];
       }
-      this._credentials = creds;
+      if (upd) {
+        creds.map((cr) => {
+          const idx = this._credentials.findIndex((el) => {
+            return el.meth == cr.meth && el.val == cr.val;
+          });
+          if (idx < 0) {
+            this._credentials.push(cr);
+          }
+        });
+      } else {
+        this._credentials = creds;
+      }
       if (this.onCredsUpdated) {
-        this.onCredsUpdated(creds);
+        this.onCredsUpdated(this._credentials);
       }
     },
     enumerable: true,
@@ -4781,8 +4792,13 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       }
       // Send {del} message, return promise
       return this._tinode.delCredential(this.name, method, value).then((ctrl) => {
-        // Remove the object from the subscription cache;
-        delete this._users[user];
+        // Remove deleted credential from the cache.
+        const index = this._credentials.findIndex((el) => {
+          return el.meth == method && el.val == value;
+        });
+        if (index > -1) {
+          this._credentials.splice(index, 1);
+        }
         // Notify listeners
         if (this.onCredsUpdated) {
           this.onCredsUpdated(this._credentials);
