@@ -41,7 +41,7 @@
     "babelify": "^10.0.0",
     "browserify": "^16.2.3",
     "js-beautify": "^1.9.0",
-    "jsdoc": "^3.5.5",
+    "jsdoc": "^3.6.2",
     "minami": "^1.2.3",
     "tinyify": "^2.5.0"
   }

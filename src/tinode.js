@@ -4649,11 +4649,22 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       }
       if (upd) {
         creds.map((cr) => {
-          const idx = this._credentials.findIndex((el) => {
-            return el.meth == cr.meth && el.val == cr.val;
-          });
-          if (idx < 0) {
-            this._credentials.push(cr);
+          if (cr.val) {
+            // Add credential.
+            const idx = this._credentials.findIndex((el) => {
+              return el.meth == cr.meth && el.val == cr.val;
+            });
+            if (idx < 0) {
+              this._credentials.push(cr);
+            }
+          } else if (cr.resp) {
+            // Handle credential confirmation.
+            const idx = this._credentials.findIndex((el) => {
+              return el.meth == cr.meth && !el.done;
+            });
+            if (idx >= 0) {
+              this._credentials[idx].done = true;
+            }
           }
         });
       } else {
