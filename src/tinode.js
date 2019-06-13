@@ -1184,7 +1184,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
           callbacks.resolve(onOK);
         }
       } else if (callbacks.reject) {
-        callbacks.reject(new Error("Error: " + errorText + " (" + code + ")"));
+        callbacks.reject(new Error(errorText + " (" + code + ")"));
       }
     }
   }
@@ -1207,7 +1207,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
 
   // Reject promises which have not been resolved for too long.
   let expirePromises = setInterval(() => {
-    const err = new Error("Error: timeout (504)");
+    const err = new Error("Timeout (504)");
     const expires = new Date(new Date().getTime() - EXPIRE_PROMISES_TIMEOUT);
     for (let id in this._pendingPromises) {
       let callbacks = this._pendingPromises[id];
@@ -1468,6 +1468,10 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
             const topic = cacheGet('topic', pkt.meta.topic);
             if (topic) {
               topic._routeMeta(pkt.meta);
+            }
+
+            if (pkt.meta.id) {
+              execPromise(pkt.meta.id, 200, pkt.meta, 'META');
             }
 
             // Secondary API: callback
@@ -4736,9 +4740,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           case 'del':
             // Update topic.del value.
             break;
-          case 'tags':
-            this.getMeta(this.startMetaQuery().withTags().build());
-            break;
           default:
             console.log("Unsupported presence update in 'me'", pres.what);
         }
@@ -4746,30 +4747,35 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         if (this.onContactUpdate) {
           this.onContactUpdate(pres.what, cont);
         }
-      } else if (pres.what == 'acs') {
-        // New subscriptions and deleted/banned subscriptions have full
-        // access mode (no + or - in the dacs string). Changes to known subscriptions are sent as
-        // deltas, but they should not happen here.
-        const acs = new AccessMode(pres.dacs);
-        if (!acs || acs.mode == AccessMode._INVALID) {
-          this._tinode.logger("Invalid access mode update", pres.src, pres.dacs);
-          return;
-        } else if (acs.mode == AccessMode._NONE) {
-          this._tinode.logger("Removing non-existent subscription", pres.src, pres.dacs);
-          return;
-        } else {
-          // New subscription. Send request for the full description.
-          // Using .withOneSub (not .withLaterOneSub) to make sure IfModifiedSince is not set.
-          this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
-          // Create a dummy entry to catch online status update.
-          this._contacts[pres.src] = {
-            touched: new Date(),
-            topic: pres.src,
-            online: false,
-            acs: acs
-          };
+      } else {
+        if (pres.what == 'acs') {
+          // New subscriptions and deleted/banned subscriptions have full
+          // access mode (no + or - in the dacs string). Changes to known subscriptions are sent as
+          // deltas, but they should not happen here.
+          const acs = new AccessMode(pres.dacs);
+          if (!acs || acs.mode == AccessMode._INVALID) {
+            this._tinode.logger("Invalid access mode update", pres.src, pres.dacs);
+            return;
+          } else if (acs.mode == AccessMode._NONE) {
+            this._tinode.logger("Removing non-existent subscription", pres.src, pres.dacs);
+            return;
+          } else {
+            // New subscription. Send request for the full description.
+            // Using .withOneSub (not .withLaterOneSub) to make sure IfModifiedSince is not set.
+            this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
+            // Create a dummy entry to catch online status update.
+            this._contacts[pres.src] = {
+              touched: new Date(),
+              topic: pres.src,
+              online: false,
+              acs: acs
+            };
+          }
+        } else if (pres.what == 'tags') {
+          this.getMeta(this.startMetaQuery().withTags().build());
         }
       }
+
       if (this.onPres) {
         this.onPres(pres);
       }
