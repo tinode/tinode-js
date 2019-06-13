@@ -4736,6 +4736,11 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           case 'del':
             // Update topic.del value.
             break;
+          case 'tags':
+            this.getMeta(this.startMetaQuery().withTags().build());
+            break;
+          default:
+            console.log("Unsupported presence update in 'me'", pres.what);
         }
 
         if (this.onContactUpdate) {
