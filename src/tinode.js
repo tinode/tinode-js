@@ -2773,7 +2773,7 @@ MetaGetBuilder.prototype = {
     if (this.topic.getType() == 'me') {
       this.what['cred'] = true;
     } else {
-      console.log("Invalid topic type for MetaGetBuilder.withCreds", this.topic.getType());
+      console.log("Invalid topic type for MetaGetBuilder:withCreds", this.topic.getType());
     }
     return this;
   },
@@ -4654,12 +4654,24 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       if (upd) {
         creds.map((cr) => {
           if (cr.val) {
-            // Add credential.
-            const idx = this._credentials.findIndex((el) => {
+            // Adding a credential.
+            let idx = this._credentials.findIndex((el) => {
               return el.meth == cr.meth && el.val == cr.val;
             });
             if (idx < 0) {
+              // Not found.
+              // Unconfirmed cerdential replaces previous unconfirmed credential of the same method.
+              idx = this._credentials.findIndex((el) => {
+                return el.meth == cr.meth && !el.done;
+              });
+              if (idx >= 0) {
+                // Remove previous unconfirmed credential.
+                this._credentials.splice(idx, 1);
+              }
               this._credentials.push(cr);
+            } else {
+              // Found. Maybe change 'done' status.
+              this._credentials[idx].done = cr.done;
             }
           } else if (cr.resp) {
             // Handle credential confirmation.
