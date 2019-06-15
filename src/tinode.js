@@ -3387,16 +3387,18 @@ Topic.prototype = {
 
         this._cachePutSelf();
 
-        // Add the new topic to the list of contacts maintained by the 'me' topic.
-        const me = this._tinode.getMeTopic();
-        if (me) {
-          me._processMetaSub([{
-            _noForwarding: true,
-            topic: this.name,
-            created: ctrl.ts,
-            updated: ctrl.ts,
-            acs: this.acs
-          }]);
+        if (this.name != TOPIC_ME && this.name != TOPIC_FND) {
+          // Add the new topic to the list of contacts maintained by the 'me' topic.
+          const me = this._tinode.getMeTopic();
+          if (me) {
+            me._processMetaSub([{
+              _noForwarding: true,
+              topic: this.name,
+              created: ctrl.ts,
+              updated: ctrl.ts,
+              acs: this.acs
+            }]);
+          }
         }
 
         if (setParams && setParams.desc) {
