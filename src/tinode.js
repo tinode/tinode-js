@@ -4662,13 +4662,15 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             });
             if (idx < 0) {
               // Not found.
-              // Unconfirmed cerdential replaces previous unconfirmed credential of the same method.
-              idx = this._credentials.findIndex((el) => {
-                return el.meth == cr.meth && !el.done;
-              });
-              if (idx >= 0) {
-                // Remove previous unconfirmed credential.
-                this._credentials.splice(idx, 1);
+              if (!cr.done) {
+                // Unconfirmed credential replaces previous unconfirmed credential of the same method.
+                idx = this._credentials.findIndex((el) => {
+                  return el.meth == cr.meth && !el.done;
+                });
+                if (idx >= 0) {
+                  // Remove previous unconfirmed credential.
+                  this._credentials.splice(idx, 1);
+                }
               }
               this._credentials.push(cr);
             } else {
