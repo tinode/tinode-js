@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Tinode SDK",
-  "version": "0.16.0-rc2",
+  "version": "0.16.0-rc3",
   "scripts": {
     "format": "js-beautify -r src/tinode.js && js-beautify -r src/drafty.js",
     "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
@@ -36,13 +36,13 @@
   "homepage": "https://github.com/tinode/chat",
   "main": "./umd/tinode.prod.js",
   "devDependencies": {
-    "@babel/core": "^7.3.4",
-    "@babel/preset-env": "^7.3.4",
+    "@babel/core": "^7.5.4",
+    "@babel/preset-env": "^7.5.4",
     "babelify": "^10.0.0",
-    "browserify": "^16.2.3",
-    "js-beautify": "^1.9.0",
-    "jsdoc": "^3.6.2",
+    "browserify": "^16.3.0",
+    "js-beautify": "^1.10.0",
+    "jsdoc": "^3.6.3",
     "minami": "^1.2.3",
-    "tinyify": "^2.5.0"
+    "tinyify": "^2.5.1"
   }
 }
