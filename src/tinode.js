@@ -5284,7 +5284,13 @@ LargeFileHelper.prototype = {
    * @returns {Promise} resolved/rejected when the download is completed/failed.
    */
   download: function(relativeUrl, filename, mimetype, onProgress) {
-    if ((/^(?:(?:[a-z]+:)?\/\/)/i.test(relativeUrl))) {
+    // Check if the URL is relative. Check for cases like:
+    //  'http://example.com'
+    //  ' http://example.com'
+    //  '//example.com/'
+    //  'http:example.com'
+    //  'http:/example.com'
+    if (/^\s*([a-z][a-z0-9+.-]*:|\/\/)/im.test(relativeUrl)) {
       // As a security measure refuse to download from an absolute URL.
       throw new Error("The URL '" + relativeUrl + "' must be relative, not absolute");
     }
