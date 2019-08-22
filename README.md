@@ -1,6 +1,6 @@
 # Javascript bindings for Tinode
 
-See demo at http://api.tinode.co/ ([source](https://github.com/tinode/example-react-js))
+See demo at http://web.tinode.co/ ([source](https://github.com/tinode/example-react-js))
 
 Regularly released NPM packages are at https://www.npmjs.com/package/tinode-sdk
 
