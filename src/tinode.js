@@ -4927,6 +4927,9 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         }
         if (cont.seq < cont.recv) {
           cont.seq = cont.recv;
+          if (!cont.touched || cont.touched < ts) {
+            cont.touched = ts;
+          }
           doUpdate = true;
         }
         cont.unread = cont.seq - cont.read;
@@ -5104,7 +5107,7 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
   /**
    * Iterate over found contacts. If callback is undefined, use {@link this.onMetaSub}.
    * @function
-   * @memberof Tinode.TopicMe#
+   * @memberof Tinode.TopicFnd#
    * @param {TopicFnd.ContactCallback} callback - Callback to call for each contact.
    * @param {Object} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
    */
