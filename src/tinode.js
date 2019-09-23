@@ -61,12 +61,13 @@ initForNonBrowserApp();
 
 // Global constants
 const PROTOCOL_VERSION = '0';
-const VERSION = package_version || '0.15';
+const VERSION = package_version || '0.16';
 const LIBRARY = 'tinodejs/' + VERSION;
 
 const TOPIC_NEW = 'new';
 const TOPIC_ME = 'me';
 const TOPIC_FND = 'fnd';
+const TOPIC_SYS = 'sys';
 const USER_NEW = 'new';
 
 // Starting value of a locally-generated seqId used for pending messages.
@@ -3658,6 +3659,26 @@ Topic.prototype = {
 
         return ctrl;
       });
+  },
+
+  /**
+   * Update access mode of the current user or of another topic subsriber.
+   * @memberof Tinode.Topic#
+   *
+   * @param {string} uid - UID of the user to update or null to update current user.
+   * @param {string} update - the update value, full or delta.
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+   */
+  updateMode: function(uid, update) {
+    const user = uid ? user = this.subscriber(uid) : null;
+    let am;
+    if (user) {
+      am = user.acs.updateGiven(update).getGiven();
+    } else {
+      am = topic.getAccessMode().updateWant(update).getWant();
+    }
+
+    return topic.setMeta({sub: {user: uid, mode: am}});
   },
 
   /**
