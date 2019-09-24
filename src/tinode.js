@@ -3740,7 +3740,7 @@ Topic.prototype = {
     }
 
     // Sort ranges in accending order by low, the descending by hi.
-    ranges.sort(function(r1, r2) {
+    ranges.sort((r1, r2) => {
       if (r1.low < r2.low) {
         return true;
       }
@@ -4149,11 +4149,10 @@ Topic.prototype = {
    * @returns {Message[]} array of removed messages (could be empty).
    */
   flushMessageRange: function(fromId, untilId) {
-    // start: find exact match.
-    // end: find insertion point (nearest == true).
+    // start, end: find insertion points (nearest == true).
     const since = this._messages.find({
       seq: fromId
-    });
+    }, true);
     return since >= 0 ? this._messages.delRange(since, this._messages.find({
       seq: untilId
     }, true)) : [];
