@@ -3678,7 +3678,12 @@ Topic.prototype = {
       am = topic.getAccessMode().updateWant(update).getWant();
     }
 
-    return topic.setMeta({sub: {user: uid, mode: am}});
+    return topic.setMeta({
+      sub: {
+        user: uid,
+        mode: am
+      }
+    });
   },
 
   /**
