@@ -261,6 +261,8 @@ function jsonBuildHelper(key, val) {
   if (val instanceof Date) {
     // Convert javascript Date objects to rfc3339 strings
     val = rfc3339DateString(val);
+  } else if (val instanceof AccessMode) {
+    val = val.jsonHelper();
   } else if (val === undefined || val === null || val === false ||
     (Array.isArray(val) && val.length == 0) ||
     ((typeof val == 'object') && (Object.keys(val).length == 0))) {
@@ -3007,9 +3009,19 @@ AccessMode.prototype = {
    * Custom formatter
    */
   toString: function() {
-    return '{mode: "' + AccessMode.encode(this.mode) +
-      '", given: "' + AccessMode.encode(this.given) +
-      '", want: "' + AccessMode.encode(this.want) + '"}';
+    return '{"mode": "' + AccessMode.encode(this.mode) +
+      '", "given": "' + AccessMode.encode(this.given) +
+      '", "want": "' + AccessMode.encode(this.want) + '"}';
+  },
+  /**
+   * Convert numeric values to strings.
+   */
+  jsonHelper: function() {
+    return {
+      mode: AccessMode.encode(this.mode),
+      given: AccessMode.encode(this.given),
+      want: AccessMode.encode(this.want)
+    };
   },
   /**
    * Assign value to 'mode'.
