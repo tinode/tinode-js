@@ -3820,6 +3820,10 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   delMessagesAll: function(hardDel) {
+    if (!this._maxSeq || this._maxSeq <= 0) {
+      // There are no messages to delete.
+      return Promise.resolve();
+    }
     return this.delMessages([{
       low: 1,
       hi: this._maxSeq + 1,
