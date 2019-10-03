@@ -646,9 +646,9 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
   let _boffIteration = 0;
   let _boffClosed = false; // Indicator if the socket was manually closed - don't autoreconnect if true.
 
-  let log = (text) => {
+  let log = (text, ...args) => {
     if (this.logger) {
-      this.logger(text);
+      this.logger(text, ...args);
     }
   }
 
@@ -714,19 +714,19 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       return new Promise(function(resolve, reject) {
         let url = makeBaseUrl(host, secure ? 'wss' : 'ws', apiKey);
 
-        log("Connecting to: " + url);
+        log("Connecting to: ", url);
 
         let conn = new WebSocketProvider(url);
 
         conn.onopen = function(evt) {
+          if (autoreconnect) {
+            boffStop();
+          }
+
           if (instance.onOpen) {
             instance.onOpen();
           }
           resolve();
-
-          if (autoreconnect) {
-            boffStop();
-          }
         }
 
         conn.onclose = function(evt) {
@@ -918,7 +918,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
       return new Promise(function(resolve, reject) {
         const url = makeBaseUrl(host, secure ? 'https' : 'http', apiKey);
-        log("Connecting to: " + url);
+        log("Connecting to: ", url);
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null)
       }).catch(function() {
@@ -1109,8 +1109,8 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
 
   /** A connection object, see {@link Tinode.Connection}. */
   this._connection = new Connection(host_, apiKey_, transport_, secure_, true);
-  // Console logger
-  this.logger = (str) => {
+  // Console logger. Babel somehow fails to parse '...rest' parameter.
+  this.logger = (str, ...args) => {
     if (this._loggingEnabled) {
       const d = new Date()
       const dateString = ('0' + d.getUTCHours()).slice(-2) + ':' +
@@ -1118,7 +1118,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
         ('0' + d.getUTCSeconds()).slice(-2) + ':' +
         ('0' + d.getUTCMilliseconds()).slice(-3);
 
-      console.log('[' + dateString + '] ' + str);
+      console.log('[' + dateString + ']', str, args.join(' '));
     }
   }
   this._connection.logger = this.logger;
@@ -1215,7 +1215,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
     for (let id in this._pendingPromises) {
       let callbacks = this._pendingPromises[id];
       if (callbacks && callbacks.ts < expires) {
-        console.log("expiring promise", id);
+        this.logger("Promise expired", id);
         delete this._pendingPromises[id];
         if (callbacks.reject) {
           callbacks.reject(err);
@@ -1615,7 +1615,8 @@ Tinode.topicType = function(name) {
     'fnd': 'fnd',
     'grp': 'grp',
     'new': 'grp',
-    'usr': 'p2p'
+    'usr': 'p2p',
+    'sys': 'sys'
   };
   return types[(typeof name == 'string') ? name.substring(0, 3) : 'xxx'];
 };
@@ -2776,7 +2777,7 @@ MetaGetBuilder.prototype = {
     if (this.topic.getType() == 'me') {
       this.what['cred'] = true;
     } else {
-      console.log("Invalid topic type for MetaGetBuilder:withCreds", this.topic.getType());
+      this.logger("Invalid topic type for MetaGetBuilder:withCreds", this.topic.getType());
     }
     return this;
   },
@@ -3482,7 +3483,7 @@ Topic.prototype = {
       this._routeData(pub);
       return ctrl;
     }).catch((err) => {
-      console.log("Message rejected by the server", err);
+      this.logger("Message rejected by the server", err);
       pub._sending = false;
       pub._failed = true;
       if (this.onData) {
@@ -3542,7 +3543,7 @@ Topic.prototype = {
         return this.publishMessage(pub);
       },
       (err) => {
-        console.log("Message draft rejected by the server", err);
+        this.logger("Message draft rejected by the server", err);
         pub._sending = false;
         pub._failed = true;
         this._messages.delAt(this._messages.find(pub));
@@ -4798,7 +4799,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             // Update topic.del value.
             break;
           default:
-            console.log("Unsupported presence update in 'me'", pres.what);
+            this.logger("Unsupported presence update in 'me'", pres.what);
         }
 
         if (this.onContactUpdate) {

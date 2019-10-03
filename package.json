@@ -5,12 +5,13 @@
   "scripts": {
     "format": "js-beautify -r src/tinode.js && js-beautify -r src/drafty.js",
     "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
-    "build:prod": "browserify ./src/tinode.js --standalone Tinode -t [ babelify --presets [ @babel/preset-env ] ] --plugin tinyify > ./umd/tinode.prod.js",
+    "build:prod": "browserify ./src/tinode.js --standalone Tinode -t [ babelify ] --plugin tinyify > ./umd/tinode.prod.js",
     "build:dev": "browserify ./src/tinode.js --debug --standalone Tinode > ./umd/tinode.dev.js",
     "build:docs": "jsdoc ./src -t ./node_modules/minami -d ../tinode.github.io/js-api",
     "vers": "echo \"{\\\"version\\\": \\\"`node -p -e \"require('./package.json').version\"`\\\"}\" > version.json",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "browserslist": "> 0.5%, not IE 11",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tinode/tinode-js.git"
