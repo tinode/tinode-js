@@ -687,6 +687,10 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
   function boffStop() {
     clearTimeout(_boffTimer);
     _boffTimer = null;
+  }
+
+  // Reset auto-reconnect iteration counter.
+  function boffReset() {
     _boffIteration = 0;
   }
 
@@ -704,7 +708,11 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       _boffClosed = false;
 
       if (_socket && _socket.readyState == _socket.OPEN) {
-        return Promise.resolve();
+        if (!force) {
+          return Promise.resolve();
+        }
+        _socket.close();
+        _socket = null;
       }
 
       if (host_) {
@@ -712,11 +720,11 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       }
 
       return new Promise(function(resolve, reject) {
-        let url = makeBaseUrl(host, secure ? 'wss' : 'ws', apiKey);
+        const url = makeBaseUrl(host, secure ? 'wss' : 'ws', apiKey);
 
         log("Connecting to: ", url);
 
-        let conn = new WebSocketProvider(url);
+        const conn = new WebSocketProvider(url);
 
         conn.onopen = function(evt) {
           if (autoreconnect) {
@@ -726,6 +734,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
           if (instance.onOpen) {
             instance.onOpen();
           }
+
           resolve();
         }
 
@@ -754,16 +763,18 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
         }
         _socket = conn;
       });
-    };
+    }
 
     /**
      * Try to restore a network connection, also reset backoff.
      * @memberof Tinode.Connection#
+     *
+     * @param {boolean} force - reconnect even if there is a live connection already.
      */
-    instance.reconnect = function() {
+    instance.reconnect = function(force) {
       boffStop();
-      instance.connect();
-    };
+      instance.connect(null, force);
+    }
 
     /**
      * Terminate the network connection
@@ -778,7 +789,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       boffStop();
       _socket.close();
       _socket = null;
-    };
+    }
 
     /**
      * Send a string to the server.
@@ -926,9 +937,9 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       });
     };
 
-    instance.reconnect = function() {
+    instance.reconnect = function(force) {
       boffStop();
-      instance.connect();
+      instance.connect(null, force);
     };
 
     instance.disconnect = function() {
@@ -991,6 +1002,14 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       // Using web sockets -- default.
       init_ws(this);
     }
+  }
+
+  /**
+   * Reset autoreconnect counter to zero.
+   * @memberof Tinode.Connection#
+   */
+  this.backoffReset = function() {
+    boffReset();
   }
 
   // Callbacks:
@@ -1126,20 +1145,20 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
   // Tinode's cache of objects
   this._cache = {};
 
-  let cachePut = this.cachePut = (type, name, obj) => {
+  const cachePut = this.cachePut = (type, name, obj) => {
     this._cache[type + ':' + name] = obj;
   }
 
-  let cacheGet = this.cacheGet = (type, name) => {
+  const cacheGet = this.cacheGet = (type, name) => {
     return this._cache[type + ':' + name];
   }
 
-  let cacheDel = this.cacheDel = (type, name) => {
+  const cacheDel = this.cacheDel = (type, name) => {
     delete this._cache[type + ':' + name];
   }
   // Enumerate all items in cache, call func for each item.
   // Enumeration stops if func returns true.
-  let cacheMap = this.cacheMap = (func, context) => {
+  const cacheMap = this.cacheMap = (func, context) => {
     for (let idx in this._cache) {
       if (func(this._cache[idx], idx, context)) {
         break;
@@ -1178,7 +1197,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
 
   // Resolve or reject a pending promise.
   // Unresolved promises are stored in _pendingPromises.
-  let execPromise = (id, code, onOK, errorText) => {
+  const execPromise = (id, code, onOK, errorText) => {
     const callbacks = this._pendingPromises[id];
     if (callbacks) {
       delete this._pendingPromises[id];
@@ -1193,7 +1212,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
   }
 
   // Generator of default promises for sent packets.
-  let makePromise = (id) => {
+  const makePromise = (id) => {
     let promise = null;
     if (id) {
       promise = new Promise((resolve, reject) => {
@@ -1209,7 +1228,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
   }
 
   // Reject promises which have not been resolved for too long.
-  let expirePromises = setInterval(() => {
+  const expirePromises = setInterval(() => {
     const err = new Error("Timeout (504)");
     const expires = new Date(new Date().getTime() - EXPIRE_PROMISES_TIMEOUT);
     for (let id in this._pendingPromises) {
@@ -1225,12 +1244,12 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
   }, EXPIRE_PROMISES_PERIOD);
 
   // Generates unique message IDs
-  let getNextUniqueId = this.getNextUniqueId = () => {
+  const getNextUniqueId = this.getNextUniqueId = () => {
     return (this._messageId != 0) ? '' + this._messageId++ : undefined;
   }
 
   // Get User Agent string
-  let getUserAgent = () => {
+  const getUserAgent = () => {
     return this._appName + ' (' + (this._browser ? this._browser + '; ' : '') + this._hwos + '); ' + LIBRARY;
   }
 
@@ -1695,12 +1714,13 @@ Tinode.prototype = {
   },
 
   /**
-   * Attempt to reconnect to the server immediately. If exponential backoff is
-   * in progress, reset it.
+   * Attempt to reconnect to the server immediately.
    * @memberof Tinode#
+   *
+   * @param {String} force - reconnect even if there is a connection already.
    */
-  reconnect: function() {
-    this._connection.reconnect();
+  reconnect: function(force) {
+    this._connection.reconnect(force);
   },
 
   /**
@@ -1859,8 +1879,11 @@ Tinode.prototype = {
 
     return this.send(pkt, pkt.hi.id)
       .then((ctrl) => {
-        // Server response contains server protocol version, build,
-        // and session ID for long polling. Save them.
+        // Reset backoff counter on successful connection.
+        this._connection.backoffReset();
+
+        // Server response contains server protocol version, build, constraints,
+        // session ID for long polling. Save them.
         if (ctrl.params) {
           this._serverInfo = ctrl.params;
         }
@@ -1871,6 +1894,8 @@ Tinode.prototype = {
 
         return ctrl;
       }).catch((err) => {
+        this._connection.reconnect(true);
+
         if (this.onDisconnect) {
           this.onDisconnect(err);
         }
