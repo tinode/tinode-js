@@ -4385,6 +4385,10 @@ Topic.prototype = {
           this._tinode.logger("Presence update for an unknown user", this.name, pres.src);
         }
         break;
+      case 'term':
+        // Attachment to topic is terminated probably due to cluster rehashing.
+        this._resetSub();
+        break;
       case 'acs':
         user = this._users[pres.src];
         if (!user) {
