@@ -4773,6 +4773,11 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   // Process presence change message
   _routePres: {
     value: function(pres) {
+      if (pres.what == 'term') {
+        // The 'me' topic itself is detached. Mark as unsubscribed. 
+        this._resetSub();
+        return;
+      }
       const cont = this._contacts[pres.src];
       if (cont) {
         switch (pres.what) {
