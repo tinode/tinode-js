@@ -701,10 +701,11 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     /**
      * Initiate a new connection
      * @memberof Tinode.Connection#
-     * @return {Promise} Promise resolved/rejected when the connection call completes,
-     resolution is called without parameters, rejection passes the {Error} as parameter.
+     * @param {string} host_ Host name to connect to; if null the old host name will be used.
+     * @param {boolean} force Force new connection even if one already exists.
+     * @return {Promise} Promise resolved/rejected when the connection call completes, resolution is called without parameters, rejection passes the {Error} as parameter.
      */
-    instance.connect = function(host_) {
+    instance.connect = function(host_, force) {
       _boffClosed = false;
 
       if (_socket && _socket.readyState == _socket.OPEN) {
@@ -916,11 +917,16 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       return poller;
     }
 
-    instance.connect = function(host_) {
+    instance.connect = function(host_, force) {
       _boffClosed = false;
 
       if (_poller) {
-        return Promise.resolve();
+        if (!force) {
+          return Promise.resolve();
+        }
+        _poller.onreadystatechange = undefined;
+        _poller.abort();
+        _poller = null;
       }
 
       if (host_) {
@@ -4774,7 +4780,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   _routePres: {
     value: function(pres) {
       if (pres.what == 'term') {
-        // The 'me' topic itself is detached. Mark as unsubscribed. 
+        // The 'me' topic itself is detached. Mark as unsubscribed.
         this._resetSub();
         return;
       }
