@@ -2808,7 +2808,7 @@ MetaGetBuilder.prototype = {
     if (this.topic.getType() == 'me') {
       this.what['cred'] = true;
     } else {
-      this.logger("Invalid topic type for MetaGetBuilder:withCreds", this.topic.getType());
+      this.topic._tinode.logger("ERROR: Invalid topic type for MetaGetBuilder:withCreds", this.topic.getType());
     }
     return this;
   },
@@ -3514,7 +3514,7 @@ Topic.prototype = {
       this._routeData(pub);
       return ctrl;
     }).catch((err) => {
-      this.logger("Message rejected by the server", err);
+      this._tinode.logger("WARNING: Message rejected by the server", err);
       pub._sending = false;
       pub._failed = true;
       if (this.onData) {
@@ -3574,7 +3574,7 @@ Topic.prototype = {
         return this.publishMessage(pub);
       },
       (err) => {
-        this.logger("Message draft rejected by the server", err);
+        this._tinode.logger("WARNING: Message draft rejected by the server", err);
         pub._sending = false;
         pub._failed = true;
         this._messages.delAt(this._messages.find(pub));
@@ -3952,13 +3952,13 @@ Topic.prototype = {
         if (this._subscribed) {
           this._tinode.note(this.name, what, seq);
         } else {
-          this._tinode.logger("Not sending {note} on inactive topic");
+          this._tinode.logger("INFO: Not sending {note} on inactive topic");
         }
 
         user[what] = seq;
       }
     } else {
-      this._tinode.logger("note(): user not found " + this._tinode.getCurrentUserID());
+      this._tinode.logger("ERROR: note(): user not found " + this._tinode.getCurrentUserID());
     }
 
     // Update locally cached contact with the new count
@@ -3996,7 +3996,7 @@ Topic.prototype = {
     if (this._subscribed) {
       this._tinode.noteKeyPress(this.name);
     } else {
-      this._tinode.logger("Cannot send notification in inactive topic");
+      this._tinode.logger("INFO: Cannot send notification in inactive topic");
     }
   },
 
@@ -4388,7 +4388,7 @@ Topic.prototype = {
         if (user) {
           user.online = pres.what == 'on';
         } else {
-          this._tinode.logger("Presence update for an unknown user", this.name, pres.src);
+          this._tinode.logger("WARNING: Presence update for an unknown user", this.name, pres.src);
         }
         break;
       case 'term':
@@ -4426,7 +4426,7 @@ Topic.prototype = {
         }
         break;
       default:
-        this._tinode.logger("Ignored presence update", pres.what);
+        this._tinode.logger("INFO: Ignored presence update", pres.what);
     }
 
     if (this.onPres) {
@@ -4839,7 +4839,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             // Update topic.del value.
             break;
           default:
-            this.logger("Unsupported presence update in 'me'", pres.what);
+            this._tinode.logger("INFO: Unsupported presence update in 'me'", pres.what);
         }
 
         if (this.onContactUpdate) {
@@ -4852,10 +4852,10 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           // deltas, but they should not happen here.
           const acs = new AccessMode(pres.dacs);
           if (!acs || acs.mode == AccessMode._INVALID) {
-            this._tinode.logger("Invalid access mode update", pres.src, pres.dacs);
+            this._tinode.logger("ERROR: Invalid access mode update", pres.src, pres.dacs);
             return;
           } else if (acs.mode == AccessMode._NONE) {
-            this._tinode.logger("Removing non-existent subscription", pres.src, pres.dacs);
+            this._tinode.logger("WARNING: Removing non-existent subscription", pres.src, pres.dacs);
             return;
           } else {
             // New subscription. Send request for the full description.
@@ -5285,7 +5285,7 @@ LargeFileHelper.prototype = {
       try {
         pkt = JSON.parse(this.response, jsonParseHelper);
       } catch (err) {
-        instance._tinode.logger("Invalid server response in LargeFileHelper", this.response);
+        instance._tinode.logger("ERROR: Invalid server response in LargeFileHelper", this.response);
       }
 
       if (this.status >= 200 && this.status < 300) {
@@ -5303,7 +5303,7 @@ LargeFileHelper.prototype = {
           instance.onFailure(pkt.ctrl)
         }
       } else {
-        instance._tinode.logger("Unexpected server response status", this.status, this.response);
+        instance._tinode.logger("ERROR: Unexpected server response status", this.status, this.response);
       }
     };
 
@@ -5430,7 +5430,7 @@ LargeFileHelper.prototype = {
             const pkt = JSON.parse(this.result, jsonParseHelper);
             instance.toReject(new Error(pkt.ctrl.text + " (" + pkt.ctrl.code + ")"));
           } catch (err) {
-            instance._tinode.logger("Invalid server response in LargeFileHelper", this.result);
+            instance._tinode.logger("ERROR: Invalid server response in LargeFileHelper", this.result);
             instance.toReject(err);
           }
         };
