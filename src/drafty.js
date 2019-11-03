@@ -1,8 +1,8 @@
 /**
- * @copyright 2015-2018 Tinode
+ * @copyright 2015-2019 Tinode
  * @summary Minimally rich text representation and formatting for Tinode.
  * @license Apache 2.0
- * @version 0.15
+ * @version 0.16
  *
  * @file Basic parser and formatter for very simple text markup. Mostly targeted at
  * mobile use cases similar to Telegram, WhatsApp, and FB Messenger.
