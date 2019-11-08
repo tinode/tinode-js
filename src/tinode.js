@@ -1692,17 +1692,30 @@ Tinode.getLibrary = function() {
 };
 
 // Exported constants
-Tinode.MESSAGE_STATUS_NONE = MESSAGE_STATUS_NONE,
-  Tinode.MESSAGE_STATUS_QUEUED = MESSAGE_STATUS_QUEUED,
-  Tinode.MESSAGE_STATUS_SENDING = MESSAGE_STATUS_SENDING,
-  Tinode.MESSAGE_STATUS_FAILED = MESSAGE_STATUS_FAILED,
-  Tinode.MESSAGE_STATUS_SENT = MESSAGE_STATUS_SENT,
-  Tinode.MESSAGE_STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED,
-  Tinode.MESSAGE_STATUS_READ = MESSAGE_STATUS_READ,
-  Tinode.MESSAGE_STATUS_TO_ME = MESSAGE_STATUS_TO_ME,
+Tinode.MESSAGE_STATUS_NONE = MESSAGE_STATUS_NONE;
+Tinode.MESSAGE_STATUS_QUEUED = MESSAGE_STATUS_QUEUED;
+Tinode.MESSAGE_STATUS_SENDING = MESSAGE_STATUS_SENDING;
+Tinode.MESSAGE_STATUS_FAILED = MESSAGE_STATUS_FAILED;
+Tinode.MESSAGE_STATUS_SENT = MESSAGE_STATUS_SENT;
+Tinode.MESSAGE_STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED;
+Tinode.MESSAGE_STATUS_READ = MESSAGE_STATUS_READ;
+Tinode.MESSAGE_STATUS_TO_ME = MESSAGE_STATUS_TO_ME;
 
-  // Unicode [del] symbol.
-  Tinode.DEL_CHAR = '\u2421';
+// Unicode [del] symbol.
+Tinode.DEL_CHAR = '\u2421';
+
+/**
+ * Check if the given string reprsents NULL value.
+ * @memberof Tinode
+ * @static
+ *
+ * @param {String} str - string to check for null value.
+ *
+ * @returns {boolean} true if string is null, false otherwise.
+ */
+Tinode.isNullValue = function(str) {
+  return str === Tinode.DEL_CHAR;
+};
 
 // Public methods;
 Tinode.prototype = {
