@@ -5299,6 +5299,7 @@ LargeFileHelper.prototype = {
         pkt = JSON.parse(this.response, jsonParseHelper);
       } catch (err) {
         instance._tinode.logger("ERROR: Invalid server response in LargeFileHelper", this.response);
+        pkt = {ctrl: {code: this.status, text: this.statusText}};
       }
 
       if (this.status >= 200 && this.status < 300) {
