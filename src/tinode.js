@@ -4818,7 +4818,8 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           case 'msg': // new message received
             cont.touched = new Date();
             cont.seq = pres.seq | 0;
-            if (this._tinode.isMe(pres.act)) {
+            // Check if message is sent by the current user. If so it's been read already.
+            if (!pres.act || this._tinode.isMe(pres.act)) {
               cont.read = cont.read ? Math.max(cont.read, cont.seq) : cont.seq;
               cont.recv = cont.recv ? Math.max(cont.read, cont.recv) : cont.recv;
             }
@@ -5306,7 +5307,12 @@ LargeFileHelper.prototype = {
         pkt = JSON.parse(this.response, jsonParseHelper);
       } catch (err) {
         instance._tinode.logger("ERROR: Invalid server response in LargeFileHelper", this.response);
-        pkt = {ctrl: {code: this.status, text: this.statusText}};
+        pkt = {
+          ctrl: {
+            code: this.status,
+            text: this.statusText
+          }
+        };
       }
 
       if (this.status >= 200 && this.status < 300) {
