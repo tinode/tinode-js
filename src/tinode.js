@@ -4818,6 +4818,10 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           case 'msg': // new message received
             cont.touched = new Date();
             cont.seq = pres.seq | 0;
+            if (this._tinode.isMe(pres.act)) {
+              cont.read = cont.read ? Math.max(cont.read, cont.seq) : cont.seq;
+              cont.recv = cont.recv ? Math.max(cont.read, cont.recv) : cont.recv;
+            }
             cont.unread = cont.seq - cont.read;
             break;
           case 'upd': // desc updated
@@ -4839,10 +4843,13 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             };
             break;
           case 'recv': // user's other session marked some messges as received
-            cont.recv = cont.recv ? Math.max(cont.recv, pres.seq) : (pres.seq | 0);
+            pres.seq = pres.seq | 0;
+            cont.recv = cont.recv ? Math.max(cont.recv, pres.seq) : pres.seq;
             break;
           case 'read': // user's other session marked some messages as read
-            cont.read = cont.read ? Math.max(cont.read, pres.seq) : (pres.seq | 0);
+            pres.seq = pres.seq | 0;
+            cont.read = cont.read ? Math.max(cont.read, pres.seq) : pres.seq;
+            cont.recv = cont.recv ? Math.max(cont.read, cont.recv) : cont.recv;
             cont.unread = cont.seq - cont.read;
             break;
           case 'gone': // topic deleted or unsubscribed from
