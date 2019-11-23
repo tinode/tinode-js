@@ -4797,6 +4797,13 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         this._resetSub();
         return;
       }
+
+      if (pres.what == 'upd' && pres.src == TOPIC_ME) {
+        // Update to me's description. Request updated value.
+        this.getMeta(this.startMetaQuery().withDesc().build());
+        return;
+      }
+
       const cont = this._contacts[pres.src];
       if (cont) {
         switch (pres.what) {
@@ -4826,7 +4833,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             cont.unread = cont.seq - cont.read;
             break;
           case 'upd': // desc updated
-            // Request updated description
+            // Request updated subscription.
             this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
             break;
           case 'acs': // access mode changed
