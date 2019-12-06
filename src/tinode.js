@@ -4330,22 +4330,40 @@ Topic.prototype = {
 
   // Process data message
   _routeData: function(data) {
-    // Maybe this is an empty message to indicate there are no actual messages.
+    // Maybe this is an empty message which indicates deleted ranges.
+    // Split the array of ranges into one range per message.
+    if (Array.isArray(data.delseq)) {
+      // Convert each range into a dummy message.
+      for (let idx in data.delseq) {
+        const range = data.delseq[idx];
+
+        range.hi = range.hi || range.low + 1;
+        this._routeData({
+          topic: data.topic,
+          seq: range.low, // used for sorting.
+          delRange: range
+        });
+      }
+      return;
+    }
+
     if (data.content) {
       if (!this.touched || this.touched < data.ts) {
         this.touched = data.ts;
       }
-
-      if (!data._noForwarding) {
-        this._messages.put(data);
-      }
     }
 
-    if (data.seq > this._maxSeq) {
-      this._maxSeq = data.seq;
+    if (!data._noForwarding) {
+      this._messages.put(data);
     }
-    if (data.seq < this._minSeq || this._minSeq == 0) {
-      this._minSeq = data.seq;
+
+    const max_id = data.delRange ? data.delRange.hi - 1 : data.seq;
+    const min_id = data.delRange ? data.delRange.low : data.seq;
+    if (max_id > this._maxSeq) {
+      this._maxSeq = max_id;
+    }
+    if (min_id < this._minSeq || this._minSeq == 0) {
+      this._minSeq = min_id;
     }
 
     if (this.onData) {
@@ -4356,9 +4374,10 @@ Topic.prototype = {
     const me = this._tinode.getMeTopic();
     if (me) {
       // Messages from the current user are considered to be read already.
+      // Messages representing deleted range are also "read".
       me.setMsgReadRecv(this.name,
-        this._tinode.isMe(data.from) ? 'read' : 'msg',
-        data.seq, data.ts);
+        (!data.from || this._tinode.isMe(data.from)) ? 'read' : 'msg',
+        max_id, data.ts);
     }
   },
 
