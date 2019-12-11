@@ -2215,6 +2215,7 @@ Tinode.prototype = {
    * @property {Number=} since - Load messages with seq id equal or greater than this value.
    * @property {Number=} before - Load messages with seq id lower than this number.
    * @property {Number=} limit - Maximum number of results to return.
+   * @property {Boolean=} withdel - Include indicator of deleted messages.
    */
 
   /**
@@ -2683,7 +2684,8 @@ MetaGetBuilder.prototype = {
     this.what['data'] = {
       since: since,
       before: before,
-      limit: limit
+      limit: limit,
+      withdel: true
     };
     return this;
   },
@@ -4330,22 +4332,7 @@ Topic.prototype = {
 
   // Process data message
   _routeData: function(data) {
-    // Maybe this is an empty message which indicates deleted ranges.
-    // Split the array of ranges into one range per message.
-    if (Array.isArray(data.delseq)) {
-      // Convert each range into a dummy message.
-      for (let idx in data.delseq) {
-        const range = data.delseq[idx];
-
-        range.hi = range.hi || range.low + 1;
-        this._routeData({
-          topic: data.topic,
-          seq: range.low, // used for sorting.
-          delRange: range
-        });
-      }
-      return;
-    }
+    // Detect deleted ranges.
 
     if (data.content) {
       if (!this.touched || this.touched < data.ts) {
@@ -4357,13 +4344,11 @@ Topic.prototype = {
       this._messages.put(data);
     }
 
-    const max_id = data.delRange ? data.delRange.hi - 1 : data.seq;
-    const min_id = data.delRange ? data.delRange.low : data.seq;
-    if (max_id > this._maxSeq) {
-      this._maxSeq = max_id;
+    if (data.seq > this._maxSeq) {
+      this._maxSeq = data.seq;
     }
-    if (min_id < this._minSeq || this._minSeq == 0) {
-      this._minSeq = min_id;
+    if (data.seq < this._minSeq || this._minSeq == 0) {
+      this._minSeq = data.seq;
     }
 
     if (this.onData) {
@@ -4374,10 +4359,9 @@ Topic.prototype = {
     const me = this._tinode.getMeTopic();
     if (me) {
       // Messages from the current user are considered to be read already.
-      // Messages representing deleted range are also "read".
       me.setMsgReadRecv(this.name,
         (!data.from || this._tinode.isMe(data.from)) ? 'read' : 'msg',
-        max_id, data.ts);
+        data.seq, data.ts);
     }
   },
 
