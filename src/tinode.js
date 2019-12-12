@@ -440,8 +440,9 @@ function getBrowserInfo(ua, product) {
  * @protected
  *
  * @param {function} compare custom comparator of objects. Returns -1 if a < b, 0 if a == b, 1 otherwise.
+ * @param {boolean} unique enforce element uniqueness: replace existing element with a new one on conflict.
  */
-var CBuffer = function(compare) {
+var CBuffer = function(compare, unique) {
   let buffer = [];
 
   compare = compare || function(a, b) {
@@ -468,18 +469,27 @@ var CBuffer = function(compare) {
       }
     }
     if (found) {
-      return pivot;
+      return {
+        idx: pivot,
+        exact: true
+      };
     }
     if (exact) {
-      return -1;
+      return {
+        idx: -1
+      };
     }
     // Not exact - insertion point
-    return diff < 0 ? pivot + 1 : pivot;
+    return {
+      idx: diff < 0 ? pivot + 1 : pivot
+    };
   }
 
   // Insert element into a sorted array.
   function insertSorted(elem, arr) {
-    arr.splice(findNearest(elem, arr, false), 0, elem);
+    const found = findNearest(elem, arr, false);
+    const count = (found.exact && unique) ? 1 : 0;
+    arr.splice(found.idx, count, elem);
     return arr;
   }
 
@@ -492,6 +502,15 @@ var CBuffer = function(compare) {
      */
     getAt: function(at) {
       return buffer[at];
+    },
+
+    /**
+     * Convenience method for getting the last element of the buffer.
+     * @memberof Tinode.CBuffer#
+     * @returns {Object} The last element in the buffer or <tt>undefined</tt> if buffer is empty.
+     */
+    getLast: function() {
+      return buffer.length > 0 ? buffer[buffer.length - 1] : undefined;
     },
 
     /** Add new element(s) to the buffer. Variadic: takes one or more arguments. If an array is passed as a single
@@ -540,20 +559,19 @@ var CBuffer = function(compare) {
     },
 
     /**
-     * Return the maximum number of element the buffer can hold
+     * Return the number of elements the buffer holds.
      * @memberof Tinode.CBuffer#
-     * @return {number} The size of the buffer.
+     * @return {number} Number of elements in the buffer.
      */
-    size: function() {
+    contains: function() {
       return buffer.length;
     },
 
     /**
-     * Discard all elements and reset the buffer to the new size (maximum number of elements).
+     * Reset the buffer discarding all elements
      * @memberof Tinode.CBuffer#
-     * @param {number} newSize - New size of the buffer.
      */
-    reset: function(newSize) {
+    reset: function() {
       buffer = [];
     },
 
@@ -591,7 +609,10 @@ var CBuffer = function(compare) {
      * @returns {number} index of the element in the buffer or -1.
      */
     find: function(elem, nearest) {
-      return findNearest(elem, buffer, !nearest);
+      const {
+        idx
+      } = findNearest(elem, buffer, !nearest);
+      return idx;
     }
   }
 }
@@ -3369,7 +3390,7 @@ var Topic = function(name, callbacks) {
   // Message cache, sorted by message seq values, from old to new.
   this._messages = CBuffer(function(a, b) {
     return a.seq - b.seq;
-  });
+  }, true);
   // Boolean, true if the topic is currently live
   this._subscribed = false;
   // Timestap when topic meta-desc update was recived.
@@ -3849,6 +3870,8 @@ Topic.prototype = {
           this.flushMessage(r.low);
         }
       });
+
+      this._updateDeletedRanges();
 
       if (this.onData) {
         // Calling with no parameters to indicate the messages were deleted.
@@ -4332,8 +4355,6 @@ Topic.prototype = {
 
   // Process data message
   _routeData: function(data) {
-    // Detect deleted ranges.
-
     if (data.content) {
       if (!this.touched || this.touched < data.ts) {
         this.touched = data.ts;
@@ -4342,6 +4363,7 @@ Topic.prototype = {
 
     if (!data._noForwarding) {
       this._messages.put(data);
+      this._updateDeletedRanges();
     }
 
     if (data.seq > this._maxSeq) {
@@ -4591,8 +4613,13 @@ Topic.prototype = {
         }
       });
     }
-    if (count > 0 && this.onData) {
-      this.onData();
+
+    if (count > 0) {
+      this._updateDeletedRanges();
+
+      if (this.onData) {
+        this.onData();
+      }
     }
   },
 
@@ -4649,6 +4676,90 @@ Topic.prototype = {
   // Get local seqId for a queued message.
   _getQueuedSeqId: function() {
     return this._queuedSeqId++;
+  },
+
+  // Calculate ranges of missing messages.
+  _updateDeletedRanges: function() {
+    const ranges = [];
+
+    let prev = null;
+    // Check for gap in the beginning, before the first message.
+    const first = this._messages.getAt(0);
+    if (this._minSeq > 1 && !this._noEarlierMsgs) {
+      // Some messages are missing in the beginning.
+      if (first.hi) {
+        // The first message already represents a gap.
+        if (first.seq > 1) {
+          first.seq = 1;
+        }
+        if (first.hi < this._minSeq - 1) {
+          first.hi = this._minSeq - 1;
+        }
+        prev = first;
+      } else {
+        // Create new gap.
+        prev = {
+          seq: 1,
+          hi: this._minSeq - 1
+        };
+        ranges.push(prev);
+      }
+    } else {
+      // No gap in the beginning.
+      prev = {
+        seq: 0,
+        hi: 0
+      };
+    }
+
+    // Find gaps in the list of received messages. The list contains messages-proper as well
+    // as placeholers for deleted ranges.
+    // The messages are iterated by seq ID in ascending order.
+    this._messages.forEach((data) => {
+      // New message is reducing the existing gap
+
+      if (data.seq == (prev.hi || prev.seq) + 1) {
+        // No new gap. Replace previous with current.
+        prev = data;
+        return;
+      }
+
+      // Found a new gap.
+
+      if (prev.hi) {
+        // Previous is also a gap, extend it.
+        prev.hi = data.hi || data.seq;
+        return;
+      }
+
+      // Previous is not a gap. Create a new gap.
+      prev = {
+        seq: (prev.hi || prev.seq) + 1,
+        hi: data.hi || data.seq
+      };
+      ranges.push(prev);
+    });
+
+    // Check for missing messages at the end.
+    const last = this._messages.getLast();
+    const maxSeq = Math.max(this.seq, this._maxSeq);
+    if (last && (last.hi || last.seq) < maxSeq) {
+      if (last.hi) {
+        // Extend existing gap
+        last.hi = maxSeq;
+      } else {
+        // Create new gap.
+        ranges.push({
+          seq: last.seq + 1,
+          hi: maxSeq
+        });
+      }
+    }
+
+    // Insert new gaps into cache.
+    ranges.map((gap) => {
+      this._messages.put(gap);
+    });
   }
 };
 
