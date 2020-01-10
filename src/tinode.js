@@ -2236,7 +2236,6 @@ Tinode.prototype = {
    * @property {Number=} since - Load messages with seq id equal or greater than this value.
    * @property {Number=} before - Load messages with seq id lower than this number.
    * @property {Number=} limit - Maximum number of results to return.
-   * @property {Boolean=} withdel - Include indicator of deleted messages.
    */
 
   /**
@@ -2705,8 +2704,7 @@ MetaGetBuilder.prototype = {
     this.what['data'] = {
       since: since,
       before: before,
-      limit: limit,
-      withdel: true
+      limit: limit
     };
     return this;
   },
@@ -4625,6 +4623,8 @@ Topic.prototype = {
 
   // Topic is informed that the entire response to {get what=data} has been received.
   _allMessagesReceived: function(count) {
+    this._updateDeletedRanges();
+
     if (this.onAllMessagesReceived) {
       this.onAllMessagesReceived(count);
     }
@@ -4685,7 +4685,7 @@ Topic.prototype = {
     let prev = null;
     // Check for gap in the beginning, before the first message.
     const first = this._messages.getAt(0);
-    if (this._minSeq > 1 && !this._noEarlierMsgs) {
+    if (first && this._minSeq > 1 && !this._noEarlierMsgs) {
       // Some messages are missing in the beginning.
       if (first.hi) {
         // The first message already represents a gap.
@@ -4740,17 +4740,17 @@ Topic.prototype = {
       ranges.push(prev);
     });
 
-    // Check for missing messages at the end.
+    // Check for missing messages at the end. All messages could be missing.
     const last = this._messages.getLast();
     const maxSeq = Math.max(this.seq, this._maxSeq);
-    if (last && (last.hi || last.seq) < maxSeq) {
-      if (last.hi) {
+    if (!last || (last && (last.hi || last.seq) < maxSeq)) {
+      if (last && last.hi) {
         // Extend existing gap
         last.hi = maxSeq;
       } else {
         // Create new gap.
         ranges.push({
-          seq: last.seq + 1,
+          seq: last ? last.seq + 1 : 1,
           hi: maxSeq
         });
       }
