@@ -790,7 +790,10 @@ Drafty.append = function(first, second) {
       first.ent = first.ent || [];
     }
     second.fmt.forEach(src => {
-      const fmt = {at: src.at + len, len: src.len};
+      const fmt = {
+        at: src.at + len,
+        len: src.len
+      };
       if (src.tp) {
         fmt.tp = src.tp;
       } else {
