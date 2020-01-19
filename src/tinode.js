@@ -56,8 +56,12 @@ let WebSocketProvider;
 if (typeof WebSocket != 'undefined') {
   WebSocketProvider = WebSocket;
 }
-initForNonBrowserApp();
 
+let XHRProvider;
+if (typeof XMLHttpRequest != 'undefined') {
+  XHRProvider = XMLHttpRequest;
+}
+initForNonBrowserApp();
 
 // Global constants
 const PROTOCOL_VERSION = '0';
@@ -146,9 +150,10 @@ function initForNonBrowserApp() {
   if (typeof window == 'undefined') {
     global.window = {
       WebSocket: WebSocketProvider,
+      XMLHttpRequest: XHRProvider,
       URL: {
         createObjectURL: function() {
-          throw new Error("Unable to use window.URL in a non browser application");
+          throw new Error("Unable to use URL.createObjectURL in a non-browser application");
         }
       }
     }
@@ -236,25 +241,6 @@ function mergeToCache(cache, key, newval, ignore) {
   cache[key] = mergeObj(cache[key], newval, ignore);
   return cache[key];
 }
-
-// Basic cross-domain requester. Supports normal browsers and IE8+
-function xdreq() {
-  let xdreq = null;
-
-  // Detect browser support for CORS
-  if ('withCredentials' in new XMLHttpRequest()) {
-    // Support for standard cross-domain requests
-    xdreq = new XMLHttpRequest();
-  } else if (typeof XDomainRequest != 'undefined') {
-    // IE-specific "CORS" with XDR
-    xdreq = new XDomainRequest();
-  } else {
-    // Browser without CORS support, don't know how to handle
-    throw new Error("Browser not supported");
-  }
-
-  return xdreq;
-};
 
 // JSON stringify helper - pre-processor for JSON.stringify
 function jsonBuildHelper(key, val) {
@@ -869,7 +855,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     let _sender = null;
 
     function lp_sender(url_) {
-      let sender = xdreq();
+      let sender = XMLHttpRequest();
       sender.onreadystatechange = function(evt) {
         if (sender.readyState == XDR_DONE && sender.status >= 400) {
           // Some sort of error response
@@ -882,7 +868,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     }
 
     function lp_poller(url_, resolve, reject) {
-      let poller = xdreq();
+      let poller = XMLHttpRequest();
       let promiseCompleted = false;
 
       poller.onreadystatechange = function(evt) {
@@ -1013,6 +999,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     }
   }
 
+  let initialized = false;
   if (transport_ === 'lp') {
     // explicit request to use long polling
     init_lp(this);
@@ -1020,14 +1007,39 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     // explicit request to use web socket
     // if websockets are not available, horrible things will happen
     init_ws(this);
-  } else {
+
     // Default transport selection
-    if (typeof window != 'object' || !window['WebSocket']) {
-      // The browser has no websockets
-      init_lp(this);
-    } else {
+  } else if (typeof window == 'object') {
+    if (window['WebSocket']) {
       // Using web sockets -- default.
       init_ws(this);
+    } else if (window['XMLHttpRequest']) {
+      // The browser has no websockets, using long polling.
+      init_lp(this);
+    }
+  }
+
+  if (!initialized) {
+    // No transport is avaiilable.
+    console.log("No network transport is available. Running Node? Call 'Tinode.setNetworkProviders()'.");
+    throw new Error("No network transport is available. Running Node? Call 'Tinode.setNetworkProviders()'.");
+  }
+
+  /**
+   * Check if the given network transport is available.
+   * @memberof Tinode.Connection#
+   * @param {String} trans - either 'ws' (websocket) or 'lp' (long polling).
+   * @returns true if given transport is available, false otherwise.
+   */
+  this.transportAvailable = function(transp) {
+    switch (transp) {
+      case 'ws':
+        return typeof window == 'object' && window['WebSocket'];
+      case 'lp':
+        return typeof window == 'object' && window['XMLHttpRequest'];
+      default:
+        console.log("Request for unknown transport", transp);
+        return false;
     }
   }
 
@@ -1691,14 +1703,15 @@ Tinode.getVersion = function() {
 };
 
 /**
- * To use for non browser app, allow to specify WebSocket provider
- * @param provider webSocket provider ex: for nodeJS require('ws')
- * @memberof Tinode
+ * To use Tinode in a non browser context, supply WebSocket and XMLHttpRequest providers.
  * @static
- *
+ * @memberof Tinode
+ * @param wsProvider WebSocket provider, e.g. for nodeJS require('ws').
+ * @param xhrProvider XMLHttpRequest provider, e.g. for node require('xhr').
  */
-Tinode.setWebSocketProvider = function(provider) {
-  WebSocketProvider = provider;
+Tinode.setNetworkProviders = function(wsProvider, xhrProvider) {
+  WebSocketProvider = wsprovider;
+  XHRProvider = xhrprovider;
 };
 
 /**
@@ -5364,7 +5377,7 @@ var LargeFileHelper = function(tinode) {
   this._apiKey = tinode._apiKey;
   this._authToken = tinode.getAuthToken();
   this._msgId = tinode.getNextUniqueId();
-  this.xhr = xdreq();
+  this.xhr = XMLHttpRequest();
 
   // Promise
   this.toResolve = null;
@@ -5556,6 +5569,7 @@ LargeFileHelper.prototype = {
     this.xhr.onload = function() {
       if (this.status == 200) {
         const link = document.createElement('a');
+        // URL.createObjectURL is not available in non-browser environment. This call will fail.
         link.href = window.URL.createObjectURL(new Blob([this.response], {
           type: mimetype
         }));
