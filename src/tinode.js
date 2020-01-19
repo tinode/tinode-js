@@ -563,7 +563,7 @@ var CBuffer = function(compare, unique) {
      * @memberof Tinode.CBuffer#
      * @return {number} Number of elements in the buffer.
      */
-    contains: function() {
+    length: function() {
       return buffer.length;
     },
 
@@ -3543,7 +3543,21 @@ Topic.prototype = {
     pub._failed = false;
     return this._tinode.publishMessage(pub).then((ctrl) => {
       pub._sending = false;
-      pub.seq = ctrl.params.seq;
+      let idx = this._messages.find({
+        seq: pub.seq
+      });
+      let newSeq = ctrl.params.seq;
+      let numMessages = this._messages.length();
+      pub.seq = newSeq;
+      if (0 <= idx && idx < numMessages) {
+        // this._messages are sorted by `seq`.
+        // If changing pub.seq to newSeq breaks the invariant, fix it.
+        if ((idx > 0 && this._messages.getAt(idx - 1).seq >= newSeq) ||
+          (idx + 1 < numMessages && newSeq < this._messages.getAt(idx + 1).seq <= newSeq)) {
+          this._messages.delAt(idx);
+          this._messages.put(pub);
+        }
+      }
       pub.ts = ctrl.ts;
       this._routeData(pub);
       return ctrl;
@@ -4117,7 +4131,7 @@ Topic.prototype = {
     if (cb) {
       let startIdx = typeof sinceId == 'number' ? this._messages.find({
         seq: sinceId
-      }) : undefined;
+      }, true) : undefined;
       let beforeIdx = typeof beforeId == 'number' ? this._messages.find({
         seq: beforeId
       }, true) : undefined;
@@ -4716,6 +4730,10 @@ Topic.prototype = {
     // as placeholers for deleted ranges.
     // The messages are iterated by seq ID in ascending order.
     this._messages.forEach((data) => {
+      // Message not sent.
+      if (data.seq >= LOCAL_SEQID) {
+        return;
+      }
       // New message is reducing the existing gap
 
       if (data.seq == (prev.hi || prev.seq) + 1) {
