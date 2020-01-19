@@ -3544,7 +3544,7 @@ Topic.prototype = {
     return this._tinode.publishMessage(pub).then((ctrl) => {
       pub._sending = false;
       pub.ts = ctrl.ts;
-      this.swapMessage(pub, ctrl.params.seq);
+      this.swapMessageId(pub, ctrl.params.seq);
       this._routeData(pub);
       return ctrl;
     }).catch((err) => {
@@ -4230,7 +4230,7 @@ Topic.prototype = {
    * @param {Object} pub message object.
    * @param {integer} newSeqId new seq id for pub.
    */
-  swapMessage: function(pub, newSeqId) {
+  swapMessageId: function(pub, newSeqId) {
     const idx = this._messages.find({
       seq: pub.seq
     });
