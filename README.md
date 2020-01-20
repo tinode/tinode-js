@@ -25,7 +25,7 @@ or while developing as
 
 ## Node JS compatibility
 
-To use tinode-sdk as a Node JS dependency, you have to polyfill network providers, for example with https://www.npmjs.com/package/ws and https://www.npmjs.com/package/xmlhttprequest (or https://www.npmjs.com/package/xhr).
+To use tinode-sdk as a Node JS dependency, you have to polyfill network providers, for example with [ws](https://www.npmjs.com/package/ws) and [xmlhttprequest](https://www.npmjs.com/package/xmlhttprequest) or [xhr](https://www.npmjs.com/package/xhr).
 ```js
   Tinode.setNetworkProviders(require('ws'), require('xmlhttprequest'));
   this.tinode  = new Tinode(...);
