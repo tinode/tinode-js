@@ -1003,19 +1003,23 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
   if (transport_ === 'lp') {
     // explicit request to use long polling
     init_lp(this);
+    initialized = true;
   } else if (transport_ === 'ws') {
     // explicit request to use web socket
     // if websockets are not available, horrible things will happen
     init_ws(this);
+    initialized = true;
 
     // Default transport selection
   } else if (typeof window == 'object') {
     if (window['WebSocket']) {
       // Using web sockets -- default.
       init_ws(this);
+      initialized = true;
     } else if (window['XMLHttpRequest']) {
       // The browser has no websockets, using long polling.
       init_lp(this);
+      initialized = true;
     }
   }
 
@@ -5405,7 +5409,7 @@ var LargeFileHelper = function(tinode) {
   this._apiKey = tinode._apiKey;
   this._authToken = tinode.getAuthToken();
   this._msgId = tinode.getNextUniqueId();
-  this.xhr = XMLHttpRequest();
+  this.xhr = new XMLHttpRequest();
 
   // Promise
   this.toResolve = null;
