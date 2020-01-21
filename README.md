@@ -7,13 +7,13 @@ Regularly released NPM packages are at https://www.npmjs.com/package/tinode-sdk
 You may include the latest standalone minified SDK into your html file as
 ```html
 <script crossorigin="anonymous"
-  src="https://unpkg.com/tinode-sdk/umd/tinode.prod.js">
+  src="https://cdn.jsdelivr.net/npm/tinode-sdk/umd/tinode.prod.js">
 </script>
 ```
 or while developing as
 ```html
 <script crossorigin="anonymous"
-  src="https://unpkg.com/tinode-sdk/umd/tinode.dev.js">
+  src="https://cdn.jsdelivr.net/npm/tinode-sdk/umd/tinode.dev.js">
 </script>
 ```
 
@@ -25,8 +25,15 @@ or while developing as
 
 ## Node JS compatibility
 
-To use tinode-sdk as a Node JS dependency, you have to provide a WebSocket provider:
+To use tinode-sdk as a Node JS dependency, you have to polyfill network providers, for example with [ws](https://www.npmjs.com/package/ws) and [xmlhttprequest](https://www.npmjs.com/package/xmlhttprequest) or [xhr](https://www.npmjs.com/package/xhr).
 ```js
-  Tinode.setWebSocketProvider(require('ws'));
+  Tinode.setNetworkProviders(require('ws'), require('xmlhttprequest'));
   this.tinode  = new Tinode(...);
 ```
+or (before instantiating Tinode):
+```js
+  window.WebSocket = require('ws');
+  window.XMLHttpRequest = require('xmlhttprequest');
+```
+
+Keep in mind that the SDK also references `URL.createObjectURL()` which is not currently polyfilled. It will throw an exception when the user attempts to download a file attachment.

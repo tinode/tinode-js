@@ -615,7 +615,7 @@ function splice(src, at, insert) {
 }
 
 /**
- * Parse plain text into structured representation.
+ * Parse plain text into Drafty document.
  * @memberof Drafty
  * @static
  *
@@ -748,7 +748,67 @@ Drafty.parse = function(content) {
 }
 
 /**
- * Insert inline image into Drafty content.
+ * Initialize Drafty document to a plain text string.
+ *
+ * @param {String} plainText string to use as Drafty content.
+ *
+ * @returns new Drafty document or null is plainText is not a string.
+ */
+Drafty.init = function(plainText) {
+  if (typeof plainText != 'string') {
+    return null;
+  }
+  return {
+    txt: plainText
+  };
+}
+
+/**
+ * Append one Drafty document to another.
+ *
+ * @param {Drafty} first Drafty document to append to.
+ * @param {Drafty} second Drafty document being appended.
+ *
+ * @return {Drafty} first document with the second appended to it.
+ */
+Drafty.append = function(first, second) {
+  if (first == null) {
+    return second;
+  }
+  if (second == null) {
+    return first;
+  }
+
+  first.txt = first.txt || '';
+  second.txt = second.txt || '';
+  const len = first.txt.length;
+
+  first.txt += second.txt;
+  if (Array.isArray(second.fmt)) {
+    first.fmt = first.fmt || [];
+    if (Array.isArray(second.ent)) {
+      first.ent = first.ent || [];
+    }
+    second.fmt.forEach(src => {
+      const fmt = {
+        at: src.at + len,
+        len: src.len
+      };
+      if (src.tp) {
+        fmt.tp = src.tp;
+      } else {
+        fmt.key = first.ent.length;
+        first.ent.push(second.ent[src.key || 0]);
+      }
+      first.fmt.push(fmt);
+    });
+  }
+
+  return first;
+}
+
+/**
+ * Insert inline image into Drafty document.
  * @memberof Drafty
  * @static
  *
