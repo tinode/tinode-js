@@ -5409,7 +5409,7 @@ var LargeFileHelper = function(tinode) {
   this._apiKey = tinode._apiKey;
   this._authToken = tinode.getAuthToken();
   this._msgId = tinode.getNextUniqueId();
-  this.xhr = XMLHttpRequest();
+  this.xhr = new XMLHttpRequest();
 
   // Promise
   this.toResolve = null;
