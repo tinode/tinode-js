@@ -1025,8 +1025,8 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
   if (!initialized) {
     // No transport is avaiilable.
-    console.log("No network transport is available. Running Node? Call 'Tinode.setNetworkProviders()'.");
-    throw new Error("No network transport is available. Running Node? Call 'Tinode.setNetworkProviders()'.");
+    console.log("No network transport is available. Running under Node? Call 'Tinode.setNetworkProviders()'.");
+    throw new Error("No network transport is available. Running under Node? Call 'Tinode.setNetworkProviders()'.");
   }
 
   /**
@@ -4035,10 +4035,10 @@ Topic.prototype = {
    * Send a 'read' receipt. Wrapper for {@link Tinode#noteRead}.
    * @memberof Tinode.Topic#
    *
-   * @param {Number} seq - ID of the message to aknowledge.
+   * @param {Number} seq - ID of the message to aknowledge or 0/undefined to acknowledge the latest messages.
    */
   noteRead: function(seq) {
-    this.note('read', seq);
+    this.note('read', seq || this._maxSeq);
   },
 
   /**
@@ -4421,8 +4421,7 @@ Topic.prototype = {
     if (me) {
       // Messages from the current user are considered to be read already.
       me.setMsgReadRecv(this.name,
-        (!data.from || this._tinode.isMe(data.from)) ? 'read' : 'msg',
-        data.seq, data.ts);
+        (!data.from || this._tinode.isMe(data.from)) ? 'read' : 'msg', data.seq, data.ts);
     }
   },
 
