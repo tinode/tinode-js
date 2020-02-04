@@ -4786,7 +4786,7 @@ Topic.prototype = {
 
     // Check for missing messages at the end. All messages could be missing.
     const last = this._messages.getLast();
-    const maxSeq = Math.max(this.seq, this._maxSeq);
+    const maxSeq = Math.max(this.seq, this._maxSeq) || 0;
     if (!last || (last && (last.hi || last.seq) < maxSeq)) {
       if (last && last.hi) {
         // Extend existing gap
