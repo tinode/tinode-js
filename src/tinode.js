@@ -4784,10 +4784,11 @@ Topic.prototype = {
       ranges.push(prev);
     });
 
-    // Check for missing messages at the end. All messages could be missing.
+    // Check for missing messages at the end.
+    // All messages could be missing or it could be a new topic with no messages.
     const last = this._messages.getLast();
     const maxSeq = Math.max(this.seq, this._maxSeq) || 0;
-    if (!last || (last && (last.hi || last.seq) < maxSeq)) {
+    if ((maxSeq > 0 && !last) || (last && ((last.hi || last.seq) < maxSeq))) {
       if (last && last.hi) {
         // Extend existing gap
         last.hi = maxSeq;
