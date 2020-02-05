@@ -4038,7 +4038,10 @@ Topic.prototype = {
    * @param {Number} seq - ID of the message to aknowledge or 0/undefined to acknowledge the latest messages.
    */
   noteRead: function(seq) {
-    this.note('read', seq || this._maxSeq);
+    seq = seq || this._maxSeq;
+    if (seq > 0) {
+      this.note('read', seq);
+    }
   },
 
   /**
