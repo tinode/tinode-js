@@ -1,6 +1,6 @@
 # Javascript bindings for Tinode
 
-See demo at http://web.tinode.co/ ([source](https://github.com/tinode/example-react-js))
+See it used at https://web.tinode.co/ and https://sandbox.tinode.co/ ([full source](https://github.com/tinode/webapp)).
 
 Regularly released NPM packages are at https://www.npmjs.com/package/tinode-sdk
 
@@ -25,7 +25,7 @@ or while developing as
 
 ## Node JS compatibility
 
-To use tinode-sdk as a Node JS dependency, you have to polyfill network providers, for example with [ws](https://www.npmjs.com/package/ws) and [xmlhttprequest](https://www.npmjs.com/package/xmlhttprequest) or [xhr](https://www.npmjs.com/package/xhr).
+This SDK is intended to be used in a browser. To use tinode-sdk in Node JS environment (such as on a server), you have to polyfill network providers, for example with [ws](https://www.npmjs.com/package/ws) and [xmlhttprequest](https://www.npmjs.com/package/xmlhttprequest) or [xhr](https://www.npmjs.com/package/xhr).
 ```js
   Tinode.setNetworkProviders(require('ws'), require('xmlhttprequest'));
   this.tinode  = new Tinode(...);
@@ -36,4 +36,4 @@ or (before instantiating Tinode):
   window.XMLHttpRequest = require('xmlhttprequest');
 ```
 
-Keep in mind that the SDK also references `URL.createObjectURL()` which is not currently polyfilled. It will throw an exception when the user attempts to download a file attachment.
+Keep in mind that the SDK also references `URL.createObjectURL()` which is [not currently polyfilled](https://github.com/nodejs/node/issues/16167). It will throw an exception when the user attempts to download a file attachment. See discussion: https://github.com/tinode/tinode-js/issues/28
