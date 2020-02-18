@@ -4403,16 +4403,16 @@ Topic.prototype = {
       }
     }
 
-    if (!data._noForwarding) {
-      this._messages.put(data);
-      this._updateDeletedRanges();
-    }
-
     if (data.seq > this._maxSeq) {
       this._maxSeq = data.seq;
     }
     if (data.seq < this._minSeq || this._minSeq == 0) {
       this._minSeq = data.seq;
+    }
+
+    if (!data._noForwarding) {
+      this._messages.put(data);
+      this._updateDeletedRanges();
     }
 
     if (this.onData) {
@@ -4763,8 +4763,8 @@ Topic.prototype = {
       if (data.seq >= LOCAL_SEQID) {
         return;
       }
-      // New message is reducing the existing gap
 
+      // New message is reducing the existing gap
       if (data.seq == (prev.hi || prev.seq) + 1) {
         // No new gap. Replace previous with current.
         prev = data;
@@ -4772,9 +4772,8 @@ Topic.prototype = {
       }
 
       // Found a new gap.
-
       if (prev.hi) {
-        // Previous is also a gap, extend it.
+        // Previous is also a gap, alter it.
         prev.hi = data.hi || data.seq;
         return;
       }
