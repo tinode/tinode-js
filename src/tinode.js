@@ -2558,7 +2558,7 @@ Tinode.prototype = {
   },
 
   /**
-   * Set human language to send to the server. Must be called before 'hi' is sent, otherwise it will not be used.
+   * Set UI language to report to the server. Must be called before 'hi' is sent, otherwise it will not be used.
    * @memberof Tinode#
    *
    * @param {String} hl - human (UI) language, like "en_US" or "zh-Hans".
