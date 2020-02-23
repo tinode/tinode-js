@@ -1143,6 +1143,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
   if (typeof navigator != 'undefined') {
     this._browser = getBrowserInfo(navigator.userAgent, navigator.product);
     this._hwos = navigator.platform;
+    // This is the default language. It could be changed by client.
     this._humanLanguage = navigator.language || 'en-US';
   }
   // Logging to console enabled
@@ -2554,6 +2555,18 @@ Tinode.prototype = {
   enableLogging: function(enabled, trimLongStrings) {
     this._loggingEnabled = enabled;
     this._trimLongStrings = enabled && trimLongStrings;
+  },
+
+  /**
+   * Set human language to send to the server. Must be called before 'hi' is sent, otherwise it will not be used.
+   * @memberof Tinode#
+   *
+   * @param {String} hl - human (UI) language, like "en_US" or "zh-Hans".
+   */
+  setHumanLanguage: function(hl) {
+    if (hl) {
+      this._humanLanguage = hl;
+    }
   },
 
   /**
