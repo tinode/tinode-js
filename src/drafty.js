@@ -381,15 +381,15 @@ var Drafty = function() {}
 // This is needed in order to clear markup, i.e. 'hello *world*' -> 'hello world' and convert
 // ranges from markup-ed offsets to plain text offsets.
 function chunkify(line, start, end, spans) {
-  var chunks = [];
+  const chunks = [];
 
   if (spans.length == 0) {
     return [];
   }
 
-  for (var i in spans) {
+  for (let i in spans) {
     // Get the next chunk from the queue
-    var span = spans[i];
+    const span = spans[i];
 
     // Grab the initial unstyled chunk
     if (span.start > start) {
@@ -399,10 +399,10 @@ function chunkify(line, start, end, spans) {
     }
 
     // Grab the styled chunk. It may include subchunks.
-    var chunk = {
+    const chunk = {
       type: span.type
     };
-    var chld = chunkify(line, span.start + 1, span.end, span.children);
+    const chld = chunkify(line, span.start + 1, span.end, span.children);
     if (chld.length > 0) {
       chunk.children = chld;
     } else {
@@ -424,11 +424,11 @@ function chunkify(line, start, end, spans) {
 
 // Inverse of chunkify. Returns a tree of formatted spans.
 function forEach(line, start, end, spans, formatter, context) {
-  let result = [];
+  const result = [];
 
   // Process ranges calling formatter for each range.
   for (let i = 0; i < spans.length; i++) {
-    let span = spans[i];
+    const span = spans[i];
     if (span.at < 0) {
       // throw out non-visual spans.
       continue;
@@ -464,7 +464,7 @@ function forEach(line, start, end, spans, formatter, context) {
 // Detect starts and ends of formatting spans. Unformatted spans are
 // ignored at this stage.
 function spannify(original, re_start, re_end, type) {
-  let result = [];
+  const result = [];
   let index = 0;
   let line = original.slice(0); // make a copy;
 
@@ -474,7 +474,7 @@ function spannify(original, re_start, re_end, type) {
     // match['index']; // offset where the match started.
 
     // Find the opening token.
-    let start = re_start.exec(line);
+    const start = re_start.exec(line);
     if (start == null) {
       break;
     }
@@ -490,7 +490,7 @@ function spannify(original, re_start, re_end, type) {
     index = start_offset + 1;
 
     // Find the matching closing token.
-    let end = re_end ? re_end.exec(line) : null;
+    const end = re_end ? re_end.exec(line) : null;
     if (end == null) {
       break;
     }
@@ -521,9 +521,9 @@ function toTree(spans) {
     return [];
   }
 
-  var tree = [spans[0]];
-  var last = spans[0];
-  for (var i = 1; i < spans.length; i++) {
+  const tree = [spans[0]];
+  let last = spans[0];
+  for (let i = 1; i < spans.length; i++) {
     // Keep spans which start after the end of the previous span or those which
     // are complete within the previous span.
 
@@ -539,7 +539,7 @@ function toTree(spans) {
   }
 
   // Recursively rearrange the subnodes.
-  for (var i in tree) {
+  for (let i in tree) {
     tree[i].children = toTree(tree[i].children);
   }
 
@@ -548,8 +548,8 @@ function toTree(spans) {
 
 // Get a list of entities from a text.
 function extractEntities(line) {
-  var match;
-  var extracted = [];
+  let match;
+  let extracted = [];
   ENTITY_TYPES.map(function(entity) {
     while ((match = entity.re.exec(line)) !== null) {
       extracted.push({
@@ -571,9 +571,9 @@ function extractEntities(line) {
     return a.offset - b.offset;
   });
 
-  var idx = -1;
+  let idx = -1;
   extracted = extracted.filter(function(el) {
-    var result = (el.offset > idx);
+    const result = (el.offset > idx);
     idx = el.offset + el.len;
     return result;
   });
@@ -583,10 +583,10 @@ function extractEntities(line) {
 
 // Convert the chunks into format suitable for serialization.
 function draftify(chunks, startAt) {
-  var plain = "";
-  var ranges = [];
+  let plain = "";
+  const ranges = [];
   for (var i in chunks) {
-    var chunk = chunks[i];
+    const chunk = chunks[i];
     if (!chunk.text) {
       var drafty = draftify(chunk.children, plain.length + startAt);
       chunk.text = drafty.txt;
@@ -629,17 +629,17 @@ Drafty.parse = function(content) {
   }
 
   // Split text into lines. It makes further processing easier.
-  var lines = content.split(/\r?\n/);
+  const lines = content.split(/\r?\n/);
 
   // Holds entities referenced from text
-  var entityMap = [];
-  var entityIndex = {};
+  const entityMap = [];
+  const entityIndex = {};
 
   // Processing lines one by one, hold intermediate result in blx.
-  var blx = [];
+  const blx = [];
   lines.map(function(line) {
-    var spans = [];
-    var entities = [];
+    let spans = [];
+    let entities;
 
     // Find formatted spans in the string.
     // Try to match each style.
@@ -648,7 +648,7 @@ Drafty.parse = function(content) {
       spans = spans.concat(spannify(line, style.start, style.end, style.name));
     });
 
-    var block;
+    let block;
     if (spans.length == 0) {
       block = {
         txt: line
@@ -664,9 +664,9 @@ Drafty.parse = function(content) {
 
       // Build a tree representation of the entire string, not
       // just the formatted parts.
-      var chunks = chunkify(line, 0, line.length, spans);
+      const chunks = chunkify(line, 0, line.length, spans);
 
-      var drafty = draftify(chunks, 0);
+      const drafty = draftify(chunks, 0);
 
       block = {
         txt: drafty.txt,
@@ -677,11 +677,11 @@ Drafty.parse = function(content) {
     // Extract entities from the cleaned up string.
     entities = extractEntities(block.txt);
     if (entities.length > 0) {
-      var ranges = [];
-      for (var i in entities) {
+      const ranges = [];
+      for (let i in entities) {
         // {offset: match['index'], unique: match[0], len: match[0].length, data: ent.packer(), type: ent.name}
-        var entity = entities[i];
-        var index = entityIndex[entity.unique];
+        const entity = entities[i];
+        let index = entityIndex[entity.unique];
         if (!index) {
           index = entityMap.length;
           entityIndex[entity.unique] = index;
@@ -702,7 +702,7 @@ Drafty.parse = function(content) {
     blx.push(block);
   });
 
-  var result = {
+  const result = {
     txt: ""
   };
 
@@ -711,9 +711,9 @@ Drafty.parse = function(content) {
     result.txt = blx[0].txt;
     result.fmt = (blx[0].fmt || []).concat(blx[0].ent || []);
 
-    for (var i = 1; i < blx.length; i++) {
-      var block = blx[i];
-      var offset = result.txt.length + 1;
+    for (let i = 1; i < blx.length; i++) {
+      const block = blx[i];
+      const offset = result.txt.length + 1;
 
       result.fmt.push({
         tp: 'BR',
@@ -903,7 +903,7 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
     key: content.ent.length
   });
 
-  let ex = {
+  const ex = {
     tp: 'EX',
     data: {
       mime: mime,
@@ -1030,7 +1030,7 @@ Drafty.appendButton = function(content, title, name, actionType, actionValue, re
   content = content || {
     txt: ""
   };
-  let at = content.txt.length;
+  const at = content.txt.length;
   content.txt += title;
   return Drafty.insertButton(content, at, title.length, name, actionType, actionValue, refUrl);
 }
@@ -1096,20 +1096,20 @@ Drafty.appendLineBreak = function(content) {
  * @return HTML-representation of content.
  */
 Drafty.UNSAFE_toHTML = function(content) {
-  var {
+  let {
     txt,
     fmt,
     ent
   } = content;
 
-  var markup = [];
+  const markup = [];
   if (fmt) {
     for (let i in fmt) {
-      let range = fmt[i];
-      let tp = range.tp,
-        data;
+      const range = fmt[i];
+      let tp = range.tp;
+      let data;
       if (!tp) {
-        let entity = ent[range.key | 0];
+        const entity = ent[range.key | 0];
         if (entity) {
           tp = entity.tp;
           data = entity.data;
@@ -1137,7 +1137,7 @@ Drafty.UNSAFE_toHTML = function(content) {
     return b.idx == a.idx ? b.len - a.len : b.idx - a.idx; // in descending order
   });
 
-  for (var i in markup) {
+  for (let i in markup) {
     if (markup[i].what) {
       txt = splice(txt, markup[i].idx, markup[i].what);
     }
@@ -1267,6 +1267,44 @@ Drafty.toPlainText = function(content) {
  */
 Drafty.isPlainText = function(content) {
   return typeof content == 'string' || !(content.fmt || content.ent);
+}
+
+/**
+ * Checks if the object represets is a valid Drafty document.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - content to check for validity.
+ * @returns true is content is valid, false otherwise.
+ */
+Drafty.isValid = function(content) {
+  if (!content) {
+    return false;
+  }
+
+  const {
+    txt,
+    fmt,
+    ent
+  } = content;
+
+  if (!txt && txt !== '' && !fmt && !ent) {
+    return false;
+  }
+
+  const txt_type = typeof txt;
+  if (txt_type != 'string' && txt_type != 'undefined' && txt !== null) {
+    return false;
+  }
+
+  if (typeof fmt != 'undefined' && !Array.isArray(fmt) && fmt !== null) {
+    return false;
+  }
+
+  if (typeof ent != 'undefined' && !Array.isArray(ent) && ent !== null) {
+    return false;
+  }
+  return true;
 }
 
 /**
