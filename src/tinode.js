@@ -1178,8 +1178,8 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
       const d = new Date()
       const dateString = ('0' + d.getUTCHours()).slice(-2) + ':' +
         ('0' + d.getUTCMinutes()).slice(-2) + ':' +
-        ('0' + d.getUTCSeconds()).slice(-2) + ':' +
-        ('0' + d.getUTCMilliseconds()).slice(-3);
+        ('0' + d.getUTCSeconds()).slice(-2) + '.' +
+        ('00' + d.getUTCMilliseconds()).slice(-3);
 
       console.log('[' + dateString + ']', str, args.join(' '));
     }
