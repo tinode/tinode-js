@@ -5248,13 +5248,17 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    * Get access mode of a given contact from cache.
    * @memberof Tinode.TopicMe#
    *
-   * @param {String} name - Name of the contact to get access mode for, either a UID (for p2p topics) or a topic name.
+   * @param {String} name - Name of the contact to get access mode for, either a UID (for p2p topics)
+   *        or a topic name; if missing, access mode for the 'me' topic itself.
    * @returns {string} - access mode, such as `RWP`.
    */
   getAccessMode: {
     value: function(name) {
-      const cont = this._contacts[name];
-      return cont ? cont.acs : null;
+      if (name) {
+        const cont = this._contacts[name];
+        return cont ? cont.acs : null;
+      }
+      return this.acs;
     },
     enumerable: true,
     configurable: true,
