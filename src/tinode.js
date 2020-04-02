@@ -242,6 +242,18 @@ function mergeToCache(cache, key, newval, ignore) {
   return cache[key];
 }
 
+function stringToDate(obj) {
+  if (typeof obj.created == 'string') {
+    obj.created = new Date(obj.created);
+  }
+  if (typeof obj.updated == 'string') {
+    obj.updated = new Date(obj.updated);
+  }
+  if (typeof obj.touched == 'string') {
+    obj.touched = new Date(obj.touched);
+  }
+}
+
 // JSON stringify helper - pre-processor for JSON.stringify
 function jsonBuildHelper(key, val) {
   if (val instanceof Date) {
@@ -945,7 +957,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
         log("Connecting to: ", url);
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null)
-      }).catch(function() {
+      }).catch((err) => {
         // Catch an error and do nothing.
       });
     };
@@ -4561,16 +4573,8 @@ Topic.prototype = {
 
     // Copy parameters from desc object to this topic.
     mergeObj(this, desc);
-
-    if (typeof this.created == 'string') {
-      this.created = new Date(this.created);
-    }
-    if (typeof this.updated == 'string') {
-      this.updated = new Date(this.updated);
-    }
-    if (typeof this.touched == 'string') {
-      this.touched = new Date(this.touched);
-    }
+    // Make sure date fields are Date().
+    stringToDate(this);
 
     // Update relevant contact in the me topic, if available:
     if (this.name !== 'me' && !desc._noForwarding) {
@@ -4844,6 +4848,45 @@ var TopicMe = function(callbacks) {
 
 // Inherit everyting from the generic Topic
 TopicMe.prototype = Object.create(Topic.prototype, {
+  // Override the original Topic._processMetaDesc.
+  _processMetaDesc: {
+    value: function(desc) {
+      // Check if online contacts need to be turned off because P permission was removed.
+      const turnOff = (desc.acs && !desc.acs.isPresencer()) && (this.acs && this.acs.isPresencer());
+
+      // Copy parameters from desc object to this topic.
+      mergeObj(this, desc);
+      // String datetime headers to Date() objects.
+      stringToDate(this);
+
+      // 'P' permission was removed. All topics are offline now.
+      if (turnOff) {
+        Object.values(this._contacts).map((cont) => {
+          if (cont.online) {
+            cont.online = false;
+            if (cont.seen) {
+              cont.seen.when = new Date();
+            } else {
+              cont.seen = {
+                when: new Date()
+              };
+            }
+            if (this.onContactUpdate) {
+              this.onContactUpdate('off', cont);
+            }
+          }
+        });
+      }
+
+      if (this.onMetaDesc) {
+        this.onMetaDesc(this);
+      }
+    },
+    enumerable: true,
+    configurable: true,
+    writable: false
+  },
+
   // Override the original Topic._processMetaSub
   _processMetaSub: {
     value: function(subs) {
