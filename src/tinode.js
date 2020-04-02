@@ -3744,11 +3744,11 @@ Topic.prototype = {
         }
 
         if (params.sub) {
+          params.sub.topic = this.name;
           if (ctrl.params && ctrl.params.acs) {
             params.sub.acs = ctrl.params.acs;
             params.sub.updated = ctrl.ts;
           }
-
           if (!params.sub.user) {
             // This is a subscription update of the current user.
             // Assign user ID otherwise the update will be ignored by _processMetaSub.
