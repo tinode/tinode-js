@@ -867,7 +867,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     let _sender = null;
 
     function lp_sender(url_) {
-      let sender = XMLHttpRequest();
+      let sender = new XMLHttpRequest();
       sender.onreadystatechange = function(evt) {
         if (sender.readyState == XDR_DONE && sender.status >= 400) {
           // Some sort of error response
@@ -880,7 +880,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     }
 
     function lp_poller(url_, resolve, reject) {
-      let poller = XMLHttpRequest();
+      let poller = new XMLHttpRequest();
       let promiseCompleted = false;
 
       poller.onreadystatechange = function(evt) {
@@ -958,7 +958,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null)
       }).catch((err) => {
-        // Catch an error and do nothing.
+        console.log("LP connection failed:", err);
       });
     };
 
