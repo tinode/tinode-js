@@ -2398,6 +2398,19 @@ Tinode.prototype = {
   },
 
   /**
+   * Request to delete account of the current user.
+   *
+   * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
+   */
+  delCurrentUser: function() {
+    const pkt = this.initPacket('del', null);
+    pkt.del.what = 'user';
+    return this.send(pkt, pkt.del.id).then((ctrl) => {
+      this._myUID = null;
+    });
+  },
+
+  /**
    * Notify server that a message or messages were read or received. Does NOT return promise.
    * @memberof Tinode#
    *
