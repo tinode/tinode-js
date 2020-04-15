@@ -2347,11 +2347,13 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {String} topic - Name of the topic to delete
+   * @param {Boolean} hard - hard-delete topic.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delTopic: function(topic) {
+  delTopic: function(topic, hard) {
     const pkt = this.initPacket('del', topic);
     pkt.del.what = 'topic';
+    pkt.del.hard = hard;
 
     return this.send(pkt, pkt.del.id).then((ctrl) => {
       this.cacheDel('topic', topic);
@@ -2376,35 +2378,36 @@ Tinode.prototype = {
   },
 
   /**
-   * Delete credential. Must be 'me' topic.
+   * Delete credential. Always sent on 'me' topic.
    * @memberof Tinode#
    *
-   * @param {String} topic - 'me'.
    * @param {String} method - validation method such as 'email' or 'tel'.
    * @param {String} value - validation value, i.e. 'alice@example.com'.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delCredential: function(topic, method, value) {
-    if (topic != 'me') {
-      throw new Error("Invalid topic for deleting credentials '" + topic + "'");
-    }
-    const pkt = this.initPacket('del', topic);
+  delCredential: function(method, value) {
+    const pkt = this.initPacket('del', TOPIC_ME);
     pkt.del.what = 'cred';
     pkt.del.cred = {
       meth: method,
       val: value
     };
+
     return this.send(pkt, pkt.del.id);
   },
 
   /**
    * Request to delete account of the current user.
+   * @memberof Tinode#
    *
+   * @param {Boolean} hard - hard-delete user.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delCurrentUser: function() {
+  delCurrentUser: function(hard) {
     const pkt = this.initPacket('del', null);
     pkt.del.what = 'user';
+    pkt.del.hard = hard;
+
     return this.send(pkt, pkt.del.id).then((ctrl) => {
       this._myUID = null;
     });
@@ -3121,9 +3124,30 @@ AccessMode.update = function(val, upd) {
 };
 
 /**
- * AccessMode is a class representing topic access mode.
- * @class Topic
+ * Bits present in a1 but missing in a2.
+ *
+ * @static
  * @memberof Tinode
+ *
+ * @param {number | string} a1 - access mode to subtract from.
+ * @param {number | string} a2 - access mode to subtract.
+ * @returns {number} access mode with bits present in a1 but missing in a2
+ */
+AccessMode.diff = function(a1, a2) {
+  a1 = AccessMode.decode(a1);
+  a2 = AccessMode.decode(a2);
+
+  if (a1 == AccessMode._INVALID || a2 == AccessMode._INVALID) {
+    return AccessMode._INVALID;
+  }
+  return a1 & ~a2;
+};
+
+/**
+ * AccessMode is a class representing topic access mode.
+ *
+ * @memberof Tinode
+ * @class AccessMode
  */
 AccessMode.prototype = {
   /**
@@ -3995,13 +4019,13 @@ Topic.prototype = {
    * Delete topic. Requires Owner permission. Wrapper for {@link Tinode#delTopic}.
    * @memberof Tinode.Topic#
    *
+   * @param {Boolean} hard - had-delete topic.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
-  delTopic: function() {
-    const topic = this;
-    return this._tinode.delTopic(this.name).then(function(ctrl) {
-      topic._resetSub();
-      topic._gone();
+  delTopic: function(hard) {
+    return this._tinode.delTopic(this.name, hard).then((ctrl) => {
+      this._resetSub();
+      this._gone();
       return ctrl;
     });
   },
@@ -4590,7 +4614,7 @@ Topic.prototype = {
     stringToDate(this);
 
     // Update relevant contact in the me topic, if available:
-    if (this.name !== 'me' && !desc._noForwarding) {
+    if (this.name !== TOPIC_ME && !desc._noForwarding) {
       const me = this._tinode.getMeTopic();
       if (me) {
         // Must use original 'desc' instead of 'this' so not to lose DEL_CHAR.
@@ -4724,7 +4748,7 @@ Topic.prototype = {
       me._routePres({
         _noForwarding: true,
         what: 'gone',
-        topic: 'me',
+        topic: TOPIC_ME,
         src: this.name
       });
     }
@@ -5169,7 +5193,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         return Promise.reject(new Error("Cannot delete credential in inactive 'me' topic"));
       }
       // Send {del} message, return promise
-      return this._tinode.delCredential(this.name, method, value).then((ctrl) => {
+      return this._tinode.delCredential(method, value).then((ctrl) => {
         // Remove deleted credential from the cache.
         const index = this._credentials.findIndex((el) => {
           return el.meth == method && el.val == value;
@@ -5793,4 +5817,5 @@ Message.prototype.constructor = Message;
 if (typeof module != 'undefined') {
   module.exports = Tinode;
   module.exports.Drafty = Drafty;
+  module.exports.AccessMode = AccessMode;
 }
