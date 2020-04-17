@@ -4941,10 +4941,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         if (sub.deleted) {
           cont = sub;
           delete this._contacts[topicName];
-        } else if (sub.acs && !sub.acs.isJoiner()) {
-          cont = sub;
-          cont.deleted = new Date();
-          delete this._contacts[topicName];
         } else {
           // Ensure the values are defined and are integers.
           if (typeof sub.seq != 'undefined') {
@@ -5212,26 +5208,21 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   },
 
   /**
-   * Iterate over cached contacts. If callback is undefined, use {@link this.onMetaSub}.
+   * Iterate over cached contacts.
+   *
    * @function
    * @memberof Tinode.TopicMe#
-   * @param {TopicMe.ContactCallback=} callback - Callback to call for each contact.
-   * @param {boolean=} includeBanned - Include banned contacts.
+   * @param {TopicMe.ContactCallback} callback - Callback to call for each contact.
+   * @param {function=} filter - Optionally filter contacts; include all if filter is false-ish, otherwise include those for
+   *                            which filter returns true-ish.
    * @param {Object=} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
    */
   contacts: {
-    value: function(callback, includeBanned, context) {
-      const cb = (callback || this.onMetaSub);
-      if (cb) {
-        for (let idx in this._contacts) {
-          if (!includeBanned &&
-            (!this._contacts[idx] ||
-              !this._contacts[idx].acs ||
-              !this._contacts[idx].acs.isJoiner())) {
-
-            continue;
-          }
-          cb.call(context, this._contacts[idx], idx, this._contacts);
+    value: function(callback, filter, context) {
+      for (let idx in this._contacts) {
+        const c = this._contacts[idx];
+        if (!filter || filter(c)) {
+          callback.call(context, c, idx, this._contacts);
         }
       }
     },
