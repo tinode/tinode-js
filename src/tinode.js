@@ -3828,14 +3828,11 @@ Topic.prototype = {
    */
   updateMode: function(uid, update) {
     const user = uid ? user = this.subscriber(uid) : null;
-    let am;
-    if (user) {
-      am = user.acs.updateGiven(update).getGiven();
-    } else {
-      am = topic.getAccessMode().updateWant(update).getWant();
-    }
+    const am = user ?
+      user.acs.updateGiven(update).getGiven() :
+      this.getAccessMode().updateWant(update).getWant();
 
-    return topic.setMeta({
+    return this.setMeta({
       sub: {
         user: uid,
         mode: am
