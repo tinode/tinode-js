@@ -1768,6 +1768,12 @@ Tinode.isNullValue = function(str) {
   return str === Tinode.DEL_CHAR;
 };
 
+// Names of keys to server-provided configuration limits.
+Tinode.MAX_MESSAGE_SIZE = 'maxMessageSize';
+Tinode.MAX_SUBSCRIBER_COUNT = 'maxSubscriberCount';
+Tinode.MAX_TAG_COUNT = 'maxTagCount';
+Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
+
 // Public methods;
 Tinode.prototype = {
   /**
@@ -2573,6 +2579,17 @@ Tinode.prototype = {
    */
   getServerInfo: function() {
     return this._serverInfo;
+  },
+
+  /**
+   * Return server-provided configuration value (long integer).
+   * @memberof Tinode#
+   * @param name of the value to return
+   * @param defaultValue to return in case server limts are not set of value is not found.
+   * @returns {integer} named value.
+   */
+  getServerLimit: function(name, defaultValue) {
+    return (this._serverInfo ? this._serverInfo[name] : null) || defaultValue;
   },
 
   /**
