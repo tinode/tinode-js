@@ -3844,7 +3844,7 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   updateMode: function(uid, update) {
-    const user = uid ? user = this.subscriber(uid) : null;
+    const user = uid ? this.subscriber(uid) : null;
     const am = user ?
       user.acs.updateGiven(update).getGiven() :
       this.getAccessMode().updateWant(update).getWant();
@@ -4551,18 +4551,19 @@ Topic.prototype = {
         this._resetSub();
         break;
       case 'acs':
-        user = this._users[pres.src];
+        const uid = pres.src || this._tinode.getCurrentUserID();
+        user = this._users[uid];
         if (!user) {
           // Update for an unknown user: notification of a new subscription.
           const acs = new AccessMode().updateAll(pres.dacs);
           if (acs && acs.mode != AccessMode._NONE) {
-            user = this._cacheGetUser(pres.src);
+            user = this._cacheGetUser(uid);
             if (!user) {
               user = {
-                user: pres.src,
+                user: uid,
                 acs: acs
               };
-              this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
+              this.getMeta(this.startMetaQuery().withOneSub(undefined, uid).build());
             } else {
               user.acs = acs;
             }
@@ -4574,7 +4575,7 @@ Topic.prototype = {
           user.acs.updateAll(pres.dacs);
           // Update user's access mode.
           this._processMetaSub([{
-            user: pres.src,
+            user: uid,
             updated: new Date(),
             acs: user.acs
           }]);
