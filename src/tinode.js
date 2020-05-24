@@ -727,8 +727,8 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     instance.connect = function(host_, force) {
       _boffClosed = false;
 
-      if (_socket && _socket.readyState == _socket.OPEN) {
-        if (!force) {
+      if (_socket) {
+        if (!force && _socket.readyState == _socket.OPEN) {
           return Promise.resolve();
         }
         _socket.close();
