@@ -744,7 +744,13 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
         log("Connecting to: ", url);
 
-        const conn = new WebSocketProvider(url);
+        let conn;
+        try {
+          conn = new WebSocketProvider(url);
+        } catch (err) {
+          reject(err);
+          return;
+        }
 
         conn.onopen = function(evt) {
           if (autoreconnect) {
