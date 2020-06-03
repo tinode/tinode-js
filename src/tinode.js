@@ -744,12 +744,12 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
         log("Connecting to: ", url);
 
-        let conn;
-        try {
-          conn = new WebSocketProvider(url);
-        } catch (err) {
+        // It throws when the server is not accessible but the exception cannot be caught:
+        // https://stackoverflow.com/questions/31002592/javascript-doesnt-catch-error-in-websocket-instantiation/31003057
+        const conn = new WebSocketProvider(url);
+
+        conn.onerror = function(err) {
           reject(err);
-          return;
         }
 
         conn.onopen = function(evt) {
@@ -776,10 +776,6 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
           if (!_boffClosed && autoreconnect) {
             boffReconnect.call(instance);
           }
-        }
-
-        conn.onerror = function(err) {
-          reject(err);
         }
 
         conn.onmessage = function(evt) {
