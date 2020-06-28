@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-If you want to ask a question please post it to https://groups.google.com/forum/#!forum/tinode
+If you ant to ask a question, please post to https://groups.google.com/d/forum/tinode instead.
 ---
 
 **Describe the bug**
@@ -26,13 +26,13 @@ A clear and concise description of what you expected to happen.
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
 
-**Desktop (please complete the following information):**
+**Environment (please complete the following information):**
  - OS: [e.g. iOS 13.3, Windows 10 Home]
  - Browser [e.g. Chrome, Safari]
  - SDK Version [e.g. 0.16.6]
 
 **Console log**
-Please attach console log which shows the problem
+Please attach or insert console log which shows the problem
 
 **Additional context**
 Add any other context about the problem here.
