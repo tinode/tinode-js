@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-If you want to ask a question please post it to https://groups.google.com/forum/#!forum/tinode
+If you ant to ask a question, please post to https://groups.google.com/d/forum/tinode instead.
 ---
 
 **Is your feature request related to a problem? Please describe.**
