@@ -3509,7 +3509,7 @@ var Topic = function(name, callbacks) {
     // All subscription records received;
     this.onSubsUpdated = callbacks.onSubsUpdated;
     this.onTagsUpdated = callbacks.onTagsUpdated;
-    this.onCredsUpdated = callbacls.onCredsUpdated;
+    this.onCredsUpdated = callbacks.onCredsUpdated;
     this.onDeleteTopic = callbacks.onDeleteTopic;
     this.onAllMessagesReceived = callbacks.onAllMessagesReceived;
   }
