@@ -2587,7 +2587,7 @@ Tinode.prototype = {
    * Return server-provided configuration value (long integer).
    * @memberof Tinode#
    * @param name of the value to return
-   * @param defaultValue to return in case server limts are not set of value is not found.
+   * @param defaultValue to return in case server limit is not set or not found.
    * @returns {integer} named value.
    */
   getServerLimit: function(name, defaultValue) {
