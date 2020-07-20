@@ -69,6 +69,7 @@ const VERSION = package_version || '0.16';
 const LIBRARY = 'tinodejs/' + VERSION;
 
 const TOPIC_NEW = 'new';
+const TOPIC_NEW_CHAN = 'nch';
 const TOPIC_ME = 'me';
 const TOPIC_FND = 'fnd';
 const TOPIC_SYS = 'sys';
@@ -1692,6 +1693,8 @@ Tinode.topicType = function(name) {
     'fnd': 'fnd',
     'grp': 'grp',
     'new': 'grp',
+    'nch': 'grp',
+    'chn': 'grp',
     'usr': 'p2p',
     'sys': 'sys'
   };
@@ -1707,7 +1710,8 @@ Tinode.topicType = function(name) {
  * @returns {boolean} true if the name is a name of a new topic.
  */
 Tinode.isNewGroupTopicName = function(name) {
-  return (typeof name == 'string') && name.substring(0, 3) == TOPIC_NEW;
+  return (typeof name == 'string') &&
+    (name.substring(0, 3) == TOPIC_NEW || name.substring(0, 3) == TOPIC_NEW_CHAN);
 };
 
 /**
@@ -2479,7 +2483,7 @@ Tinode.prototype = {
   },
 
   /**
-   * Instantiate a new unnamed topic. An actual name will be assigned by the server
+   * Instantiate a new group topic. An actual name will be assigned by the server
    * on {@link Tinode.Topic.subscribe}.
    * @memberof Tinode#
    *
@@ -2493,13 +2497,28 @@ Tinode.prototype = {
   },
 
   /**
+   * Instantiate a new channel-enabled group topic. An actual name will be assigned by the server
+   * on {@link Tinode.Topic.subscribe}.
+   * @memberof Tinode#
+   *
+   * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
+   * @returns {Tinode.Topic} Newly created topic.
+   */
+  newChannel: function(callbacks) {
+    const topic = new Topic(TOPIC_NEW_CHAN, callbacks);
+    this.attachCacheToTopic(topic);
+    return topic;
+  },
+
+  /**
    * Generate unique name  like 'new123456' suitable for creating a new group topic.
    * @memberof Tinode#
    *
+   * @param {Boolean} isChan - if the topic is channel-enabled.
    * @returns {string} name which can be used for creating a new group topic.
    */
-  newGroupTopicName: function() {
-    return TOPIC_NEW + this.getNextUniqueId();
+  newGroupTopicName: function(isChan) {
+    return (isChan ? TOPIC_NEW_CHAN : TOPIC_NEW) + this.getNextUniqueId();
   },
 
   /**
