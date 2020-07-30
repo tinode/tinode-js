@@ -42,7 +42,7 @@
     "babelify": "^10.0.0",
     "browserify": "^16.5.1",
     "js-beautify": "^1.11.0",
-    "jsdoc": "^3.6.4",
+    "jsdoc": "^3.6.5",
     "minami": "^1.2.3",
     "tinyify": "^2.5.2"
   }
