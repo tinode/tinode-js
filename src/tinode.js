@@ -2511,7 +2511,7 @@ Tinode.prototype = {
   },
 
   /**
-   * Generate unique name  like 'new123456' suitable for creating a new group topic.
+   * Generate unique name like 'new123456' suitable for creating a new group topic.
    * @memberof Tinode#
    *
    * @param {Boolean} isChan - if the topic is channel-enabled.
