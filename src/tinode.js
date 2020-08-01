@@ -4096,23 +4096,33 @@ Topic.prototype = {
    * @param {Number} seq - ID or the message read or received.
    */
   note: function(what, seq) {
-    const user = this._users[this._tinode.getCurrentUserID()];
-    if (user) {
-      if (!user[what] || user[what] < seq) {
-        if (this._subscribed) {
-          this._tinode.note(this.name, what, seq);
-        } else {
-          this._tinode.logger("INFO: Not sending {note} on inactive topic");
-        }
-
-        user[what] = seq;
-      }
-    } else {
-      this._tinode.logger("ERROR: note(): user not found " + this._tinode.getCurrentUserID());
+    if (this._subscribed) {
+      this._tinode.logger("INFO: Not sending {note} on an inactive topic");
+      return;
     }
 
-    // Update locally cached contact with the new count
+    // Update locally cached contact with the new count.
+
     const me = this._tinode.getMeTopic();
+
+    const user = this._users[this._tinode.getCurrentUserID()];
+    let update = false;
+    if (user) {
+      // Known topic subscriber.
+      if (!user[what] || user[what] < seq) {
+        user[what] = seq;
+        update = true;
+      }
+    } else if (me) {
+      // Subscriber not found, such as in case of no S permission.
+      update = (me.getMsgReadRecv(this.name, what) < seq);
+    }
+
+    if (update) {
+      this._tinode.note(this.name, what, seq);
+    }
+
+    // Update locally cached contact with the new count.
     if (me) {
       me.setMsgReadRecv(this.name, what, seq);
     }
@@ -5276,7 +5286,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    * @memberof Tinode.TopicMe#
    *
    * @param {String} contactName - UID of contact to update.
-   * @param {String} what - Whach count to update, one of <tt>"read", "recv", "msg"</tt>
+   * @param {String} what - Which count to update, one of <tt>"read", "recv", "msg"</tt>
    * @param {Number} seq - New value of the count.
    * @param {Date} ts - Timestamp of the update.
    */
@@ -5329,6 +5339,34 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           this.onContactUpdate(what, cont);
         }
       }
+    },
+    enumerable: true,
+    configurable: true,
+    writable: true
+  },
+
+  /**
+   * Get cached read/received/message count for the given contact.
+   * @function
+   * @memberof Tinode.TopicMe#
+   *
+   * @param {String} contactName - UID of contact to read.
+   * @param {String} what - Which count to read, one of <tt>"read", "recv", "msg"</tt>
+   */
+  getMsgReadRecv: {
+    value: function(contactName, what) {
+      const cont = this._contacts[contactName];
+      if (cont) {
+        switch (what) {
+          case 'recv':
+            return cont.recv | 0;
+          case 'read':
+            return cont.read | 0;
+          case 'msg':
+            return cont.seq | 0;
+        }
+      }
+      return 0;
     },
     enumerable: true,
     configurable: true,
