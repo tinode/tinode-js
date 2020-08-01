@@ -4110,7 +4110,7 @@ Topic.prototype = {
    * @param {Number} seq - ID or the message read or received.
    */
   note: function(what, seq) {
-    if (this._subscribed) {
+    if (!this._subscribed) {
       this._tinode.logger("INFO: Not sending {note} on an inactive topic");
       return;
     }
@@ -4439,7 +4439,7 @@ Topic.prototype = {
    * Get type of the topic: me, p2p, grp, fnd...
    * @memberof Tinode.Topic#
    *
-   * @returns {String} One of 'me', 'p2p', 'grp', 'fnd', 'sys', 'chn' or <tt>undefined</tt>.
+   * @returns {String} One of 'me', 'p2p', 'grp', 'fnd', 'sys' or <tt>undefined</tt>.
    */
   getType: function() {
     return Tinode.topicType(this.name);
