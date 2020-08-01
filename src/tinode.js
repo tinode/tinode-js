@@ -73,6 +73,7 @@ const TOPIC_NEW_CHAN = 'nch';
 const TOPIC_ME = 'me';
 const TOPIC_FND = 'fnd';
 const TOPIC_SYS = 'sys';
+const TOPIC_CHAN = 'chn';
 const USER_NEW = 'new';
 
 // Starting value of a locally-generated seqId used for pending messages.
@@ -1712,6 +1713,19 @@ Tinode.topicType = function(name) {
 Tinode.isNewGroupTopicName = function(name) {
   return (typeof name == 'string') &&
     (name.substring(0, 3) == TOPIC_NEW || name.substring(0, 3) == TOPIC_NEW_CHAN);
+};
+
+/**
+ * Check if the topic name is a name of a channel.
+ * @memberof Tinode
+ * @static
+ *
+ * @param {string} name - topic name to check.
+ * @returns {boolean} true if the name is a name of a channel.
+ */
+Tinode.isChannelTopicName = function(name) {
+  return (typeof name == 'string') &&
+    (name.substring(0, 3) == TOPIC_CHAN || name.substring(0, 3) == TOPIC_NEW_CHAN);
 };
 
 /**
@@ -4425,7 +4439,7 @@ Topic.prototype = {
    * Get type of the topic: me, p2p, grp, fnd...
    * @memberof Tinode.Topic#
    *
-   * @returns {String} One of 'me', 'p2p', 'grp', 'fnd' or <tt>undefined</tt>.
+   * @returns {String} One of 'me', 'p2p', 'grp', 'fnd', 'sys', 'chn' or <tt>undefined</tt>.
    */
   getType: function() {
     return Tinode.topicType(this.name);
@@ -4470,6 +4484,16 @@ Topic.prototype = {
    */
   isArchived: function() {
     return this.private && this.private.arch ? true : false;
+  },
+
+  /**
+   * Check if topic is a channel.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} - true if topic is a channel, false otherwise.
+   */
+  isChannel: function() {
+    return Tinode.isChannelTopicName(this.name);
   },
 
   /**
