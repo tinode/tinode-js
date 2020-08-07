@@ -4111,7 +4111,7 @@ Topic.prototype = {
    */
   note: function(what, seq) {
     if (!this._subscribed) {
-      this._tinode.logger("INFO: Not sending {note} on an inactive topic");
+      // Cannot sending {note} on an inactive topic".
       return;
     }
 
