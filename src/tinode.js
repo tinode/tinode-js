@@ -1185,6 +1185,10 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
 
   // Cache of pending promises by message id.
   this._pendingPromises = {};
+  
+  // The Timeout object returned by the reject expired promises setInterval
+  this._expirePromises = null;
+
 
   /** A connection object, see {@link Tinode.Connection}. */
   this._connection = new Connection(host_, apiKey_, transport_, secure_, true);
@@ -1286,22 +1290,6 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
     }
     return promise;
   }
-
-  // Reject promises which have not been resolved for too long.
-  const expirePromises = setInterval(() => {
-    const err = new Error("Timeout (504)");
-    const expires = new Date(new Date().getTime() - EXPIRE_PROMISES_TIMEOUT);
-    for (let id in this._pendingPromises) {
-      let callbacks = this._pendingPromises[id];
-      if (callbacks && callbacks.ts < expires) {
-        this.logger("Promise expired", id);
-        delete this._pendingPromises[id];
-        if (callbacks.reject) {
-          callbacks.reject(err);
-        }
-      }
-    }
-  }, EXPIRE_PROMISES_PERIOD);
 
   // Generates unique message IDs
   const getNextUniqueId = this.getNextUniqueId = () => {
@@ -1609,6 +1597,23 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
 
   // Ready to start sending.
   this._connection.onOpen = () => {
+    if (!this._expirePromises) {
+      // Reject promises which have not been resolved for too long.
+      this._expirePromises = setInterval(() => {
+        const err = new Error("Timeout (504)");
+        const expires = new Date(new Date().getTime() - EXPIRE_PROMISES_TIMEOUT);
+        for (let id in this._pendingPromises) {
+          let callbacks = this._pendingPromises[id];
+          if (callbacks && callbacks.ts < expires) {
+            this.logger("Promise expired", id);
+            delete this._pendingPromises[id];
+            if (callbacks.reject) {
+              callbacks.reject(err);
+            }
+          }
+        }
+      }, EXPIRE_PROMISES_PERIOD);
+    }
     this.hello();
   }
 
@@ -1623,6 +1628,11 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
     this._inPacketCount = 0;
     this._serverInfo = null;
     this._authenticated = false;
+    
+    if (this._expirePromises) {
+      clearInterval(this._expirePromises);
+      this._expirePromises = null;
+    }
 
     // Mark all topics as unsubscribed
     cacheMap((obj, key) => {
@@ -1747,8 +1757,8 @@ Tinode.getVersion = function() {
  * @param xhrProvider XMLHttpRequest provider, e.g. for node require('xhr').
  */
 Tinode.setNetworkProviders = function(wsProvider, xhrProvider) {
-  WebSocketProvider = wsprovider;
-  XHRProvider = xhrprovider;
+  WebSocketProvider = wsProvider;
+  XHRProvider = xhrProvider;
 };
 
 /**
