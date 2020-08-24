@@ -1185,7 +1185,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
 
   // Cache of pending promises by message id.
   this._pendingPromises = {};
-  
+
   // The Timeout object returned by the reject expired promises setInterval
   this._expirePromises = null;
 
@@ -1628,7 +1628,7 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
     this._inPacketCount = 0;
     this._serverInfo = null;
     this._authenticated = false;
-    
+
     if (this._expirePromises) {
       clearInterval(this._expirePromises);
       this._expirePromises = null;
