@@ -3779,6 +3779,7 @@ Topic.prototype = {
     return this._tinode.leave(this.name, unsub).then((ctrl) => {
       this._resetSub();
       if (unsub) {
+        this._tinode.cacheDel('topic', this.name);
         this._gone();
       }
       return ctrl;
