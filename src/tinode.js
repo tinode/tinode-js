@@ -3587,7 +3587,7 @@ Topic.prototype = {
     // use "new".
     return this._tinode.subscribe(this.name || TOPIC_NEW, getParams, setParams).then((ctrl) => {
       if (ctrl.code >= 300) {
-        // Do nothing ff the topic is already subscribed to.
+        // Do nothing if subscription status has not changed.
         return ctrl;
       }
 
