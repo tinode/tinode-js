@@ -1713,6 +1713,30 @@ Tinode.topicType = function(name) {
 };
 
 /**
+ * Check if the given topic name is a name of a group topic.
+ * @memberof Tinode
+ * @static
+ *
+ * @param {string} name - Name of the topic to test.
+ * @returns {boolean} true if the name is a name of a group topic, false otherwise.
+ */
+Tinode.isGroupTopicName = function(name) {
+  return Tinode.topicType(name) === 'grp';
+};
+
+/**
+ * Check if the given topic name is a name of a p2p topic.
+ * @memberof Tinode
+ * @static
+ *
+ * @param {string} name - Name of the topic to test.
+ * @returns {boolean} true if the name is a name of a p2p topic, false otherwise.
+ */
+Tinode.isP2PTopicName = function(name) {
+  return Tinode.topicType(name) === 'p2p';
+};
+
+/**
  * Check if the topic name is a name of a new topic.
  * @memberof Tinode
  * @static
@@ -2185,7 +2209,7 @@ Tinode.prototype = {
         if (Tinode.isNewGroupTopicName(topicName)) {
           // Full set.desc params are used for new topics only
           pkt.sub.set.desc = setParams.desc;
-        } else if (Tinode.topicType(topicName) == 'p2p' && setParams.desc.defacs) {
+        } else if (Tinode.isP2PTopicName(topicName) && setParams.desc.defacs) {
           // Use optional default permissions only.
           pkt.sub.set.desc = {
             defacs: setParams.desc.defacs
@@ -2936,8 +2960,8 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <tt>this</tt> object.
    */
   withLaterSub: function(limit) {
-    return this.withSub(
-      this.topic.getType() == 'p2p' ? this._get_ims() : this.topic._lastSubsUpdate,
+    return this.withSub(this.topic.isP2P() ?
+      this._get_ims() : this.topic._lastSubsUpdate,
       limit);
   },
 
@@ -4212,7 +4236,7 @@ Topic.prototype = {
    * @return {Object} peer's description or undefined.
    */
   p2pPeerDesc: function() {
-    if (this.getType() != 'p2p') {
+    if (!this.isP2P()) {
       return undefined;
     }
     return this._users[this.name];
@@ -4508,6 +4532,26 @@ Topic.prototype = {
   },
 
   /**
+   * Check if topic is a group topic.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} - true if topic is a group, false otherwise.
+   */
+  isGroup: function() {
+    return Tinode.isGroupTopicName(this.name);
+  },
+
+  /**
+   * Check if topic is a p2p topic.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} - true if topic is a p2p topic, false otherwise.
+   */
+  isP2P: function() {
+    return Tinode.isP2PTopicName(this.name);
+  },
+
+  /**
    * Get status (queued, sent, received etc) of a given message in the context
    * of this topic.
    * @memberof Tinode.Topic#
@@ -4685,7 +4729,7 @@ Topic.prototype = {
   _processMetaDesc: function(desc) {
     // Synthetic desc may include defacs for p2p topics which is useless.
     // Remove it.
-    if (this.getType() == 'p2p') {
+    if (this.isP2P()) {
       delete desc.defacs;
     }
 
@@ -5039,7 +5083,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           }
           cont = mergeToCache(this._contacts, topicName, sub);
 
-          if (Tinode.topicType(topicName) == 'p2p') {
+          if (Tinode.isP2PTopicName(topicName)) {
             this._cachePutUser(topicName, cont);
           }
           // Notify topic of the update if it's an external update.
