@@ -2653,8 +2653,8 @@ Tinode.prototype = {
   /**
    * Return server-provided configuration value (long integer).
    * @memberof Tinode#
-   * @param name of the value to return
-   * @param defaultValue to return in case server limit is not set or not found.
+   * @param {String} name of the value to return
+   * @param {Object} defaultValue to return in case server limit is not set or not found.
    * @returns {integer} named value.
    */
   getServerLimit: function(name, defaultValue) {
@@ -2687,13 +2687,26 @@ Tinode.prototype = {
    * Check if given topic is online.
    * @memberof Tinode#
    *
-   * @param {String} name - Name of the topic to test.
+   * @param {String} name of the topic to test.
    * @returns {Boolean} true if topic is online, false otherwise.
    */
   isTopicOnline: function(name) {
     const me = this.getMeTopic();
     const cont = me && me.getContact(name);
     return cont && cont.online;
+  },
+
+  /**
+   * Get access mode for the given contact.
+   * @memberof Tinode#
+   *
+   * @param {String} name of the topic to query.
+   * @returns {AccessMode} access mode if topic is found, null otherwise.
+   */
+  getTopicAccessMode: function(name) {
+    const me = this.getMeTopic();
+    const cont = me && me.getContact(name);
+    return cont ? cont.acs : null;
   },
 
   /**
