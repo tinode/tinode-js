@@ -5684,14 +5684,14 @@ LargeFileHelper.prototype = {
    * @memberof Tinode.LargeFileHelper#
    *
    * @param {String} baseUrl alternative base URL of upload server.
-   * @param {File} file to upload
+   * @param {File|Blob} data to upload
    * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
    * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
    * @param {Callback} onFailure callback. Called in case of a failure.
    *
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
-  uploadWithBaseUrl: function(baseUrl, file, onProgress, onSuccess, onFailure) {
+  uploadWithBaseUrl: function(baseUrl, data, onProgress, onSuccess, onFailure) {
     if (!this._authToken) {
       throw new Error("Must authenticate first");
     }
@@ -5717,7 +5717,7 @@ LargeFileHelper.prototype = {
     this.onSuccess = onSuccess;
     this.onFailure = onFailure;
 
-    this.xhr.upload.onprogress = function(e) {
+    this.xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && instance.onProgress) {
         instance.onProgress(e.loaded / e.total);
       }
@@ -5776,7 +5776,7 @@ LargeFileHelper.prototype = {
 
     try {
       const form = new FormData();
-      form.append('file', file);
+      form.append('file', data);
       form.set('id', this._msgId);
       this.xhr.send(form);
     } catch (err) {
@@ -5796,15 +5796,15 @@ LargeFileHelper.prototype = {
    *
    * @memberof Tinode.LargeFileHelper#
    *
-   * @param {File} file to upload
+   * @param {File|Blob} data to upload
    * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
    * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
    * @param {Callback} onFailure callback. Called in case of a failure.
    *
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
-  upload: function(file, onProgress, onSuccess, onFailure) {
-    return this.uploadWithBaseUrl(undefined, file, onProgress, onSuccess, onFailure);
+  upload: function(data, onProgress, onSuccess, onFailure) {
+    return this.uploadWithBaseUrl(undefined, data, onProgress, onSuccess, onFailure);
   },
 
   /**

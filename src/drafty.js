@@ -186,6 +186,10 @@ const HTML_TAGS = {
 
 // Convert base64-encoded string into Blob.
 function base64toObjectUrl(b64, contentType) {
+  if (!b64) {
+    return null;
+  }
+
   let bin;
   try {
     bin = atob(b64);
@@ -335,9 +339,8 @@ const DECORATORS = {
     },
     props: function(data) {
       if (!data) return null;
-      let url = base64toObjectUrl(data.val, data.mime);
       return {
-        src: url,
+        src: base64toObjectUrl(data.val, data.mime) || data.ref,
         title: data.name,
         'data-width': data.width,
         'data-height': data.height,
@@ -836,7 +839,8 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
     len: 1,
     key: content.ent.length
   });
-  content.ent.push({
+
+  const ex = {
     tp: 'IM',
     data: {
       mime: mime,
@@ -847,13 +851,25 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
       ref: refurl,
       size: size | 0
     }
-  });
+  };
+  if (refurl instanceof Promise) {
+    ex.data.ref = refurl.then(
+      (url) => {
+        ex.data.ref = url;
+      },
+      (err) => {
+        /* catch the error, otherwise it will appear in the console. */
+      }
+    );
+  }
+
+  content.ent.push();
 
   return content;
 }
 
 /**
- * Append image to Drafty content.
+ * Append inline image to Drafty content.
  * @memberof Drafty
  * @static
  *
