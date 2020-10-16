@@ -823,7 +823,7 @@ Drafty.append = function(first, second) {
  * @param {integer} height height of the image
  * @param {string} fname file name suggestion for downloading the image.
  * @param {integer} size size of the external file. Treat is as an untrusted hint.
- * @param {string} refurl reference to the content. Could be null or undefined.
+ * @param {string | Promise} refurl reference to the content. Could be null or undefined or Promise which returns content URL.
  *
  * @return {Drafty} updated content.
  */
@@ -863,7 +863,7 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
     );
   }
 
-  content.ent.push();
+  content.ent.push(ex);
 
   return content;
 }
@@ -880,7 +880,7 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
  * @param {integer} height height of the image
  * @param {string} fname file name suggestion for downloading the image.
  * @param {integer} size size of the external file. Treat is as an untrusted hint.
- * @param {string} refurl reference to the content. Could be null or undefined.
+ * @param {string | Promise} refurl reference to the content. Could be null or undefined.
  *
  * @return {Drafty} updated content.
  */
