@@ -1810,16 +1810,35 @@ Tinode.MESSAGE_STATUS_TO_ME = MESSAGE_STATUS_TO_ME;
 Tinode.DEL_CHAR = '\u2421';
 
 /**
- * Check if the given string reprsents NULL value.
+ * Check if the given string represents NULL value as defined by Tinode ('\u2421').
  * @memberof Tinode
  * @static
  *
  * @param {String} str - string to check for null value.
  *
- * @returns {boolean} true if string is null, false otherwise.
+ * @returns {boolean} true if string represents NULL value, false otherwise.
  */
 Tinode.isNullValue = function(str) {
   return str === Tinode.DEL_CHAR;
+};
+
+/**
+ * Check if the given URL string is a relative URL.
+ * Check for cases like:
+ *  'http://example.com'
+ *  ' http://example.com'
+ *  '//example.com/'
+ *  'http:example.com'
+ *  'http:/example.com'
+ * @memberof Tinode
+ * @static
+ *
+ * @param {String} url - URL string to check.
+ *
+ * @returns {boolean} true if the URL is relative, false otherwise.
+ */
+Tinode.isRelativeURL = function(url) {
+  return !/^\s*([a-z][a-z0-9+.-]*:|\/\/)/im.test(url);
 };
 
 // Names of keys to server-provided configuration limits.
@@ -1886,6 +1905,36 @@ Tinode.prototype = {
    */
   isAuthenticated: function() {
     return this._authenticated;
+  },
+
+  /**
+   * Add API key and auth token to the relative URL making it usable for getting data
+   * from the server in a simple GET request.
+   * @memberof Tinode#
+   *
+   * @param {String} URL to wrap.
+   * @returns {string} URL with appended API key and token, if valid token is present.
+   */
+  authorizeURL: function(url) {
+    if (!url) {
+      return url;
+    }
+
+    if (Tinode.isRelativeURL(url)) {
+      // Fake base to make the relative URL parseable.
+      const base = 'scheme://host/';
+      const parsed = new URL(url, base);
+      if (this._apiKey) {
+        parsed.searchParams.append('apikey', this._apiKey);
+      }
+      if (this._authToken.token) {
+        parsed.searchParams.append('auth', 'token');
+        parsed.searchParams.append('secret', this._authToken.token);
+      }
+      // Convert back to string and strip fake base URL except for the root slash.
+      url = parsed.toString().substring(base.length - 1);
+    }
+    return url;
   },
 
   /**
@@ -5818,13 +5867,7 @@ LargeFileHelper.prototype = {
    * @returns {Promise} resolved/rejected when the download is completed/failed.
    */
   download: function(relativeUrl, filename, mimetype, onProgress) {
-    // Check if the URL is relative. Check for cases like:
-    //  'http://example.com'
-    //  ' http://example.com'
-    //  '//example.com/'
-    //  'http:example.com'
-    //  'http:/example.com'
-    if (/^\s*([a-z][a-z0-9+.-]*:|\/\/)/im.test(relativeUrl)) {
+    if (Tinode.isRelativeURL(relativeUrl)) {
       // As a security measure refuse to download from an absolute URL.
       throw new Error("The URL '" + relativeUrl + "' must be relative, not absolute");
     }

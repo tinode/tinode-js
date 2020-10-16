@@ -823,7 +823,7 @@ Drafty.append = function(first, second) {
  * @param {integer} height height of the image
  * @param {string} fname file name suggestion for downloading the image.
  * @param {integer} size size of the external file. Treat is as an untrusted hint.
- * @param {string | Promise} refurl reference to the content. Could be null or undefined or Promise which returns content URL.
+ * @param {string | Promise} refurl reference to the content. Could be null/undefined or Promise which returns content URL.
  *
  * @return {Drafty} updated content.
  */
@@ -848,12 +848,11 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
       width: width,
       height: height,
       name: fname,
-      ref: refurl,
       size: size | 0
     }
   };
   if (refurl instanceof Promise) {
-    ex.data.ref = refurl.then(
+    refurl.then(
       (url) => {
         ex.data.ref = url;
       },
@@ -861,6 +860,8 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
         /* catch the error, otherwise it will appear in the console. */
       }
     );
+  } else {
+    ex.ref = refurl;
   }
 
   content.ent.push(ex);
