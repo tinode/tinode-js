@@ -190,12 +190,11 @@ function base64toObjectUrl(b64, contentType) {
     return null;
   }
 
-  let bin;
   try {
-    bin = atob(b64);
-    let length = bin.length;
-    let buf = new ArrayBuffer(length);
-    let arr = new Uint8Array(buf);
+    const bin = atob(b64);
+    const length = bin.length;
+    const buf = new ArrayBuffer(length);
+    const arr = new Uint8Array(buf);
     for (let i = 0; i < length; i++) {
       arr[i] = bin.charCodeAt(i);
     }
@@ -851,6 +850,7 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
       size: size | 0
     }
   };
+
   if (refurl instanceof Promise) {
     refurl.then(
       (url) => {
@@ -861,7 +861,7 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
       }
     );
   } else {
-    ex.ref = refurl;
+    ex.data.ref = refurl;
   }
 
   content.ent.push(ex);
