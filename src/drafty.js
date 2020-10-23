@@ -209,6 +209,14 @@ function base64toObjectUrl(b64, contentType) {
   return null;
 }
 
+function base64toDataUrl(b64, contentType) {
+  if (!b64) {
+    return null;
+  }
+  contentType = contentType || 'image/jpeg';
+  return 'data:' + contentType + ';base64,' + b64;
+}
+
 // Helpers for converting Drafty to HTML.
 const DECORATORS = {
   // Visial styles
@@ -339,7 +347,8 @@ const DECORATORS = {
     props: function(data) {
       if (!data) return null;
       return {
-        src: base64toObjectUrl(data.val, data.mime) || data.ref,
+        src: base64toDataUrl(data._tempPreview, data.mime) ||
+          base64toObjectUrl(data.val, data.mime) || data.ref,
         title: data.name,
         'data-width': data.width,
         'data-height': data.height,
@@ -810,23 +819,32 @@ Drafty.append = function(first, second) {
 }
 
 /**
+ * @typedef Drafty.ImageDesc
+ * @memberof Drafty
+ * @type Object
+ * @param {string} mime mime-type of the image, e.g. "image/png"
+ * @param {string} preview base64-encoded image content (or preview, if large image is attached). Could be null/undefined.
+ * @param {integer} width width of the image
+ * @param {integer} height height of the image
+ * @param {string} filename file name suggestion for downloading the image.
+ * @param {integer} size size of the image in bytes. Treat is as an untrusted hint.
+ * @param {string} refurl reference to the content. Could be null/undefined.
+ * @param {string} _tempPreview base64-encoded image preview used during upload process; not serializable.
+ * @param {Promise} urlPromise Promise which returns content URL when resolved.
+ */
+
+/**
  * Insert inline image into Drafty document.
  * @memberof Drafty
  * @static
  *
  * @param {Drafty} content object to add image to.
  * @param {integer} at index where the object is inserted. The length of the image is always 1.
- * @param {string} mime mime-type of the image, e.g. "image/png"
- * @param {string} base64bits base64-encoded image content (or preview, if large image is attached)
- * @param {integer} width width of the image
- * @param {integer} height height of the image
- * @param {string} fname file name suggestion for downloading the image.
- * @param {integer} size size of the external file. Treat is as an untrusted hint.
- * @param {string | Promise} refurl reference to the content. Could be null/undefined or Promise which returns content URL.
+ * @param {ImageDesc} imageDesc object with image paramenets and data.
  *
  * @return {Drafty} updated content.
  */
-Drafty.insertImage = function(content, at, mime, base64bits, width, height, fname, size, refurl) {
+Drafty.insertImage = function(content, at, imageDesc) {
   content = content || {
     txt: " "
   };
@@ -842,26 +860,30 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
   const ex = {
     tp: 'IM',
     data: {
-      mime: mime,
-      val: base64bits,
-      width: width,
-      height: height,
-      name: fname,
-      size: size | 0
+      mime: imageDesc.mime,
+      val: imageDesc.preview,
+      width: imageDesc.width,
+      height: imageDesc.height,
+      name: imageDesc.filename,
+      size: imageDesc.size | 0,
+      ref: imageDesc.refurl
     }
   };
 
-  if (refurl instanceof Promise) {
-    refurl.then(
+  if (imageDesc.urlPromise) {
+    ex.data._tempPreview = imageDesc._tempPreview;
+    ex.data._processing = true;
+    imageDesc.urlPromise.then(
       (url) => {
         ex.data.ref = url;
+        ex.data._tempPreview = undefined;
+        ex.data._processing = undefined;
       },
       (err) => {
         /* catch the error, otherwise it will appear in the console. */
+        ex.data._processing = undefined;
       }
     );
-  } else {
-    ex.data.ref = refurl;
   }
 
   content.ent.push(ex);
@@ -875,23 +897,29 @@ Drafty.insertImage = function(content, at, mime, base64bits, width, height, fnam
  * @static
  *
  * @param {Drafty} content object to add image to.
- * @param {string} mime mime-type of the image, e.g. "image/png"
- * @param {string} base64bits base64-encoded image content (or preview, if large image is attached)
- * @param {integer} width width of the image
- * @param {integer} height height of the image
- * @param {string} fname file name suggestion for downloading the image.
- * @param {integer} size size of the external file. Treat is as an untrusted hint.
- * @param {string | Promise} refurl reference to the content. Could be null or undefined.
+ * @param {ImageDesc} imageDesc object with image paramenets.
  *
  * @return {Drafty} updated content.
  */
-Drafty.appendImage = function(content, mime, base64bits, width, height, fname, size, refurl) {
+Drafty.appendImage = function(content, imageDesc) {
   content = content || {
     txt: ""
   };
   content.txt += " ";
-  return Drafty.insertImage(content, content.txt.length - 1, mime, base64bits, width, height, fname, size, refurl);
+  return Drafty.insertImage(content, content.txt.length - 1, imageDesc);
 }
+
+/**
+ * @typedef Drafty.AttachmentDesc
+ * @memberof Drafty
+ * @type Object
+ * @param {string} mime mime-type of the image, e.g. "image/png"
+ * @param {string} data base64-encoded in-band content of small attachments. Could be null/undefined.
+ * @param {string} filename file name suggestion for downloading the attachment.
+ * @param {integer} size size of the file in bytes. Treat is as an untrusted hint.
+ * @param {string} refurl reference to the out-of-band content. Could be null/undefined.
+ * @param {Promise} urlPromise Promise which returns content URL when resolved.
+ */
 
 /**
  * Attach file to Drafty content. Either as a blob or as a reference.
@@ -899,15 +927,11 @@ Drafty.appendImage = function(content, mime, base64bits, width, height, fname, s
  * @static
  *
  * @param {Drafty} content object to attach file to.
- * @param {string} mime mime-type of the file, e.g. "image/png"
- * @param {string} base64bits base64-encoded file content
- * @param {string} fname file name suggestion for downloading.
- * @param {integer} size size of the external file. Treat is as an untrusted hint.
- * @param {string | Promise} refurl optional reference to the content.
+ * @param {AttachmentDesc} object containing attachment description and data.
  *
  * @return {Drafty} updated content.
  */
-Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
+Drafty.attachFile = function(content, attachmentDesc) {
   content = content || {
     txt: ""
   };
@@ -923,20 +947,23 @@ Drafty.attachFile = function(content, mime, base64bits, fname, size, refurl) {
   const ex = {
     tp: 'EX',
     data: {
-      mime: mime,
-      val: base64bits,
-      name: fname,
-      ref: refurl,
-      size: size | 0
+      mime: attachmentDesc.mime,
+      val: attachmentDesc.data,
+      name: attachmentDesc.filename,
+      ref: attachmentDesc.refurl,
+      size: attachmentDesc.size | 0
     }
   }
-  if (refurl instanceof Promise) {
-    ex.data.ref = refurl.then(
+  if (attachmentDesc.urlPromise) {
+    ex.data._processing = true;
+    attachmentDesc.urlPromise.then(
       (url) => {
         ex.data.ref = url;
+        ex.data._processing = undefined;
       },
       (err) => {
         /* catch the error, otherwise it will appear in the console. */
+        ex.data._processing = undefined;
       }
     );
   }
@@ -1334,7 +1361,7 @@ Drafty.isValid = function(content) {
  */
 Drafty.hasAttachments = function(content) {
   if (content.ent && content.ent.length > 0) {
-    for (var i in content.ent) {
+    for (let i in content.ent) {
       if (content.ent[i] && content.ent[i].tp == 'EX') {
         return true;
       }
@@ -1365,7 +1392,7 @@ Drafty.hasAttachments = function(content) {
  */
 Drafty.attachments = function(content, callback, context) {
   if (content.ent && content.ent.length > 0) {
-    for (var i in content.ent) {
+    for (let i in content.ent) {
       if (content.ent[i] && content.ent[i].tp == 'EX') {
         callback.call(context, content.ent[i].data, i);
       }
@@ -1392,15 +1419,15 @@ Drafty.getDownloadUrl = function(entData) {
 }
 
 /**
- * Check if the entity data is being uploaded to the server.
+ * Check if the entity data is not ready for sending, such as being uploaded to the server.
  * @memberof Drafty
  * @static
  *
  * @param {Object} entity.data to get the URl from.
  * @returns {boolean} true if upload is in progress, false otherwise.
  */
-Drafty.isUploading = function(entData) {
-  return entData.ref instanceof Promise;
+Drafty.isProcessing = function(entData) {
+  return !!entData._processing;
 }
 
 /**
