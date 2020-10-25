@@ -3831,11 +3831,10 @@ Topic.prototype = {
             text: "cancelled"
           };
         }
-
         return this.publishMessage(pub);
       },
       (err) => {
-        this._tinode.logger("WARNING: Message draft rejected by the server", err);
+        this._tinode.logger("WARNING: Message draft rejected", err);
         pub._sending = false;
         pub._failed = true;
         this._messages.delAt(this._messages.find(pub));
@@ -4626,7 +4625,7 @@ Topic.prototype = {
     if (this._tinode.isMe(msg.from)) {
       if (msg._sending) {
         status = MESSAGE_STATUS_SENDING;
-      } else if (msg._failed) {
+      } else if (msg._failed || msg._cancelled) {
         status = MESSAGE_STATUS_FAILED;
       } else if (msg.seq >= LOCAL_SEQID) {
         status = MESSAGE_STATUS_QUEUED;
@@ -5866,13 +5865,19 @@ LargeFileHelper.prototype = {
    *
    * @returns {Promise} resolved/rejected when the download is completed/failed.
    */
-  download: function(relativeUrl, filename, mimetype, onProgress) {
-    if (Tinode.isRelativeURL(relativeUrl)) {
+  download: function(relativeUrl, filename, mimetype, onProgress, onError) {
+    if (!Tinode.isRelativeURL(relativeUrl)) {
       // As a security measure refuse to download from an absolute URL.
-      throw new Error("The URL '" + relativeUrl + "' must be relative, not absolute");
+      if (onError) {
+        onError("The URL '" + relativeUrl + "' must be relative, not absolute");
+      }
+      return;
     }
     if (!this._authToken) {
-      throw new Error("Must authenticate first");
+      if (onError) {
+        onError("Must authenticate first");
+      }
+      return;
     }
     const instance = this;
     // Get data as blob (stored by the browser as a temporary file).
