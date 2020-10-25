@@ -334,10 +334,11 @@ const DECORATORS = {
   IM: {
     open: function(data) {
       // Don't use data.ref for preview: it's a security risk.
+      const tmpPreviewUrl = base64toDataUrl(data._tempPreview, data.mime);
       const previewUrl = base64toObjectUrl(data.val, data.mime);
-      const downloadUrl = data.ref ? data.ref : previewUrl;
+      const downloadUrl = data.ref || previewUrl;
       return (data.name ? '<a href="' + downloadUrl + '" download="' + data.name + '">' : '') +
-        '<img src="' + previewUrl + '"' +
+        '<img src="' + (tmpPreviewUrl || previewUrl) + '"' +
         (data.width ? ' width="' + data.width + '"' : '') +
         (data.height ? ' height="' + data.height + '"' : '') + ' border="0" />';
     },
@@ -347,13 +348,14 @@ const DECORATORS = {
     props: function(data) {
       if (!data) return null;
       return {
+        // Temporary preview, or permanent preview, or external link.
         src: base64toDataUrl(data._tempPreview, data.mime) ||
           base64toObjectUrl(data.val, data.mime) || data.ref,
         title: data.name,
         'data-width': data.width,
         'data-height': data.height,
         'data-name': data.name,
-        'data-size': data.val ? (data.val.length * 0.75) | 0 : 0,
+        'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
         'data-mime': data.mime
       };
     },
