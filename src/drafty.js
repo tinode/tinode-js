@@ -597,11 +597,11 @@ function extractEntities(line) {
 // Convert the chunks into format suitable for serialization.
 function draftify(chunks, startAt) {
   let plain = "";
-  const ranges = [];
-  for (var i in chunks) {
+  let ranges = [];
+  for (let i in chunks) {
     const chunk = chunks[i];
     if (!chunk.text) {
-      var drafty = draftify(chunk.children, plain.length + startAt);
+      const drafty = draftify(chunk.children, plain.length + startAt);
       chunk.text = drafty.txt;
       ranges = ranges.concat(drafty.fmt);
     }
