@@ -1344,7 +1344,7 @@ Drafty.hasAttachments = function(content) {
  *
  * @param {Drafty} content - drafty object to process for attachments.
  * @param {AttachmentCallback} callback - callback to call for each attachment.
- * @param {Object} content - value of "this" for callback.
+ * @param {Object} context - value of "this" for callback.
  */
 Drafty.attachments = function(content, callback, context) {
   if (content.ent && content.ent.length > 0) {
