@@ -588,7 +588,7 @@ var CBuffer = function(compare, unique) {
      * @memberof Tinode.CBuffer#
      *
      * @param {Tinode.ForEachCallbackType} callback - Function to call for each element.
-     * @param {integer} startIdx- Optional index to start iterating from (inclusive).
+     * @param {integer} startIdx - Optional index to start iterating from (inclusive).
      * @param {integer} beforeIdx - Optional index to stop iterating before (exclusive).
      * @param {Object} context - calling context (i.e. value of 'this' in callback)
      */
@@ -2089,7 +2089,7 @@ Tinode.prototype = {
    * @param {string} dt - token obtained from the provider.
    * @param {boolean} sendToServer - if true, send dt to server immediately.
    *
-   * @param true if attempt was made to send the token to the server.
+   * @returns true if attempt was made to send the token to the server.
    */
   setDeviceToken: function(dt, sendToServer) {
     let sent = false;
@@ -2725,6 +2725,7 @@ Tinode.prototype = {
    * Toggle console logging. Logging is off by default.
    * @memberof Tinode#
    * @param {boolean} enabled - Set to <tt>true</tt> to enable logging to console.
+   * @param {boolean} trimLongStrings - Set to <tt>true</tt> to trim long strings.
    */
   enableLogging: function(enabled, trimLongStrings) {
     this._loggingEnabled = enabled;
