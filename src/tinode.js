@@ -2559,7 +2559,7 @@ Tinode.prototype = {
    * There is a single instance of topic for each name.
    * @memberof Tinode#
    *
-   * @param {String} topic - Name of the topic to get.
+   * @param {String} name - Name of the topic to get.
    * @returns {Tinode.Topic} Requested or newly created topic or <tt>undefined</tt> if topic name is invalid.
    */
   getTopic: function(name) {
@@ -2577,6 +2577,17 @@ Tinode.prototype = {
       this.attachCacheToTopic(topic);
     }
     return topic;
+  },
+
+  /**
+   * Check if named topic is already present in cache.
+   * @memberof Tinode#
+   *
+   * @param {String} name - Name of the topic to check.
+   * @returns {Boolean} true if topic is found in cache, false oterwise.
+   */
+  isTopicCached: function(name) {
+    return !!this.cacheGet('topic', name);
   },
 
   /**
