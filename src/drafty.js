@@ -350,7 +350,7 @@ const DECORATORS = {
       return {
         // Temporary preview, or permanent preview, or external link.
         src: base64toDataUrl(data._tempPreview, data.mime) ||
-          base64toObjectUrl(data.val, data.mime) || data.ref,
+          data.ref || base64toObjectUrl(data.val, data.mime),
         title: data.name,
         'data-width': data.width,
         'data-height': data.height,
@@ -1490,7 +1490,7 @@ Drafty.tagName = function(style) {
  * @memberof Drafty
  * @static
  *
- * @param {string} style - tw-letter style to generate attributes for.
+ * @param {string} style - two-letter style to generate attributes for.
  * @param {Object} data - data bundle to convert to attributes
  *
  * @returns {Object} object with HTML attributes.
