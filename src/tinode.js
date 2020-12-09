@@ -1513,6 +1513,9 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
             const topic = cacheGet('topic', pkt.ctrl.topic);
             if (topic) {
               topic._resetSub();
+              if (pkt.ctrl.params && pkt.ctrl.params.unsub) {
+                topic._gone();
+              }
             }
           } else if (pkt.ctrl.params && pkt.ctrl.params.what == 'data') {
             // All messages received: "params":{"count":11,"what":"data"},
