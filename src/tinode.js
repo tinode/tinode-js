@@ -5279,9 +5279,9 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             // Check if message is sent by the current user. If so it's been read already.
             if (!pres.act || this._tinode.isMe(pres.act)) {
               cont.read = cont.read ? Math.max(cont.read, cont.seq) : cont.seq;
-              cont.recv = cont.recv ? Math.max(cont.read, cont.recv) : cont.recv;
+              cont.recv = cont.recv ? Math.max(cont.read, cont.recv) : cont.read;
             }
-            cont.unread = cont.seq - cont.read;
+            cont.unread = cont.seq - (cont.read | 0);
             break;
           case 'upd': // desc updated
             // Request updated subscription.
