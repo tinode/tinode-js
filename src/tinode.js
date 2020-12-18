@@ -678,7 +678,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     // Clear timer
     clearTimeout(_boffTimer);
     // Calculate when to fire the reconnect attempt
-    let timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 + _BOFF_JITTER * Math.random()));
+    const timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 + _BOFF_JITTER * Math.random()));
     // Update iteration counter for future use
     _boffIteration = (_boffIteration >= _BOFF_MAX_ITER ? _boffIteration : _boffIteration + 1);
     if (this.onAutoreconnectIteration) {
@@ -689,7 +689,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       log("Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
       // Maybe the socket was closed while we waited for the timer?
       if (!_boffClosed) {
-        let prom = this.connect();
+        const prom = this.connect();
         if (this.onAutoreconnectIteration) {
           this.onAutoreconnectIteration(0, prom);
         } else {
@@ -806,11 +806,11 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
      */
     instance.disconnect = function() {
       _boffClosed = true;
+      boffStop();
+
       if (!_socket) {
         return;
       }
-
-      boffStop();
       _socket.close();
       _socket = null;
     }
