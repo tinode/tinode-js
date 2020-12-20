@@ -5145,6 +5145,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         if (sub.deleted) {
           cont = sub;
           delete this._contacts[topicName];
+          this._tinode.cacheDel('topic', topicName);
         } else {
           // Ensure the values are defined and are integers.
           if (typeof sub.seq != 'undefined') {
@@ -5313,6 +5314,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             break;
           case 'gone': // topic deleted or unsubscribed from
             delete this._contacts[pres.src];
+            this._tinode.cacheDel('topic', pres.src);
             break;
           case 'del':
             // Update topic.del value.
