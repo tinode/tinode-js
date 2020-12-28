@@ -1152,6 +1152,7 @@ Drafty.UNSAFE_toHTML = function(content) {
   if (fmt) {
     for (let i in fmt) {
       const range = fmt[i];
+      let at = range.at || 0 // j4hangir: it's optional in encoding, hence default it
       let tp = range.tp;
       let data;
       if (!tp) {
@@ -1166,12 +1167,12 @@ Drafty.UNSAFE_toHTML = function(content) {
         // Because we later sort in descending order, closing markup must come first.
         // Otherwise zero-length objects will not be represented correctly.
         markup.push({
-          idx: range.at + range.len,
+          idx: at + range.len,
           len: -range.len,
           what: DECORATORS[tp].close(data)
         });
         markup.push({
-          idx: range.at,
+          idx: at,
           len: range.len,
           what: DECORATORS[tp].open(data)
         });
