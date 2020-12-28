@@ -1152,7 +1152,7 @@ Drafty.UNSAFE_toHTML = function(content) {
   if (fmt) {
     for (let i in fmt) {
       const range = fmt[i];
-      let at = range.at || 0 // j4hangir: it's optional in encoding, hence default it
+      const at = range.at | 0;
       let tp = range.tp;
       let data;
       if (!tp) {
