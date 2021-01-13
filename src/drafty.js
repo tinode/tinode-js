@@ -181,6 +181,10 @@ const HTML_TAGS = {
   HD: {
     name: '',
     isVoid: false
+  },
+  HL: {
+    name: 'span',
+    isVoid: false
   }
 };
 
@@ -268,6 +272,15 @@ const DECORATORS = {
     },
     close: function() {
       return '';
+    }
+  },
+  // Highlighted element.
+  HL: {
+    open: function() {
+      return '<span style="color:teal">';
+    },
+    close: function() {
+      return '</span>';
     }
   },
   // Link (URL)
@@ -385,7 +398,7 @@ const DECORATORS = {
  * @class Drafty
  * @constructor
  */
-var Drafty = function() {}
+const Drafty = function() {}
 
 // Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
 // a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
@@ -443,7 +456,11 @@ function forEach(line, start, end, spans, formatter, context) {
   for (let i = 0; i < spans.length; i++) {
     const span = spans[i];
     if (span.at < 0) {
-      // throw out non-visual spans.
+      // Ask formatter if it wants to do anything with the non-visual span.
+      const s = formatter.call(context, span.tp, span.data, undefined, result.length);
+      if (s) {
+        result.push(s);
+      }
       continue;
     }
     // Add un-styled range before the styled span starts.
@@ -1472,16 +1489,16 @@ Drafty.getEntityMimeType = function(entData) {
 }
 
 /**
- * Get HTML tag for a given two-letter style name
+ * Get HTML tag for a given two-letter style name.
  * @memberof Drafty
  * @static
  *
- * @param {string} style - two-letter style, like ST or LN
+ * @param {string} style - two-letter style, like ST or LN.
  *
- * @returns {string} tag name
+ * @returns {string} HTML tag name if style is found, '_UNKN' if not found, {code: undefined} if style is falsish.
  */
 Drafty.tagName = function(style) {
-  return HTML_TAGS[style] ? HTML_TAGS[style].name : undefined;
+  return style ? (HTML_TAGS[style] ? HTML_TAGS[style].name : '_UNKN') : undefined;
 }
 
 /**
@@ -1513,6 +1530,113 @@ Drafty.attrValue = function(style, data) {
  */
 Drafty.getContentType = function() {
   return 'text/x-drafty';
+}
+
+/**
+ * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} original Drafty object to shorten.
+ * @param {Number} length length in characters to shorten to.
+ * @returns new shortened Drafty object leaving the original intact.
+ */
+Drafty.preview = function(original, length) {
+  if (!original || length <= 0 || typeof original != object) {
+    return null;
+  }
+
+  const {
+    txt,
+    fmt,
+    ent
+  } = original;
+
+  const preview = {
+    txt: ''
+  };
+  let len = 0;
+  if (typeof txt == 'string') {
+    if (txt.length > length) {
+      preview.txt = txt.substr(0, length);
+    } else {
+      preview.txt = txt;
+    }
+    len = preview.txt.length;
+  }
+
+  if (Array.isArray(fmt) && fmt.length > 0) {
+    // Old key to new key entity mapping.
+    const ent_refs = [];
+    // Count styles which start within the new length of the text and save entity keys as a set.
+    let fmt_count = 0;
+    let ent_count = 0;
+    fmt.forEach((st) => {
+      if (st.at < len) {
+        fmt_count++;
+        if (!st.tp) {
+          const key = st.key | 0;
+          if (!ent_refs[key]) {
+            ent_refs[key] = ent_count;
+            ent_count++;
+          }
+        }
+      }
+    });
+
+    if (fmt_count == 0) {
+      return preview;
+    }
+
+    // Allocate space for copying styles and entities.
+    preview.fmt = [];
+    if (Array.isArray(ent) && ent_refs.length > 0) {
+      preview.ent = [];
+    }
+
+    // Insertion point for styles.
+    let fmt_idx = 0;
+    fmt.forEach((st) => {
+      if (st.at < len) {
+        const style = {
+          at: st.at,
+          len: st.len
+        };
+        const key = st.key | 0;
+        if (st.tp) {
+          style.tp = '' + st.tp;
+        } else if (Array.isArray(ent) && ent.length > key && typeof ent_refs[key] == 'number') {
+          style.key = ent_refs[key];
+          preview.ent[style.key] = copyLight(ent[key]);
+        } else {
+          return;
+        }
+        preview.fmt[fmt_idx++] = style;
+      }
+    });
+  }
+
+  return preview;
+}
+
+// Create a copy of an entity without large data.
+function copyLight(ent) {
+  let result = {
+    tp: ent.tp
+  };
+  if (ent.data && Object.entries(ent.data).length != 0) {
+    dc = {};
+    ["mime", "name", "width", "height", "size"].forEach((key) => {
+      const val = ent.data[key];
+      if (val) {
+        dc[key] = val;
+      }
+    });
+    if (Object.entries(dc).length != 0) {
+      result.data = dc;
+    }
+  }
+  return result;
 }
 
 if (typeof module != 'undefined') {
