@@ -1222,10 +1222,13 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
   }
   // Enumerate all items in cache, call func for each item.
   // Enumeration stops if func returns true.
-  const cacheMap = this.cacheMap = (func, context) => {
+  const cacheMap = this.cacheMap = (type, func, context) => {
+    const key = type ? type + ':' : undefined;
     for (let idx in this._cache) {
-      if (func(this._cache[idx], idx, context)) {
-        break;
+      if (!key || idx.indexOf(key) == 0) {
+        if (func.call(context, this._cache[idx], idx)) {
+          break;
+        }
       }
     }
   }
@@ -1638,15 +1641,13 @@ var Tinode = function(appname_, host_, apiKey_, transport_, secure_, platform_) 
     }
 
     // Mark all topics as unsubscribed
-    cacheMap((obj, key) => {
-      if (key.lastIndexOf('topic:', 0) === 0) {
-        obj._resetSub();
-      }
+    cacheMap('topic', (topic, key) => {
+      topic._resetSub();
     });
 
     // Reject all pending promises
     for (let key in this._pendingPromises) {
-      let callbacks = this._pendingPromises[key];
+      const callbacks = this._pendingPromises[key];
       if (callbacks && callbacks.reject) {
         callbacks.reject(err);
       }
@@ -1724,7 +1725,7 @@ Tinode.topicType = function(name) {
  * @returns {boolean} true if the name is a name of a group topic, false otherwise.
  */
 Tinode.isGroupTopicName = function(name) {
-  return Tinode.topicType(name) === 'grp';
+  return Tinode.topicType(name) == 'grp';
 };
 
 /**
@@ -1736,7 +1737,19 @@ Tinode.isGroupTopicName = function(name) {
  * @returns {boolean} true if the name is a name of a p2p topic, false otherwise.
  */
 Tinode.isP2PTopicName = function(name) {
-  return Tinode.topicType(name) === 'p2p';
+  return Tinode.topicType(name) == 'p2p';
+};
+
+/**
+ * Check if the given topic name is a name of a communication topic, i.e. P2P or group.
+ * @memberof Tinode
+ * @static
+ *
+ * @param {string} name - Name of the topic to test.
+ * @returns {boolean} true if the name is a name of a p2p or group topic, false otherwise.
+ */
+Tinode.isCommTopicName = function(name) {
+  return Tinode.isP2PTopicName(name) || Tinode.isGroupTopicName(name);
 };
 
 /**
@@ -2583,6 +2596,31 @@ Tinode.prototype = {
   },
 
   /**
+   * Get a named topic, either pull it from cache or create a new instance.
+   * There is a single instance of topic for each name.
+   * @memberof Tinode#
+   *
+   * @param {String} name - Name of the topic to get.
+   * @returns {Tinode.Topic} Requested or newly created topic or <tt>undefined</tt> if topic name is invalid.
+   */
+  forEachTopic: function(callback, context) {
+    let topic = this.cacheGet('topic', name);
+    if (!topic && name) {
+      if (name == TOPIC_ME) {
+        topic = new TopicMe();
+      } else if (name == TOPIC_FND) {
+        topic = new TopicFnd();
+      } else {
+        topic = new Topic(name);
+      }
+      // topic._new = false;
+      this.cachePut('topic', name, topic);
+      this.attachCacheToTopic(topic);
+    }
+    return topic;
+  },
+
+  /**
    * Check if named topic is already present in cache.
    * @memberof Tinode#
    *
@@ -2755,9 +2793,8 @@ Tinode.prototype = {
    * @returns {Boolean} true if topic is online, false otherwise.
    */
   isTopicOnline: function(name) {
-    const me = this.getMeTopic();
-    const cont = me && me.getContact(name);
-    return cont && cont.online;
+    const topic = this.cacheGet('topic', name);
+    return topic && topic.online;
   },
 
   /**
@@ -2768,9 +2805,8 @@ Tinode.prototype = {
    * @returns {AccessMode} access mode if topic is found, null otherwise.
    */
   getTopicAccessMode: function(name) {
-    const me = this.getMeTopic();
-    const cont = me && me.getContact(name);
-    return cont ? cont.acs : null;
+    const topic = this.cacheGet('topic', name);
+    return topic ? topic.acs : null;
   },
 
   /**
@@ -2898,8 +2934,6 @@ Tinode.prototype = {
  */
 var MetaGetBuilder = function(parent) {
   this.topic = parent;
-  const me = parent._tinode.getMeTopic();
-  this.contact = me && me.getContact(parent.name);
   this.what = {};
 }
 
@@ -2907,7 +2941,7 @@ MetaGetBuilder.prototype = {
 
   // Get latest timestamp
   _get_ims: function() {
-    const cupd = this.contact && this.contact.updated;
+    const cupd = this.topic && this.topic.updated;
     const tupd = this.topic._lastDescUpdate || 0;
     return cupd > tupd ? cupd : tupd;
   },
@@ -4628,6 +4662,16 @@ Topic.prototype = {
   },
 
   /**
+   * Check if topic is a communication topic, i.e. a group or p2p topic.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} - true if topic is a p2p or group topic, false otherwise.
+   */
+  isComm: function() {
+    return Tinode.isCommTopicName(this.name);
+  },
+
+  /**
    * Get status (queued, sent, received etc) of a given message in the context
    * of this topic.
    * @memberof Tinode.Topic#
@@ -5075,8 +5119,6 @@ Topic.prototype = {
  */
 var TopicMe = function(callbacks) {
   Topic.call(this, TOPIC_ME, callbacks);
-  // List of contacts (topic_name -> Contact object)
-  this._contacts = {};
 
   // me-specific callbacks
   if (callbacks) {
@@ -5099,7 +5141,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
 
       // 'P' permission was removed. All topics are offline now.
       if (turnOff) {
-        Object.values(this._contacts).map((cont) => {
+        this._tinode.cacheMap('topic', (cont) => {
           if (cont.online) {
             cont.online = false;
             if (cont.seen) {
@@ -5129,13 +5171,11 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   _processMetaSub: {
     value: function(subs) {
       let updateCount = 0;
-      for (let idx in subs) {
-        const sub = subs[idx];
+      subs.forEach((sub) => {
         const topicName = sub.topic;
-
         // Don't show 'me' and 'fnd' topics in the list of contacts.
         if (topicName == TOPIC_FND || topicName == TOPIC_ME) {
-          continue;
+          return;
         }
         sub.updated = new Date(sub.updated);
         sub.touched = sub.touched ? new Date(sub.touched) : undefined;
@@ -5144,7 +5184,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         let cont = null;
         if (sub.deleted) {
           cont = sub;
-          delete this._contacts[topicName];
           this._tinode.cacheDel('topic', topicName);
         } else {
           // Ensure the values are defined and are integers.
@@ -5158,7 +5197,9 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           if (sub.seen && sub.seen.when) {
             sub.seen.when = new Date(sub.seen.when);
           }
-          cont = mergeToCache(this._contacts, topicName, sub);
+
+          cont = mergeObj(this._tinode.getTopic(topicName), sub);
+          console.log("topic initialized", cont.name, cont.acs, "from", sub.acs);
 
           if (Tinode.isP2PTopicName(topicName)) {
             this._cachePutUser(topicName, cont);
@@ -5178,10 +5219,14 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         if (this.onMetaSub) {
           this.onMetaSub(cont);
         }
-      }
+      });
 
-      if (this.onSubsUpdated) {
-        this.onSubsUpdated(Object.keys(this._contacts), updateCount);
+      if (this.onSubsUpdated && updateCount > 0) {
+        const keys = [];
+        subs.forEach((s) => {
+          keys.push(s.topic);
+        });
+        this.onSubsUpdated(keys, updateCount);
       }
     },
     enumerable: true,
@@ -5256,7 +5301,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         return;
       }
 
-      const cont = this._contacts[pres.src];
+      const cont = this._tinode.cacheGet(pres.src);
       if (cont) {
         switch (pres.what) {
           case 'on': // topic came online
@@ -5296,24 +5341,27 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             }
             cont.touched = new Date();
             break;
-          case 'ua': // user agent changed
+          case 'ua':
+            // user agent changed.
             cont.seen = {
               when: new Date(),
               ua: pres.ua
             };
             break;
-          case 'recv': // user's other session marked some messges as received
+          case 'recv':
+            // user's other session marked some messges as received.
             pres.seq = pres.seq | 0;
             cont.recv = cont.recv ? Math.max(cont.recv, pres.seq) : pres.seq;
             break;
-          case 'read': // user's other session marked some messages as read
+          case 'read':
+            // user's other session marked some messages as read.
             pres.seq = pres.seq | 0;
             cont.read = cont.read ? Math.max(cont.read, pres.seq) : pres.seq;
             cont.recv = cont.recv ? Math.max(cont.read, cont.recv) : cont.recv;
             cont.unread = cont.seq - cont.read;
             break;
-          case 'gone': // topic deleted or unsubscribed from
-            delete this._contacts[pres.src];
+          case 'gone':
+            // topic deleted or unsubscribed from.
             this._tinode.cacheDel('topic', pres.src);
             break;
           case 'del':
@@ -5343,12 +5391,12 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             // Using .withOneSub (not .withLaterOneSub) to make sure IfModifiedSince is not set.
             this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
             // Create a dummy entry to catch online status update.
-            this._contacts[pres.src] = {
-              touched: new Date(),
-              topic: pres.src,
-              online: false,
-              acs: acs
-            };
+            const dummy = this._tinode.getTopic(pres.src);
+            dummy.touched = new Date();
+            dummy.topic = pres.src;
+            dummy.online = false;
+            dummy.acs = acs;
+            this._tinode.cachePut('topic', pres.src, dummy);
           }
         } else if (pres.what == 'tags') {
           this.getMeta(this.startMetaQuery().withTags().build());
@@ -5425,12 +5473,11 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   contacts: {
     value: function(callback, filter, context) {
-      for (let idx in this._contacts) {
-        const c = this._contacts[idx];
-        if (!filter || filter(c)) {
-          callback.call(context, c, idx, this._contacts);
+      this._tinode.cacheMap('topic', (c, idx) => {
+        if (c.isComm() && (!filter || filter(c))) {
+          callback.call(context, c, idx);
         }
-      }
+      });
     },
     enumerable: true,
     configurable: true,
@@ -5449,7 +5496,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   setMsgReadRecv: {
     value: function(contactName, what, seq, ts) {
-      const cont = this._contacts[contactName];
+      const cont = this._tinode.cacheGet('topic', contactName);
       let oldVal, doUpdate = false;
       let mode = null;
       if (cont) {
@@ -5512,7 +5559,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   getMsgReadRecv: {
     value: function(contactName, what) {
-      const cont = this._contacts[contactName];
+      const cont = this._tinode.cacheGet('topic', contactName);
       if (cont) {
         switch (what) {
           case 'recv':
@@ -5539,7 +5586,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   getContact: {
     value: function(name) {
-      return this._contacts[name];
+      return this._tinode.cacheGet(name);
     },
     enumerable: true,
     configurable: true,
@@ -5557,7 +5604,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   getAccessMode: {
     value: function(name) {
       if (name) {
-        const cont = this._contacts[name];
+        const cont = this._tinode.cacheGet('topic', name);
         return cont ? cont.acs : null;
       }
       return this.acs;
@@ -5576,7 +5623,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   isArchived: {
     value: function(name) {
-      const cont = this._contacts[name];
+      const cont = this._tinode.cacheGet('topic', name);
       return cont ? ((cont.private && cont.private.arch) ? true : false) : null;
     },
     enumerable: true,
