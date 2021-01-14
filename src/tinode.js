@@ -5199,7 +5199,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           }
 
           cont = mergeObj(this._tinode.getTopic(topicName), sub);
-          console.log("topic initialized", cont.name, cont.acs, "from", sub.acs);
 
           if (Tinode.isP2PTopicName(topicName)) {
             this._cachePutUser(topicName, cont);
@@ -5301,7 +5300,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         return;
       }
 
-      const cont = this._tinode.cacheGet(pres.src);
+      const cont = this._tinode.cacheGet('topic', pres.src);
       if (cont) {
         switch (pres.what) {
           case 'on': // topic came online
@@ -5586,7 +5585,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   getContact: {
     value: function(name) {
-      return this._tinode.cacheGet(name);
+      return this._tinode.cacheGet('topic', name);
     },
     enumerable: true,
     configurable: true,
