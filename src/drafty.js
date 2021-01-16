@@ -649,8 +649,8 @@ function splice(src, at, insert) {
  * @memberof Drafty
  * @static
  *
- * @param {String} content plain-text content to parse.
- * @return {Drafty} parsed object or null if the source is not plain text.
+ * @param {String} content - plain-text content to parse.
+ * @return {Drafty} parsed document or null if the source is not plain text.
  */
 Drafty.parse = function(content) {
   // Make sure we are parsing strings only.
@@ -780,7 +780,7 @@ Drafty.parse = function(content) {
 /**
  * Initialize Drafty document to a plain text string.
  *
- * @param {String} plainText string to use as Drafty content.
+ * @param {String} plainText - string to use as Drafty content.
  *
  * @returns new Drafty document or null is plainText is not a string.
  */
@@ -796,8 +796,8 @@ Drafty.init = function(plainText) {
 /**
  * Append one Drafty document to another.
  *
- * @param {Drafty} first Drafty document to append to.
- * @param {Drafty} second Drafty document being appended.
+ * @param {Drafty} first - Drafty document to append to.
+ * @param {Drafty} second - Drafty document being appended.
  *
  * @return {Drafty} first document with the second appended to it.
  */
@@ -841,15 +841,15 @@ Drafty.append = function(first, second) {
  * @typedef Drafty.ImageDesc
  * @memberof Drafty
  * @type Object
- * @param {string} mime mime-type of the image, e.g. "image/png"
- * @param {string} preview base64-encoded image content (or preview, if large image is attached). Could be null/undefined.
- * @param {integer} width width of the image
- * @param {integer} height height of the image
- * @param {string} filename file name suggestion for downloading the image.
- * @param {integer} size size of the image in bytes. Treat is as an untrusted hint.
- * @param {string} refurl reference to the content. Could be null/undefined.
- * @param {string} _tempPreview base64-encoded image preview used during upload process; not serializable.
- * @param {Promise} urlPromise Promise which returns content URL when resolved.
+ * @param {string} mime - mime-type of the image, e.g. "image/png"
+ * @param {string} preview - base64-encoded image content (or preview, if large image is attached). Could be null/undefined.
+ * @param {integer} width - width of the image
+ * @param {integer} height - height of the image
+ * @param {string} filename - file name suggestion for downloading the image.
+ * @param {integer} size - size of the image in bytes. Treat is as an untrusted hint.
+ * @param {string} refurl - reference to the content. Could be null/undefined.
+ * @param {string} _tempPreview - base64-encoded image preview used during upload process; not serializable.
+ * @param {Promise} urlPromise - Promise which returns content URL when resolved.
  */
 
 /**
@@ -857,11 +857,11 @@ Drafty.append = function(first, second) {
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} content object to add image to.
- * @param {integer} at index where the object is inserted. The length of the image is always 1.
- * @param {ImageDesc} imageDesc object with image paramenets and data.
+ * @param {Drafty} content - document to add image to.
+ * @param {integer} at - index where the object is inserted. The length of the image is always 1.
+ * @param {ImageDesc} imageDesc - object with image paramenets and data.
  *
- * @return {Drafty} updated content.
+ * @return {Drafty} updated document.
  */
 Drafty.insertImage = function(content, at, imageDesc) {
   content = content || {
@@ -911,14 +911,14 @@ Drafty.insertImage = function(content, at, imageDesc) {
 }
 
 /**
- * Append inline image to Drafty content.
+ * Append inline image to Drafty document.
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} content object to add image to.
- * @param {ImageDesc} imageDesc object with image paramenets.
+ * @param {Drafty} content - document to add image to.
+ * @param {ImageDesc} imageDesc - object with image paramenets.
  *
- * @return {Drafty} updated content.
+ * @return {Drafty} updated document.
  */
 Drafty.appendImage = function(content, imageDesc) {
   content = content || {
@@ -932,12 +932,12 @@ Drafty.appendImage = function(content, imageDesc) {
  * @typedef Drafty.AttachmentDesc
  * @memberof Drafty
  * @type Object
- * @param {string} mime mime-type of the image, e.g. "image/png"
- * @param {string} data base64-encoded in-band content of small attachments. Could be null/undefined.
- * @param {string} filename file name suggestion for downloading the attachment.
- * @param {integer} size size of the file in bytes. Treat is as an untrusted hint.
- * @param {string} refurl reference to the out-of-band content. Could be null/undefined.
- * @param {Promise} urlPromise Promise which returns content URL when resolved.
+ * @param {string} mime - mime-type of the image, e.g. "image/png"
+ * @param {string} data - base64-encoded in-band content of small attachments. Could be null/undefined.
+ * @param {string} filename - file name suggestion for downloading the attachment.
+ * @param {integer} size - size of the file in bytes. Treat is as an untrusted hint.
+ * @param {string} refurl - reference to the out-of-band content. Could be null/undefined.
+ * @param {Promise} urlPromise - Promise which returns content URL when resolved.
  */
 
 /**
@@ -945,10 +945,10 @@ Drafty.appendImage = function(content, imageDesc) {
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} content object to attach file to.
- * @param {AttachmentDesc} object containing attachment description and data.
+ * @param {Drafty} content - document to attach file to.
+ * @param {AttachmentDesc} object - containing attachment description and data.
  *
- * @return {Drafty} updated content.
+ * @return {Drafty} updated document.
  */
 Drafty.attachFile = function(content, attachmentDesc) {
   content = content || {
@@ -996,11 +996,11 @@ Drafty.attachFile = function(content, attachmentDesc) {
  * @memberof Drafty
  * @static
  *
- * @param {Drafty|string} content to wrap into a form.
- * @param {number} at index where the forms starts.
- * @param {number} len length of the form content.
+ * @param {Drafty|string} content - to wrap into a form.
+ * @param {number} at - index where the forms starts.
+ * @param {number} len - length of the form content.
  *
- * @return {Drafty} updated content.
+ * @return {Drafty} updated document.
  */
 Drafty.wrapAsForm = function(content, at, len) {
   if (typeof content == 'string') {
@@ -1024,15 +1024,15 @@ Drafty.wrapAsForm = function(content, at, len) {
  * @memberof Drafty
  * @static
  *
- * @param {Drafty|string} content is Drafty object to insert button to or a string to be used as button text.
- * @param {number} at is location where the button is inserted.
- * @param {number} len is the length of the text to be used as button title.
- * @param {string} name of the button. Client should return it to the server when the button is clicked.
- * @param {string} actionType is the type of the button, one of 'url' or 'pub'.
- * @param {string} actionValue is the value to return on click:
- * @param {string} refUrl is the URL to go to when the 'url' button is clicked.
+ * @param {Drafty|string} content - Drafty document to insert button to or a string to be used as button text.
+ * @param {number} at - location where the button is inserted.
+ * @param {number} len - the length of the text to be used as button title.
+ * @param {string} name - the button. Client should return it to the server when the button is clicked.
+ * @param {string} actionType - the type of the button, one of 'url' or 'pub'.
+ * @param {string} actionValue - the value to return on click:
+ * @param {string} refUrl - the URL to go to when the 'url' button is clicked.
  *
- * @return {Drafty} updated content.
+ * @return {Drafty} updated document.
  */
 Drafty.insertButton = function(content, at, len, name, actionType, actionValue, refUrl) {
   if (typeof content == 'string') {
@@ -1080,14 +1080,14 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue, 
  * @memberof Drafty
  * @static
  *
- * @param {Drafty|string} content is Drafty object to insert button to or a string to be used as button text.
- * @param {string} title is the text to be used as button title.
- * @param {string} name of the button. Client should return it to the server when the button is clicked.
- * @param {string} actionType is the type of the button, one of 'url' or 'pub'.
- * @param {string} actionValue is the value to return on click:
- * @param {string} refUrl is the URL to go to when the 'url' button is clicked.
+ * @param {Drafty|string} content - Drafty document to insert button to or a string to be used as button text.
+ * @param {string} title - the text to be used as button title.
+ * @param {string} name - the button. Client should return it to the server when the button is clicked.
+ * @param {string} actionType - the type of the button, one of 'url' or 'pub'.
+ * @param {string} actionValue - the value to return on click:
+ * @param {string} refUrl - the URL to go to when the 'url' button is clicked.
  *
- * @return {Drafty} updated content.
+ * @return {Drafty} updated document.
  */
 Drafty.appendButton = function(content, title, name, actionType, actionValue, refUrl) {
   content = content || {
@@ -1105,8 +1105,9 @@ Drafty.appendButton = function(content, title, name, actionType, actionValue, re
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} content object to attach file to.
- * @param {Object} data to convert to json string and attach.
+ * @param {Drafty} content - Drafty document to attach file to.
+ * @param {Object} data - data to convert to json string and attach.
+ * @returns {Drafty} the same document as <code>content</code>.
  */
 Drafty.attachJSON = function(content, data) {
   content = content || {
@@ -1131,7 +1132,14 @@ Drafty.attachJSON = function(content, data) {
 
   return content;
 }
-
+/**
+ * Append line break to a Drafty document.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - Drafty document to append linebreak to.
+ * @returns {Drafty} the same document as <code>content</code>.
+ */
 Drafty.appendLineBreak = function(content) {
   content = content || {
     txt: ""
@@ -1147,16 +1155,16 @@ Drafty.appendLineBreak = function(content) {
   return content;
 }
 /**
- * Given the structured representation of rich text, convert it to HTML.
+ * Given Drafty document, convert it to HTML.
  * No attempt is made to strip pre-existing html markup.
- * This is potentially unsafe because `content.txt` may contain malicious
+ * This is potentially unsafe because <code>content.txt</code> may contain malicious
  * markup.
  * @memberof Tinode.Drafty
  * @static
  *
- * @param {drafy} content - structured representation of rich text.
+ * @param {Drafy} content - document to convert.
  *
- * @return HTML-representation of content.
+ * @returns {string} HTML-representation of content.
  */
 Drafty.UNSAFE_toHTML = function(content) {
   let {
@@ -1211,26 +1219,26 @@ Drafty.UNSAFE_toHTML = function(content) {
 }
 
 /**
- * Callback for applying custom formatting/transformation to a Drafty object.
+ * Callback for applying custom formatting/transformation to a Drafty document.
  * Called once for each syle span.
  * @memberof Drafty
  * @static
  *
  * @callback Formatter
- * @param {string} style style code such as "ST" or "IM".
- * @param {Object} data entity's data
- * @param {Object} values possibly styled subspans contained in this style span.
- * @param {number} index of the current element among its siblings.
+ * @param {string} style - style code such as "ST" or "IM".
+ * @param {Object} data - entity's data
+ * @param {Object} values - possibly styled subspans contained in this style span.
+ * @param {number} index - of the current element among its siblings.
  */
 
 /**
- * Transform Drafty using custom formatting.
+ * Transform Drafty document using custom formatting.
  * @memberof Drafty
  * @static
  *
  * @param {Drafty} content - content to transform.
  * @param {Formatter} formatter - callback which transforms individual elements
- * @param {Object} context - context provided to formatter as 'this'.
+ * @param {Object} context - context provided to formatter as <code>this</code>.
  *
  * @return {Object} transformed object
  */
@@ -1311,23 +1319,24 @@ Drafty.format = function(content, formatter, context) {
 }
 
 /**
- * Given structured representation of rich text, convert it to plain text.
+ * Given Drafty document, convert it to plain text.
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} content - content to convert to plain text.
+ * @param {Drafty} content - document to convert to plain text.
+ * @returns {string} plain-text representation of the drafty document.
  */
 Drafty.toPlainText = function(content) {
   return typeof content == 'string' ? content : content.txt;
 }
 
 /**
- * Returns true if content has no markup and no entities.
+ * Check if the document has no markup and no entities.
  * @memberof Drafty
  * @static
  *
  * @param {Drafty} content - content to check for presence of markup.
- * @returns true is content is plain text, false otherwise.
+ * @returns <code>true</code> is content is plain text, <code>false</code> otherwise.
  */
 Drafty.isPlainText = function(content) {
   return typeof content == 'string' || !(content.fmt || content.ent);
@@ -1339,7 +1348,7 @@ Drafty.isPlainText = function(content) {
  * @static
  *
  * @param {Drafty} content - content to check for validity.
- * @returns true is content is valid, false otherwise.
+ * @returns <code>true</code> is content is valid, <code>false</code> otherwise.
  */
 Drafty.isValid = function(content) {
   if (!content) {
@@ -1372,12 +1381,12 @@ Drafty.isValid = function(content) {
 }
 
 /**
- * Check if the drafty content has attachments.
+ * Check if the drafty document has attachments.
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} content - content to check for attachments.
- * @returns true if there are attachments.
+ * @param {Drafty} content - document to check for attachments.
+ * @returns <code>true</code> if there are attachments.
  */
 Drafty.hasAttachments = function(content) {
   if (content.ent && content.ent.length > 0) {
@@ -1391,7 +1400,7 @@ Drafty.hasAttachments = function(content) {
 }
 
 /**
- * Callback for applying custom formatting/transformation to a Drafty object.
+ * Callback for applying custom formatting/transformation to a Drafty document.
  * Called once for each syle span.
  * @memberof Drafty
  * @static
@@ -1406,7 +1415,7 @@ Drafty.hasAttachments = function(content) {
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} content - drafty object to process for attachments.
+ * @param {Drafty} content - document to process for attachments.
  * @param {AttachmentCallback} callback - callback to call for each attachment.
  * @param {Object} context - value of "this" for callback.
  */
@@ -1426,7 +1435,8 @@ Drafty.attachments = function(content, callback, context) {
  * @memberof Drafty
  * @static
  *
- * @param {Object} entity.data to get the URl from.
+ * @param {Object} entData - entity.data to get the URl from.
+ * @returns {string} URL to download entity data or <code>null</code>.
  */
 Drafty.getDownloadUrl = function(entData) {
   let url = null;
@@ -1469,7 +1479,8 @@ Drafty.getPreviewUrl = function(entData) {
  * @memberof Drafty
  * @static
  *
- * @param {Object} entity.data to get the size for.
+ * @param {Object} entData - entity.data to get the size for.
+ * @returns {number} size of entity data in bytes.
  */
 Drafty.getEntitySize = function(entData) {
   // Either size hint or length of value. The value is base64 encoded,
@@ -1482,7 +1493,8 @@ Drafty.getEntitySize = function(entData) {
  * @memberof Drafty
  * @static
  *
- * @param {Object} entity.data to get the type for.
+ * @param {Object} entData - entity.data to get the type for.
+ * @returns {string} mime type of entity.
  */
 Drafty.getEntityMimeType = function(entData) {
   return entData.mime || 'text/plain';
@@ -1537,12 +1549,12 @@ Drafty.getContentType = function() {
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} original Drafty object to shorten.
- * @param {Number} length length in characters to shorten to.
+ * @param {Drafty} original - Drafty object to shorten.
+ * @param {number} length - length in characters to shorten to.
  * @returns new shortened Drafty object leaving the original intact.
  */
 Drafty.preview = function(original, length) {
-  if (!original || length <= 0 || typeof original != object) {
+  if (!original || length <= 0 || typeof original != 'object') {
     return null;
   }
 
