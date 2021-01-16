@@ -3,7 +3,7 @@
  * See <a href="https://github.com/tinode/webapp">
  * https://github.com/tinode/webapp</a> for real-life usage.
  *
- * @copyright 2015-2019 Tinode
+ * @copyright 2015-2021 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
  * @version 0.16

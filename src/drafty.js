@@ -1,5 +1,5 @@
 /**
- * @copyright 2015-2019 Tinode
+ * @copyright 2015-2021 Tinode
  * @summary Minimally rich text representation and formatting for Tinode.
  * @license Apache 2.0
  * @version 0.16
