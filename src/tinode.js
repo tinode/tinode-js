@@ -5013,7 +5013,10 @@ Topic.prototype = {
 var TopicMe = function(callbacks) {
   Topic.call(this, TOPIC_ME, callbacks);
   // List of contacts (topic_name -> Contact object)
-  this._contacts = {};
+  Object.defineProperty(this, 'contactsList', {
+    value: {},
+    writable: false
+  })
 
   // me-specific callbacks
   if (callbacks) {
@@ -5036,7 +5039,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
 
       // 'P' permission was removed. All topics are offline now.
       if (turnOff) {
-        Object.values(this._contacts).map((cont) => {
+        Object.values(this.contactsList).map((cont) => {
           if (cont.online) {
             cont.online = false;
             if (cont.seen) {
@@ -5081,7 +5084,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         let cont = null;
         if (sub.deleted) {
           cont = sub;
-          delete this._contacts[topicName];
+          delete this.contactsList[topicName];
         } else {
           // Ensure the values are defined and are integers.
           if (typeof sub.seq != 'undefined') {
@@ -5094,7 +5097,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           if (sub.seen && sub.seen.when) {
             sub.seen.when = new Date(sub.seen.when);
           }
-          cont = mergeToCache(this._contacts, topicName, sub);
+          cont = mergeToCache(this.contactsList, topicName, sub);
 
           if (Tinode.isP2PTopicName(topicName)) {
             this._cachePutUser(topicName, cont);
@@ -5117,7 +5120,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       }
 
       if (this.onSubsUpdated) {
-        this.onSubsUpdated(Object.keys(this._contacts), updateCount);
+        this.onSubsUpdated(Object.keys(this.contactsList), updateCount);
       }
     },
     enumerable: true,
@@ -5192,7 +5195,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         return;
       }
 
-      const cont = this._contacts[pres.src];
+      const cont = this.contactsList[pres.src];
       if (cont) {
         switch (pres.what) {
           case 'on': // topic came online
@@ -5249,7 +5252,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             cont.unread = cont.seq - cont.read;
             break;
           case 'gone': // topic deleted or unsubscribed from
-            delete this._contacts[pres.src];
+            delete this.contactsList[pres.src];
             break;
           case 'del':
             // Update topic.del value.
@@ -5278,7 +5281,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             // Using .withOneSub (not .withLaterOneSub) to make sure IfModifiedSince is not set.
             this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
             // Create a dummy entry to catch online status update.
-            this._contacts[pres.src] = {
+            this.contactsList[pres.src] = {
               touched: new Date(),
               topic: pres.src,
               online: false,
@@ -5360,10 +5363,10 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   contacts: {
     value: function(callback, filter, context) {
-      for (let idx in this._contacts) {
-        const c = this._contacts[idx];
+      for (let idx in this.contactsList) {
+        const c = this.contactsList[idx];
         if (!filter || filter(c)) {
-          callback.call(context, c, idx, this._contacts);
+          callback.call(context, c, idx, this.contactsList);
         }
       }
     },
@@ -5384,7 +5387,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   setMsgReadRecv: {
     value: function(contactName, what, seq, ts) {
-      const cont = this._contacts[contactName];
+      const cont = this.contactsList[contactName];
       let oldVal, doUpdate = false;
       let mode = null;
       if (cont) {
@@ -5447,7 +5450,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   getMsgReadRecv: {
     value: function(contactName, what) {
-      const cont = this._contacts[contactName];
+      const cont = this.contactsList[contactName];
       if (cont) {
         switch (what) {
           case 'recv':
@@ -5474,7 +5477,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   getContact: {
     value: function(name) {
-      return this._contacts[name];
+      return this.contactsList[name];
     },
     enumerable: true,
     configurable: true,
@@ -5492,7 +5495,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   getAccessMode: {
     value: function(name) {
       if (name) {
-        const cont = this._contacts[name];
+        const cont = this.contactsList[name];
         return cont ? cont.acs : null;
       }
       return this.acs;
@@ -5511,7 +5514,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
   isArchived: {
     value: function(name) {
-      const cont = this._contacts[name];
+      const cont = this.contactsList[name];
       return cont ? ((cont.private && cont.private.arch) ? true : false) : null;
     },
     enumerable: true,
@@ -5555,7 +5558,10 @@ TopicMe.prototype.constructor = TopicMe;
 var TopicFnd = function(callbacks) {
   Topic.call(this, TOPIC_FND, callbacks);
   // List of users and topics uid or topic_name -> Contact object)
-  this._contacts = {};
+  Object.defineProperty(this, 'contactsList', {
+    value: {},
+    writable: false
+  })
 };
 
 // Inherit everyting from the generic Topic
@@ -5563,9 +5569,13 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
   // Override the original Topic._processMetaSub
   _processMetaSub: {
     value: function(subs) {
-      let updateCount = Object.getOwnPropertyNames(this._contacts).length;
+      let updateCount = Object.getOwnPropertyNames(this.contactsList).length;
       // Reset contact list.
-      this._contacts = {};
+      Object.defineProperty(this, 'contactsList', {
+        value: {},
+        writable: false
+      })
+
       for (let idx in subs) {
         let sub = subs[idx];
         const indexBy = sub.topic ? sub.topic : sub.user;
@@ -5575,7 +5585,7 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
           sub.seen.when = new Date(sub.seen.when);
         }
 
-        sub = mergeToCache(this._contacts, indexBy, sub);
+        sub = mergeToCache(this.contactsList, indexBy, sub);
         updateCount++;
 
         if (this.onMetaSub) {
@@ -5584,7 +5594,7 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
       }
 
       if (updateCount > 0 && this.onSubsUpdated) {
-        this.onSubsUpdated(Object.keys(this._contacts));
+        this.onSubsUpdated(Object.keys(this.contactsList));
       }
     },
     enumerable: true,
@@ -5616,8 +5626,12 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
     value: function(params) {
       const instance = this;
       return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(function() {
-        if (Object.keys(instance._contacts).length > 0) {
-          instance._contacts = {};
+        if (Object.keys(instance.contactsList).length > 0) {
+          Object.defineProperty(instance, 'contactsList', {
+            value: {},
+            writable: false
+          })
+
           if (instance.onSubsUpdated) {
             instance.onSubsUpdated([]);
           }
@@ -5640,8 +5654,8 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
     value: function(callback, context) {
       const cb = (callback || this.onMetaSub);
       if (cb) {
-        for (let idx in this._contacts) {
-          cb.call(context, this._contacts[idx], idx, this._contacts);
+        for (let idx in this.contactsList) {
+          cb.call(context, this.contactsList[idx], idx, this.contactsList);
         }
       }
     },
