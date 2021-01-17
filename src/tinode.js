@@ -4268,7 +4268,7 @@ Topic.prototype = {
   },
 
   /**
-   * Send a read/recv notification
+   * Send a read/recv notification.
    * @memberof Tinode.Topic#
    *
    * @param {string} what - what notification to send: <code>recv</code>, <code>read</code>.
@@ -4280,30 +4280,31 @@ Topic.prototype = {
       return;
     }
 
-    // Update locally cached contact with the new count.
-
-    const me = this._tinode.getMeTopic();
-
+    // Update local cache with the new count.
     const user = this._users[this._tinode.getCurrentUserID()];
     let update = false;
     if (user) {
-      // Known topic subscriber.
+      // Self-subscription is found.
       if (!user[what] || user[what] < seq) {
         user[what] = seq;
         update = true;
       }
-    } else if (me) {
-      // Subscriber not found, such as in case of no S permission.
-      update = (me.getMsgReadRecv(this.name, what) < seq);
+    } else {
+      // Self-subscription is not found, such as in case of no S permission.
+      update = (this[what] | 0) < seq;
     }
 
     if (update) {
+      // Send notification to the server.
       this._tinode.note(this.name, what, seq);
-    }
+      // Update locally cached contact with the new count.
+      this._updateReadRecv(what, seq);
 
-    // Update locally cached contact with the new count.
-    if (me) {
-      me.setMsgReadRecv(this.name, what, seq);
+      const me = this._tinode.getMeTopic();
+      if (this.acs != null && !this.acs.isMuted() && me.onContactUpdate) {
+        // Sent a notification to 'me' listeners.
+        me.onContactUpdate(what, this);
+      }
     }
   },
 
@@ -4340,6 +4341,51 @@ Topic.prototype = {
     } else {
       this._tinode.logger("INFO: Cannot send notification in inactive topic");
     }
+  },
+
+  // Update cached read/recv/unread counts.
+  _updateReadRecv: function(what, seq, ts) {
+    let oldVal, doUpdate = false;
+
+    seq = seq | 0;
+    this.seq = this.seq | 0;
+    this.read = this.read | 0;
+    this.recv = this.recv | 0;
+    switch (what) {
+      case 'recv':
+        oldVal = this.recv;
+        this.recv = Math.max(this.recv, seq);
+        doUpdate = (oldVal != this.recv);
+        break;
+      case 'read':
+        oldVal = this.read;
+        this.read = Math.max(this.read, seq);
+        doUpdate = (oldVal != this.read);
+        break;
+      case 'msg':
+        oldVal = this.seq;
+        this.seq = Math.max(this.seq, seq);
+        if (!this.touched || this.touched < ts) {
+          this.touched = ts;
+        }
+        doUpdate = (oldVal != this.seq);
+        break;
+    }
+
+    // Sanity checks.
+    if (this.recv < this.read) {
+      this.recv = this.read;
+      doUpdate = true;
+    }
+    if (this.seq < this.recv) {
+      this.seq = this.recv;
+      if (!this.touched || this.touched < ts) {
+        this.touched = ts;
+      }
+      doUpdate = true;
+    }
+    this.unread = this.seq - this.read;
+    return doUpdate;
   },
 
   /**
@@ -4759,11 +4805,12 @@ Topic.prototype = {
     }
 
     // Update locally cached contact with the new message count.
+    const what = (!data.from || this._tinode.isMe(data.from)) ? 'read' : 'msg';
+    const updated = this._updateReadRecv(what, data.seq, data.ts);
     const me = this._tinode.getMeTopic();
-    if (me) {
-      // Messages from the current user are considered to be read already.
-      me.setMsgReadRecv(this.name,
-        (!data.from || this._tinode.isMe(data.from)) ? 'read' : 'msg', data.seq, data.ts);
+    if (updated && me.onContactUpdate) {
+      // Notify 'me' listeners of the change.
+      me.onContactUpdate(what, this);
     }
   },
 
@@ -4864,11 +4911,14 @@ Topic.prototype = {
         }
       }
 
-      // If this is an update from the current user, update the contact with the new count too.
+      // If this is an update from the current user, update the cache with the new count and notify 'me' listener.
       if (this._tinode.isMe(info.from)) {
-        const me = this._tinode.getMeTopic();
-        if (me) {
-          me.setMsgReadRecv(info.topic, info.what, info.seq);
+        const updated = this._updateReadRecv(info.what, info.seq);
+        if (updated) {
+          const me = this._tinode.getMeTopic();
+          if (me.onContactUpdate) {
+            me.onContactUpdate(info.what, this);
+          }
         }
       }
     }
@@ -5515,99 +5565,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           callback.call(context, c, idx);
         }
       });
-    },
-    enumerable: true,
-    configurable: true,
-    writable: true
-  },
-
-  /**
-   * Update a cached contact with new read/received/message count.
-   * @function
-   * @memberof Tinode.TopicMe#
-   *
-   * @param {string} contactName - UID of contact to update.
-   * @param {string} what - Which count to update, one of <code>"read"</code>, <code>"recv"</code>, <code>"msg"</code>
-   * @param {number} seq - New value of the count.
-   * @param {Date} ts - Timestamp of the update.
-   */
-  setMsgReadRecv: {
-    value: function(contactName, what, seq, ts) {
-      const cont = this._tinode.cacheGet('topic', contactName);
-      let oldVal, doUpdate = false;
-      let mode = null;
-      if (cont) {
-        seq = seq | 0;
-        cont.seq = cont.seq | 0;
-        cont.read = cont.read | 0;
-        cont.recv = cont.recv | 0;
-        switch (what) {
-          case 'recv':
-            oldVal = cont.recv;
-            cont.recv = Math.max(cont.recv, seq);
-            doUpdate = (oldVal != cont.recv);
-            break;
-          case 'read':
-            oldVal = cont.read;
-            cont.read = Math.max(cont.read, seq);
-            doUpdate = (oldVal != cont.read);
-            break;
-          case 'msg':
-            oldVal = cont.seq;
-            cont.seq = Math.max(cont.seq, seq);
-            if (!cont.touched || cont.touched < ts) {
-              cont.touched = ts;
-            }
-            doUpdate = (oldVal != cont.seq);
-            break;
-        }
-
-        // Sanity checks.
-        if (cont.recv < cont.read) {
-          cont.recv = cont.read;
-          doUpdate = true;
-        }
-        if (cont.seq < cont.recv) {
-          cont.seq = cont.recv;
-          if (!cont.touched || cont.touched < ts) {
-            cont.touched = ts;
-          }
-          doUpdate = true;
-        }
-        cont.unread = cont.seq - cont.read;
-
-        if (doUpdate && (!cont.acs || !cont.acs.isMuted()) && this.onContactUpdate) {
-          this.onContactUpdate(what, cont);
-        }
-      }
-    },
-    enumerable: true,
-    configurable: true,
-    writable: true
-  },
-
-  /**
-   * Get cached read/received/message count for the given contact.
-   * @function
-   * @memberof Tinode.TopicMe#
-   *
-   * @param {string} contactName - UID of contact to read.
-   * @param {string} what - Which count to read, one of <code>"read"</code>, <code>"recv"</code>, <code>"msg"</code>.
-   */
-  getMsgReadRecv: {
-    value: function(contactName, what) {
-      const cont = this._tinode.cacheGet('topic', contactName);
-      if (cont) {
-        switch (what) {
-          case 'recv':
-            return cont.recv | 0;
-          case 'read':
-            return cont.read | 0;
-          case 'msg':
-            return cont.seq | 0;
-        }
-      }
-      return 0;
     },
     enumerable: true,
     configurable: true,
