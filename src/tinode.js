@@ -139,8 +139,8 @@ function initForNonBrowserApp() {
       }
       for (let bc = 0, bs = 0, buffer, i = 0; buffer = str.charAt(i++);
 
-           ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer,
-           bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
+        ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer,
+          bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
       ) {
         buffer = chars.indexOf(buffer);
       }
@@ -5362,7 +5362,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             cont.unread = cont.seq - (cont.read | 0);
             break;
           case 'upd': // desc updated
-                      // Request updated subscription.
+            // Request updated subscription.
             this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
             break;
           case 'acs': // access mode changed
@@ -5493,11 +5493,26 @@ TopicMe.prototype = Object.create(Topic.prototype, {
     writable: false
   },
 
+  contactsList: {
+    get: function() {
+      const ret = []
+      for (let idx in this._tinode._cache) {
+        if (idx.indexOf('topic:') !== 0) continue
+        const c = this._tinode._cache[idx]
+        if (!c.isComm()) continue
+        ret.push(c)
+      }
+      return ret
+    },
+    enumerable: true,
+  },
+
   /**
    * @callback contactFilter
    * @param {Object} contact to check for inclusion.
    * @returns {boolean} <code>true</code> if contact should be processed, <code>false</code> to exclude it.
    */
+
   /**
    * Iterate over cached contacts.
    *
