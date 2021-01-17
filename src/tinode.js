@@ -5514,6 +5514,11 @@ TopicMe.prototype = Object.create(Topic.prototype, {
    */
 
   /**
+   * @callback contactFilter
+   * @param {Object} contact to check for inclusion.
+   * @returns {boolean} <code>true</code> if contact should be processed, <code>false</code> to exclude it.
+   */
+  /**
    * Iterate over cached contacts.
    *
    * @function
