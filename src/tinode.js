@@ -3765,14 +3765,11 @@ Topic.prototype = {
         if (this.name != TOPIC_ME && this.name != TOPIC_FND) {
           // Add the new topic to the list of contacts maintained by the 'me' topic.
           const me = this._tinode.getMeTopic();
-          if (me) {
-            me._processMetaSub([{
-              _noForwarding: true,
-              topic: this.name,
-              created: ctrl.ts,
-              updated: ctrl.ts,
-              acs: this.acs
-            }]);
+          if (me.onMetaSub) {
+            me.onMetaSub(this);
+          }
+          if (me.onSubsUpdated) {
+            me.onSubsUpdated([this.name], 1);
           }
         }
 
@@ -4290,7 +4287,7 @@ Topic.prototype = {
         update = true;
       }
     } else {
-      // Self-subscription is not found, such as in case of no S permission.
+      // Self-subscription is not found.
       update = (this[what] | 0) < seq;
     }
 
@@ -4805,7 +4802,7 @@ Topic.prototype = {
     }
 
     // Update locally cached contact with the new message count.
-    const what = (!data.from || this._tinode.isMe(data.from)) ? 'read' : 'msg';
+    const what = ((!this.isChannel() && !data.from) || this._tinode.isMe(data.from)) ? 'read' : 'msg';
     const updated = this._updateReadRecv(what, data.seq, data.ts);
     const me = this._tinode.getMeTopic();
     if (updated && me.onContactUpdate) {
@@ -4941,23 +4938,14 @@ Topic.prototype = {
     // Make sure date fields are Date().
     stringToDate(this);
 
-    // Update relevant contact in the me topic, if available:
+    // Notify 'me' listener, if available:
     if (this.name !== TOPIC_ME && !desc._noForwarding) {
       const me = this._tinode.getMeTopic();
-      if (me) {
-        // Must use original 'desc' instead of 'this' so not to lose DEL_CHAR.
-        me._processMetaSub([{
-          _noForwarding: true,
-          topic: this.name,
-          updated: this.updated,
-          touched: this.touched,
-          acs: desc.acs,
-          seq: desc.seq,
-          read: desc.read,
-          recv: desc.recv,
-          public: desc.public,
-          private: desc.private
-        }]);
+      if (me.onMetaSub) {
+        me.onMetaSub(this);
+      }
+      if (me.onSubsUpdated) {
+        me.onSubsUpdated([this.name], 1);
       }
     }
 
@@ -5246,8 +5234,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       }
     },
     enumerable: true,
-    configurable: true,
-    writable: false
+    configurable: true
   },
 
   // Override the original Topic._processMetaSub
@@ -5312,8 +5299,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       }
     },
     enumerable: true,
-    configurable: true,
-    writable: false
+    configurable: true
   },
 
   // Called by Tinode when meta.sub is recived.
@@ -5364,8 +5350,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       }
     },
     enumerable: true,
-    configurable: true,
-    writable: false
+    configurable: true
   },
 
   // Process presence change message
@@ -5490,8 +5475,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       }
     },
     enumerable: true,
-    configurable: true,
-    writable: false
+    configurable: true
   },
 
   /**
@@ -5504,8 +5488,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       return Promise.reject(new Error("Publishing to 'me' is not supported"));
     },
     enumerable: true,
-    configurable: true,
-    writable: false
+    configurable: true
   },
 
   /**
@@ -5539,8 +5522,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
 
     },
     enumerable: true,
-    configurable: true,
-    writable: false
+    configurable: true
   },
 
   /**
@@ -5567,8 +5549,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       });
     },
     enumerable: true,
-    configurable: true,
-    writable: true
+    configurable: true
   },
 
   /**
@@ -5583,8 +5564,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       return this._tinode.cacheGet('topic', name);
     },
     enumerable: true,
-    configurable: true,
-    writable: true
+    configurable: true
   },
 
   /**
@@ -5604,8 +5584,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       return this.acs;
     },
     enumerable: true,
-    configurable: true,
-    writable: true
+    configurable: true
   },
 
   /**
@@ -5621,8 +5600,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       return cont ? ((cont.private && cont.private.arch) ? true : false) : null;
     },
     enumerable: true,
-    configurable: true,
-    writable: true
+    configurable: true
   },
 
   /**
@@ -5644,8 +5622,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       return this._credentials;
     },
     enumerable: true,
-    configurable: true,
-    writable: true
+    configurable: true
   }
 });
 TopicMe.prototype.constructor = TopicMe;
@@ -5694,8 +5671,7 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
       }
     },
     enumerable: true,
-    configurable: true,
-    writable: false
+    configurable: true
   },
 
   /**
@@ -5708,8 +5684,7 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
       return Promise.reject(new Error("Publishing to 'fnd' is not supported"));
     },
     enumerable: true,
-    configurable: true,
-    writable: false
+    configurable: true
   },
 
   /**
@@ -5731,8 +5706,7 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
       });
     },
     enumerable: true,
-    configurable: true,
-    writable: false
+    configurable: true
   },
 
   /**
@@ -5752,8 +5726,7 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
       }
     },
     enumerable: true,
-    configurable: true,
-    writable: true
+    configurable: true
   }
 });
 TopicFnd.prototype.constructor = TopicFnd;
