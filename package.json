@@ -1,9 +1,9 @@
 {
   "name": "tinode-sdk",
   "description": "Tinode SDK",
-  "version": "0.16.10",
+  "version": "0.17.0",
   "scripts": {
-    "format": "js-beautify -r src/tinode.js && js-beautify -r src/drafty.js",
+    "format": "js-beautify -r src/tinode.js && js-beautify -r src/drafty.js && js-beautify -r src/db.js",
     "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
     "build:prod": "browserify ./src/tinode.js --standalone Tinode -t [ babelify ] --plugin tinyify > ./umd/tinode.prod.js",
     "build:dev": "browserify ./src/tinode.js --debug --standalone Tinode > ./umd/tinode.dev.js",
