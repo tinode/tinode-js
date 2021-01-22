@@ -6,7 +6,7 @@
  * @copyright 2015-2021 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.16
+ * @version 0.17
  *
  * @example
  * <head>
@@ -693,7 +693,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
     }
 
     _boffTimer = setTimeout(() => {
-      log("Reconnecting, iter=" + _boffIteration + ", timeout=" + timeout);
+      log(`Reconnecting, iter=${_boffIteration}, timeout=${timeout}`);
       // Maybe the socket was closed while we waited for the timer?
       if (!_boffClosed) {
         const prom = this.connect();
@@ -883,7 +883,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       sender.onreadystatechange = function(evt) {
         if (sender.readyState == XDR_DONE && sender.status >= 400) {
           // Some sort of error response
-          throw new Error("LP sender failed, " + sender.status);
+          throw new Error(`LP sender failed, ${sender.status}`);
         }
       }
 
@@ -1264,6 +1264,7 @@ var Tinode = function(config) {
       return cacheDel('user', uid);
     };
     topic._cachePutSelf = () => {
+      topic._tinode._db.addTopic(topic);
       return cachePut('topic', topic.name, topic);
     }
     topic._cacheDelSelf = () => {
@@ -1282,7 +1283,7 @@ var Tinode = function(config) {
           callbacks.resolve(onOK);
         }
       } else if (callbacks.reject) {
-        callbacks.reject(new Error(errorText + " (" + code + ")"));
+        callbacks.reject(new Error(`${errorText} (${code})`));
       }
     }
   }
@@ -1427,7 +1428,7 @@ var Tinode = function(config) {
         };
 
       default:
-        throw new Error("Unknown packet type requested: " + type);
+        throw new Error(`Unknown packet type requested: ${type}`);
     }
   }
 
@@ -1456,7 +1457,7 @@ var Tinode = function(config) {
   // On successful login save server-provided data.
   this.loginSuccessful = (ctrl) => {
     if (!ctrl.params || !ctrl.params.user) {
-      return;
+      return ctrl;
     }
     // This is a response to a successful login,
     // extract UID and security token, save it in Tinode module
@@ -1471,15 +1472,45 @@ var Tinode = function(config) {
       this._authToken = null;
     }
 
-    if (this._persist && this._authenticated && this._myUID) {
-      this._db = DB(this._myUID, (err) => {
-        console.log("DB", err);
+    if (this._persist) {
+      this._db = DB((err) => {
+        this.logger("DB", err);
+      });
+
+      return this._db.initDatabase(this._myUID).then(() => {
+        this.logger("IndexedDB initialized successfully");
+        // Load topics to memory.
+        return this._db.mapTopics((data) => {
+          let topic = this.cacheGet('topic', data.name);
+          if (topic) {
+            return;
+          }
+          if (data.name == TOPIC_ME) {
+            topic = new TopicMe();
+          } else if (data.name == TOPIC_FND) {
+            topic = new TopicFnd();
+          } else {
+            topic = new Topic(data.name);
+          }
+
+          this._db.deserializeTopic(topic, data);
+          this.cachePut('topic', data.name, topic);
+          this.attachCacheToTopic(topic);
+        }).then(() => {
+          console.log("SUCCESS retrieving topics", ctrl);
+          if (this.onLogin) {
+            this.onLogin(ctrl.code, ctrl.text);
+          }
+          return ctrl;
+        });
       });
     }
 
     if (this.onLogin) {
       this.onLogin(ctrl.code, ctrl.text);
     }
+
+    return ctrl;
   }
 
   // The main message dispatcher.
@@ -1923,7 +1954,7 @@ Tinode.prototype = {
   },
 
   /**
-   * Clear persistent cache: remove indexDB cache of the most recently loggen in user.
+   * Clear persistent cache: remove indexDB cache of the most recently logged in user.
    */
   clearStorage: function() {
     if (this._db) {
@@ -2053,8 +2084,7 @@ Tinode.prototype = {
     let promise = this.account(USER_NEW, scheme, secret, login, params);
     if (login) {
       promise = promise.then((ctrl) => {
-        this.loginSuccessful(ctrl);
-        return ctrl;
+        return this.loginSuccessful(ctrl);
       });
     }
     return promise;
@@ -2175,8 +2205,9 @@ Tinode.prototype = {
 
     return this.send(pkt, pkt.login.id)
       .then((ctrl) => {
-        this.loginSuccessful(ctrl);
-        return ctrl;
+        const x = this.loginSuccessful(ctrl);
+        console.log("login->then", ctrl, x);
+        return x;
       });
   },
 
@@ -2191,6 +2222,7 @@ Tinode.prototype = {
   loginBasic: function(uname, password, cred) {
     return this.login('basic', b64EncodeUnicode(uname + ':' + password), cred)
       .then((ctrl) => {
+        console.log("loginBasic->then", ctrl);
         this._login = uname;
         return ctrl;
       });
@@ -2587,7 +2619,7 @@ Tinode.prototype = {
    */
   note: function(topic, what, seq) {
     if (seq <= 0 || seq >= LOCAL_SEQID) {
-      throw new Error("Invalid message id " + seq);
+      throw new Error(`Invalid message id ${seq}`);
     }
 
     const pkt = this.initPacket('note', topic);
@@ -2627,31 +2659,8 @@ Tinode.prototype = {
       } else {
         topic = new Topic(name);
       }
-      // topic._new = false;
-      this.cachePut('topic', name, topic);
-      this.attachCacheToTopic(topic);
-    }
-    return topic;
-  },
-
-  /**
-   * Get a named topic, either pull it from cache or create a new instance.
-   * There is a single instance of topic for each name.
-   * @memberof Tinode#
-   *
-   * @param {string} name - Name of the topic to get.
-   * @returns {Tinode.Topic} Requested or newly created topic or <code>undefined</code> if topic name is invalid.
-   */
-  forEachTopic: function(callback, context) {
-    let topic = this.cacheGet('topic', name);
-    if (!topic && name) {
-      if (name == TOPIC_ME) {
-        topic = new TopicMe();
-      } else if (name == TOPIC_FND) {
-        topic = new TopicFnd();
-      } else {
-        topic = new Topic(name);
-      }
+      console.log("adding topic to DB", topic.name, new Error("stacktrace"));
+      this._db.addTopic(topic);
       // topic._new = false;
       this.cachePut('topic', name, topic);
       this.attachCacheToTopic(topic);
@@ -3237,7 +3246,7 @@ AccessMode._checkFlag = function(val, side, flag) {
   if (['given', 'want', 'mode'].includes(side)) {
     return ((val[side] & flag) != 0);
   }
-  throw new Error("Invalid AccessMode component '" + side + "'");
+  throw new Error(`Invalid AccessMode component '${side}'`);
 }
 
 /**
@@ -4686,13 +4695,23 @@ Topic.prototype = {
   },
 
   /**
-   * Get user's cumulative access mode of the topic.
+   * Get current user's access mode of the topic.
    * @memberof Tinode.Topic#
    *
    * @returns {Tinode.AccessMode} - user's access mode
    */
   getAccessMode: function() {
     return this.acs;
+  },
+
+  /**
+   * Set current user's access mode of the topic.
+   * @memberof Tinode.Topic#
+   *
+   * @param {AccessMode | Object} acs - access mode to set.
+   */
+  setAccessMode: function(acs) {
+    return this.acs = new AccessMode(acs);
   },
 
   /**
@@ -5274,6 +5293,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         if (sub.deleted) {
           cont = sub;
           this._tinode.cacheDel('topic', topicName);
+          this._tinode._db.remTopic(topicName);
         } else {
           // Ensure the values are defined and are integers.
           if (typeof sub.seq != 'undefined') {
@@ -5288,6 +5308,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           }
 
           cont = mergeObj(this._tinode.getTopic(topicName), sub);
+          this._tinode._db.updTopic(cont);
 
           if (Tinode.isP2PTopicName(topicName)) {
             this._cachePutUser(topicName, cont);
@@ -5482,6 +5503,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             dummy.topic = pres.src;
             dummy.online = false;
             dummy.acs = acs;
+            this._db.addTopic(dummy);
             this._tinode.cachePut('topic', pres.src, dummy);
           }
         } else if (pres.what == 'tags') {
@@ -5800,7 +5822,7 @@ LargeFileHelper.prototype = {
       if (baseUrl.indexOf('http://') == 0 || baseUrl.indexOf('https://') == 0) {
         url = baseUrl + url;
       } else {
-        throw new Error("Invalid base URL '" + baseUrl + "'");
+        throw new Error(`Invalid base URL '${baseUrl}'`);
       }
     }
     this.xhr.open('POST', url, true);
@@ -5844,7 +5866,7 @@ LargeFileHelper.prototype = {
         }
       } else if (this.status >= 400) {
         if (instance.toReject) {
-          instance.toReject(new Error(pkt.ctrl.text + " (" + pkt.ctrl.code + ")"));
+          instance.toReject(new Error(`${pkt.ctrl.text} (${pkt.ctrl.code})`));
         }
         if (instance.onFailure) {
           instance.onFailure(pkt.ctrl)
@@ -5919,7 +5941,7 @@ LargeFileHelper.prototype = {
     if (!Tinode.isRelativeURL(relativeUrl)) {
       // As a security measure refuse to download from an absolute URL.
       if (onError) {
-        onError("The URL '" + relativeUrl + "' must be relative, not absolute");
+        onError(`The URL '${relativeUrl}' must be relative, not absolute`);
       }
       return;
     }
@@ -5976,7 +5998,7 @@ LargeFileHelper.prototype = {
         reader.onload = function() {
           try {
             const pkt = JSON.parse(this.result, jsonParseHelper);
-            instance.toReject(new Error(pkt.ctrl.text + " (" + pkt.ctrl.code + ")"));
+            instance.toReject(new Error(`${pkt.ctrl.text} (${pkt.ctrl.code})`));
           } catch (err) {
             instance._tinode.logger("ERROR: Invalid server response in LargeFileHelper", this.result);
             instance.toReject(err);
