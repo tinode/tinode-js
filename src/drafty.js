@@ -189,7 +189,7 @@ const HTML_TAGS = {
 };
 
 // Convert base64-encoded string into Blob.
-function base64toObjectUrl(b64, contentType) {
+function base64toObjectUrl(b64, contentType, logger) {
   if (!b64) {
     return null;
   }
@@ -207,7 +207,9 @@ function base64toObjectUrl(b64, contentType) {
       type: contentType
     }));
   } catch (err) {
-    console.log("Drafty: failed to convert object.", err.message);
+    if (logger) {
+      logger("Drafty: failed to convert object.", err.message);
+    }
   }
 
   return null;
@@ -348,7 +350,7 @@ const DECORATORS = {
     open: function(data) {
       // Don't use data.ref for preview: it's a security risk.
       const tmpPreviewUrl = base64toDataUrl(data._tempPreview, data.mime);
-      const previewUrl = base64toObjectUrl(data.val, data.mime);
+      const previewUrl = base64toObjectUrl(data.val, data.mime, Drafty.logger);
       const downloadUrl = data.ref || previewUrl;
       return (data.name ? '<a href="' + downloadUrl + '" download="' + data.name + '">' : '') +
         '<img src="' + (tmpPreviewUrl || previewUrl) + '"' +
@@ -363,7 +365,7 @@ const DECORATORS = {
       return {
         // Temporary preview, or permanent preview, or external link.
         src: base64toDataUrl(data._tempPreview, data.mime) ||
-          data.ref || base64toObjectUrl(data.val, data.mime),
+          data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
         title: data.name,
         'data-width': data.width,
         'data-height': data.height,
@@ -1441,7 +1443,7 @@ Drafty.attachments = function(content, callback, context) {
 Drafty.getDownloadUrl = function(entData) {
   let url = null;
   if (entData.mime != JSON_MIME_TYPE && entData.val) {
-    url = base64toObjectUrl(entData.val, entData.mime);
+    url = base64toObjectUrl(entData.val, entData.mime, Drafty.logger);
   } else if (typeof entData.ref == 'string') {
     url = entData.ref;
   }
@@ -1471,7 +1473,7 @@ Drafty.isProcessing = function(entData) {
  * @returns {string} url for previewing or null if no such url is available.
  */
 Drafty.getPreviewUrl = function(entData) {
-  return entData.val ? base64toObjectUrl(entData.val, entData.mime) : null;
+  return entData.val ? base64toObjectUrl(entData.val, entData.mime, Drafty.logger) : null;
 }
 
 /**

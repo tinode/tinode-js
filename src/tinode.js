@@ -104,6 +104,9 @@ const EXPIRE_PROMISES_PERIOD = 1000;
 const NETWORK_USER = 418;
 const NETWORK_USER_TEXT = "Disconnected by client";
 
+// Default number of messages to pull into memory from persistent cache.
+const DEFAULT_MESSAGES_PAGE = 24;
+
 // Utility functions
 
 // Add brower missing function for non browser app, eg nodeJs
@@ -970,7 +973,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null)
       }).catch((err) => {
-        console.log("LP connection failed:", err);
+        log("LP connection failed:", err);
       });
     };
 
@@ -1049,7 +1052,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
 
   if (!initialized) {
     // No transport is avaiilable.
-    console.log("No network transport is available. Running under Node? Call 'Tinode.setNetworkProviders()'.");
+    log("No network transport is available. Running under Node? Call 'Tinode.setNetworkProviders()'.");
     throw new Error("No network transport is available. Running under Node? Call 'Tinode.setNetworkProviders()'.");
   }
 
@@ -1066,7 +1069,7 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
       case 'lp':
         return typeof window == 'object' && window['XMLHttpRequest'];
       default:
-        console.log("Request for unknown transport", transp);
+        log("Request for unknown transport", transp);
         return false;
     }
   }
@@ -1214,6 +1217,7 @@ var Tinode = function(config) {
     }
   }
   this._connection.logger = this.logger;
+  Drafty.logger = this.logger;
 
   // Tinode's cache of objects
   this._cache = {};
@@ -1264,7 +1268,6 @@ var Tinode = function(config) {
       return cacheDel('user', uid);
     };
     topic._cachePutSelf = () => {
-      topic._tinode._db.addTopic(topic);
       return cachePut('topic', topic.name, topic);
     }
     topic._cacheDelSelf = () => {
@@ -1473,12 +1476,13 @@ var Tinode = function(config) {
     }
 
     if (this._persist) {
+      this.logger("Persistent cache enabled.");
+
       this._db = DB((err) => {
         this.logger("DB", err);
-      });
+      }, this.logger);
 
       return this._db.initDatabase(this._myUID).then(() => {
-        this.logger("IndexedDB initialized successfully");
         // Load topics to memory.
         return this._db.mapTopics((data) => {
           let topic = this.cacheGet('topic', data.name);
@@ -1496,13 +1500,13 @@ var Tinode = function(config) {
           this._db.deserializeTopic(topic, data);
           this.cachePut('topic', data.name, topic);
           this.attachCacheToTopic(topic);
-        }).then(() => {
-          console.log("SUCCESS retrieving topics", ctrl);
-          if (this.onLogin) {
-            this.onLogin(ctrl.code, ctrl.text);
-          }
-          return ctrl;
+          topic._loadMessages();
         });
+      }).then(() => {
+        if (this.onLogin) {
+          this.onLogin(ctrl.code, ctrl.text);
+        }
+        return ctrl;
       });
     }
 
@@ -2206,7 +2210,6 @@ Tinode.prototype = {
     return this.send(pkt, pkt.login.id)
       .then((ctrl) => {
         const x = this.loginSuccessful(ctrl);
-        console.log("login->then", ctrl, x);
         return x;
       });
   },
@@ -2222,7 +2225,6 @@ Tinode.prototype = {
   loginBasic: function(uname, password, cred) {
     return this.login('basic', b64EncodeUnicode(uname + ':' + password), cred)
       .then((ctrl) => {
-        console.log("loginBasic->then", ctrl);
         this._login = uname;
         return ctrl;
       });
@@ -2542,17 +2544,18 @@ Tinode.prototype = {
    * Delete the topic alltogether. Requires Owner permission.
    * @memberof Tinode#
    *
-   * @param {string} topic - Name of the topic to delete
+   * @param {string} topicName - Name of the topic to delete
    * @param {boolean} hard - hard-delete topic.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delTopic: function(topic, hard) {
-    const pkt = this.initPacket('del', topic);
+  delTopic: function(topicName, hard) {
+    const pkt = this.initPacket('del', topicName);
     pkt.del.what = 'topic';
     pkt.del.hard = hard;
 
     return this.send(pkt, pkt.del.id).then((ctrl) => {
-      this.cacheDel('topic', topic);
+      this._db.remTopic(topicName);
+      this.cacheDel('topic', topicName);
       return this.ctrl;
     });
   },
@@ -2561,12 +2564,12 @@ Tinode.prototype = {
    * Delete subscription. Requires Share permission.
    * @memberof Tinode#
    *
-   * @param {string} topic - Name of the topic to delete
+   * @param {string} topicName - Name of the topic to delete
    * @param {string} user - User ID to remove.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delSubscription: function(topic, user) {
-    const pkt = this.initPacket('del', topic);
+  delSubscription: function(topicName, user) {
+    const pkt = this.initPacket('del', topicName);
     pkt.del.what = 'sub';
     pkt.del.user = user;
 
@@ -2613,16 +2616,16 @@ Tinode.prototype = {
    * Notify server that a message or messages were read or received. Does NOT return promise.
    * @memberof Tinode#
    *
-   * @param {string} topic - Name of the topic where the mesage is being aknowledged.
+   * @param {string} topicName - Name of the topic where the mesage is being aknowledged.
    * @param {string} what - Action being aknowledged, either <code>"read"</code> or <code>"recv"</code>.
    * @param {number} seq - Maximum id of the message being acknowledged.
    */
-  note: function(topic, what, seq) {
+  note: function(topicName, what, seq) {
     if (seq <= 0 || seq >= LOCAL_SEQID) {
       throw new Error(`Invalid message id ${seq}`);
     }
 
-    const pkt = this.initPacket('note', topic);
+    const pkt = this.initPacket('note', topicName);
     pkt.note.what = what;
     pkt.note.seq = seq;
     this.send(pkt);
@@ -2633,10 +2636,10 @@ Tinode.prototype = {
    * typing notifications "user X is typing...".
    * @memberof Tinode#
    *
-   * @param {string} topic - Name of the topic to broadcast to.
+   * @param {string} topicName - Name of the topic to broadcast to.
    */
-  noteKeyPress: function(topic) {
-    const pkt = this.initPacket('note', topic);
+  noteKeyPress: function(topicName) {
+    const pkt = this.initPacket('note', topicName);
     pkt.note.what = 'kp';
     this.send(pkt);
   },
@@ -2646,23 +2649,22 @@ Tinode.prototype = {
    * There is a single instance of topic for each name.
    * @memberof Tinode#
    *
-   * @param {string} name - Name of the topic to get.
+   * @param {string} topicName - Name of the topic to get.
    * @returns {Tinode.Topic} Requested or newly created topic or <code>undefined</code> if topic name is invalid.
    */
-  getTopic: function(name) {
-    let topic = this.cacheGet('topic', name);
-    if (!topic && name) {
-      if (name == TOPIC_ME) {
+  getTopic: function(topicName) {
+    let topic = this.cacheGet('topic', topicName);
+    if (!topic && topicName) {
+      if (topicName == TOPIC_ME) {
         topic = new TopicMe();
-      } else if (name == TOPIC_FND) {
+      } else if (topicName == TOPIC_FND) {
         topic = new TopicFnd();
       } else {
-        topic = new Topic(name);
+        topic = new Topic(topicName);
       }
-      console.log("adding topic to DB", topic.name, new Error("stacktrace"));
+      // Cache management.
       this._db.addTopic(topic);
-      // topic._new = false;
-      this.cachePut('topic', name, topic);
+      this.cachePut('topic', topicName, topic);
       this.attachCacheToTopic(topic);
     }
     return topic;
@@ -2672,39 +2674,11 @@ Tinode.prototype = {
    * Check if named topic is already present in cache.
    * @memberof Tinode#
    *
-   * @param {string} name - Name of the topic to check.
+   * @param {string} topicName - Name of the topic to check.
    * @returns {boolean} true if topic is found in cache, false oterwise.
    */
-  isTopicCached: function(name) {
-    return !!this.cacheGet('topic', name);
-  },
-
-  /**
-   * Instantiate a new group topic. An actual name will be assigned by the server
-   * on {@link Tinode.Topic.subscribe}.
-   * @memberof Tinode#
-   *
-   * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
-   * @returns {Tinode.Topic} Newly created topic.
-   */
-  newTopic: function(callbacks) {
-    const topic = new Topic(TOPIC_NEW, callbacks);
-    this.attachCacheToTopic(topic);
-    return topic;
-  },
-
-  /**
-   * Instantiate a new channel-enabled group topic. An actual name will be assigned by the server
-   * on {@link Tinode.Topic.subscribe}.
-   * @memberof Tinode#
-   *
-   * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
-   * @returns {Tinode.Topic} Newly created topic.
-   */
-  newChannel: function(callbacks) {
-    const topic = new Topic(TOPIC_NEW_CHAN, callbacks);
-    this.attachCacheToTopic(topic);
-    return topic;
+  isTopicCached: function(topicName) {
+    return !!this.cacheGet('topic', topicName);
   },
 
   /**
@@ -2716,20 +2690,6 @@ Tinode.prototype = {
    */
   newGroupTopicName: function(isChan) {
     return (isChan ? TOPIC_NEW_CHAN : TOPIC_NEW) + this.getNextUniqueId();
-  },
-
-  /**
-   * Instantiate a new P2P topic with a given peer.
-   * @memberof Tinode#
-   *
-   * @param {string} peer - UID of the peer to start topic with.
-   * @param {Tinode.Callbacks} callbacks - Object with callbacks for various events.
-   * @returns {Tinode.Topic} Newly created topic.
-   */
-  newTopicWith: function(peer, callbacks) {
-    const topic = new Topic(peer, callbacks);
-    this.attachCacheToTopic(topic);
-    return topic;
   },
 
   /**
@@ -3910,6 +3870,7 @@ Topic.prototype = {
       pub.noecho = true;
       // Add to cache.
       this._messages.put(pub);
+      this._tinode._db.addMessage(this.name, pub);
 
       if (this.onData) {
         this.onData(pub);
@@ -3932,6 +3893,7 @@ Topic.prototype = {
         pub._sending = false;
         pub._failed = true;
         this._messages.delAt(this._messages.find(pub));
+        this._tinode._db.remMessages(this.name, pub.seq);
         if (this.onData) {
           this.onData();
         }
@@ -4610,7 +4572,11 @@ Topic.prototype = {
     const idx = this._messages.find({
       seq: seqId
     });
-    return idx >= 0 ? this._messages.delAt(idx) : undefined;
+    if (idx >= 0) {
+      this._tinode._db.remMessages(this.name, seqId);
+      return this._messages.delAt(idx);
+    }
+    return undefined;
   },
 
   /**
@@ -4621,19 +4587,16 @@ Topic.prototype = {
    * @param {number} newSeqId new seq id for pub.
    */
   swapMessageId: function(pub, newSeqId) {
-    const idx = this._messages.find({
-      seq: pub.seq
-    });
+    const idx = this._messages.find(pub);
     const numMessages = this._messages.length();
-    pub.seq = newSeqId;
     if (0 <= idx && idx < numMessages) {
-      // this._messages are sorted by `seq`.
-      // If changing pub.seq to newSeqId breaks the invariant, fix it.
-      if ((idx > 0 && this._messages.getAt(idx - 1).seq >= newSeqId) ||
-        (idx + 1 < numMessages && newSeqId < this._messages.getAt(idx + 1).seq <= newSeqId)) {
-        this._messages.delAt(idx);
-        this._messages.put(pub);
-      }
+      // Remove message with the old seq ID.
+      this._messages.delAt(idx);
+      this._tinode._db.remMessages(this.name, pub.seq);
+      // Add message with the new seq ID.
+      pub.seq = newSeqId;
+      this._messages.put(pub);
+      this._tinode._db.addMessage(this.name, pub);
     }
   },
 
@@ -4647,6 +4610,8 @@ Topic.prototype = {
    * @returns {Message[]} array of removed messages (could be empty).
    */
   flushMessageRange: function(fromId, untilId) {
+    // Remove range from persistent cache.
+    this._tinode._db.remMessages(this.name, fromId, untilId);
     // start, end: find insertion points (nearest == true).
     const since = this._messages.find({
       seq: fromId
@@ -4672,6 +4637,7 @@ Topic.prototype = {
       const msg = this._messages.getAt(idx);
       const status = this.msgStatus(msg);
       if (status == MESSAGE_STATUS_QUEUED || status == MESSAGE_STATUS_FAILED) {
+        this._tinode._db.remMessages(this.name, seqId);
         msg._cancelled = true;
         this._messages.delAt(idx);
         if (this.onData) {
@@ -4832,6 +4798,7 @@ Topic.prototype = {
 
     if (!data._noForwarding) {
       this._messages.put(data);
+      this._tinode._db.addMessage(this.name, data);
       this._updateDeletedRanges();
     }
 
@@ -5089,6 +5056,7 @@ Topic.prototype = {
   // This topic is either deleted or unsubscribed from.
   _gone: function() {
     this._messages.reset();
+    this._tinode._db.remMessages(this.name);
     this._users = {};
     this.acs = new AccessMode(null);
     this.private = null;
@@ -5215,6 +5183,26 @@ Topic.prototype = {
     ranges.map((gap) => {
       this._messages.put(gap);
     });
+  },
+
+  // Load most recent messages from persistent cache.
+  _loadMessages: function() {
+    return this._tinode._db.readMessages(this.name, {
+        limit: DEFAULT_MESSAGES_PAGE
+      })
+      .then((msgs) => {
+        msgs.forEach((data) => {
+          if (data.seq > this._maxSeq) {
+            this._maxSeq = data.seq;
+          }
+          if (data.seq < this._minSeq || this._minSeq == 0) {
+            this._minSeq = data.seq;
+          }
+          this._messages.put(data);
+        });
+
+        this._updateDeletedRanges();
+      });
   }
 };
 
