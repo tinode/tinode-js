@@ -18,45 +18,7 @@ const DB = function(onError, logger) {
   // Account which owns currently open database.
   let account = null;
   // Placeholder DB which does nothing.
-  let db = {
-    transaction: function() {
-      logger("IndexedDB is not initialized");
-      onError("not initialized");
-      this.error = new Error("not initialized");
-      const event = {
-        target: {
-          error: this.error
-        }
-      };
-      return {
-        commit: () => {},
-        objectStore: () => {
-          return {
-            add: () => {
-              if (this.onerror) {
-                this.onerror(event);
-              }
-            },
-            delete: () => {
-              if (this.onerror) {
-                this.onerror(event);
-              }
-            },
-            put: () => {
-              if (this.onerror) {
-                this.onerror(event);
-              }
-            },
-            getAll: () => {
-              if (this.onerror) {
-                this.onerror(event);
-              }
-            }
-          };
-        }
-      };
-    }
-  };
+  let db = null;
 
   // Serializable topic fields.
   const topic_fields = ['created', 'updated', 'deleted', 'read', 'recv', 'seq', 'clear', 'defacs',
@@ -65,6 +27,7 @@ const DB = function(onError, logger) {
 
   function serializeTopic(topic) {
     const res = {
+      _acc: account,
       name: topic.name
     };
     topic_fields.forEach((f) => {
@@ -97,13 +60,18 @@ const DB = function(onError, logger) {
   }
 
   function serializeUser(user) {
-    return {};
+    return {
+      _acc: account
+    };
   }
 
   function serializeMessage(topicName, msg) {
     // Serializable fields.
     const fields = ['topic', 'seq', 'ts', 'status', 'from', 'head', 'content'];
-    const res = {};
+    const res = {
+      _acc: account,
+      topic: topicName
+    };
     fields.forEach((f) => {
       if (msg.hasOwnProperty(f)) {
         res[f] = msg[f];
@@ -113,15 +81,15 @@ const DB = function(onError, logger) {
   }
 
   return {
+
     /**
-     * Open (and optionally create) indexedDB for the provided account.
-     * @param {string} account - UID of the account which owns the database.
+     * Initialize persistent cache: open or create/upgrade if needed.
      * @returns {Promise} promise to be resolved/rejected when the DB is initialized.
      */
-    initDatabase: function(account) {
+    initDatabase: function() {
       return new Promise((resolve, reject) => {
         // Open the database and initialize callbacks.
-        const req = indexedDB.open(`tinode_${account}`, DB_VERSION);
+        const req = indexedDB.open(`tinode-web`, DB_VERSION);
         req.onerror = (event) => {
           logger("PCache", "failed to initialize", event);
           reject(event.target.error);
@@ -146,32 +114,67 @@ const DB = function(onError, logger) {
             }
           };
 
+          // Individual object stores. All stores are keyed by account name.
+
           // Object store (table) for topics. The primary key is topic name.
           db.createObjectStore('topic', {
-            keyPath: 'name'
+            keyPath: ['_acc', 'name']
           });
 
           // Users object store. UID is the primary key.
           db.createObjectStore('user', {
-            keyPath: 'uid'
+            keyPath: ['_acc', 'uid']
           });
 
           // Messages object store. The primary key is topic name + seq.
           db.createObjectStore('message', {
-            keyPath: ['topic', 'seq']
+            keyPath: ['_acc', 'topic', 'seq']
           });
         };
       });
     },
 
     /**
-     * Delete currently open database.
+     * Delete currently initialized persistent cache.
+     *  @returns {Promise} promise to be resolved/rejected when the DB is initialized.
      */
     deleteDatabase: function() {
-      if (account) {
-        indexedDB.deleteDatabase(`tinode_${account}`);
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
       }
+      return new Promise((resolve, reject) => {
+        const trx = db.transaction(['topic', 'user', 'message'], 'readwrite');
+        trx.onsuccess = (event) => {
+          resolve(true);
+        };
+        trx.onerror = (event) => {
+          logger("PCache", "deleteDatabase", event.target.error);
+          reject(event.target.error);
+        };
+        // Deleting all messages of all topics for the given account. The range '-' .. '~' contains all ASCII characters.
+        trx.objectStore('message').delete(IDBKeyRange.bound([account, '-', 0], [account, '~', Number.MAX_SAFE_INTEGER]));
+        trx.objectStore('user').delete(IDBKeyRange.bound([account, '-'], [account, '~']));
+        trx.objectStore('topic').delete(IDBKeyRange.bound([account, '-'], [account, '~']));
+        trx.commit();
+      });
     },
+
+    /**
+     * Assign account for accessing the database.
+     * @param {string} acc - UID of the account to use for cache access.
+     */
+    useAccount: function(acc) {
+      account = acc;
+    },
+
+    /**
+     * Check if persistent cache is ready for use.
+     * @returns {boolean} <code>true</code> if cache is ready, <code>false</code> otherwise.
+     */
+    isReady: function() {
+      return account && db;
+    },
+
     // Topics.
     /**
      * Serialize topic and write to database.
@@ -180,6 +183,9 @@ const DB = function(onError, logger) {
      * @returns {Promise} promise resolved/rejected on operation completion.
      */
     addTopic: function(topic) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['topic'], 'readwrite');
         trx.onsuccess = (event) => {
@@ -200,6 +206,9 @@ const DB = function(onError, logger) {
      * @return {Promise} promise resolved/rejected on operation completion.
      */
     remTopic: function(name) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['topic', 'message'], 'readwrite');
         trx.onsuccess = (event) => {
@@ -209,8 +218,9 @@ const DB = function(onError, logger) {
           logger("PCache", "remTopic", event.target.error);
           reject(event.target.error);
         };
-        trx.objectStore('topic').delete(name);
-        trx.objectStore('message').delete(IDBKeyRange.bound([name, 0], [name, Number.MAX_SAFE_INTEGER]));
+        trx.objectStore('topic').delete(IDBKeyRange.only([account, name]));
+        trx.objectStore('message').delete(IDBKeyRange.bound([account, name, 0],
+          [account, name, Number.MAX_SAFE_INTEGER]));
         trx.commit();
       });
     },
@@ -221,6 +231,9 @@ const DB = function(onError, logger) {
      * @return {Promise} promise resolved/rejected on operation completion.
      */
     updTopic: function(topic) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['topic'], 'readwrite');
         trx.onsuccess = (event) => {
@@ -242,13 +255,16 @@ const DB = function(onError, logger) {
      * @return {Promise} promise resolved/rejected on operation completion.
      */
     mapTopics: function(callback, context) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['topic']);
         trx.onerror = (event) => {
           logger("PCache", "mapTopics", event.target.error);
           reject(event.target.error);
         };
-        trx.objectStore('topic').getAll().onsuccess = (event) => {
+        trx.objectStore('topic').getAll(IDBKeyRange.bound([account, '-'], [account, '~'])).onsuccess = (event) => {
           if (callback) {
             event.target.result.forEach((topic) => {
               callback.call(context, topic);
@@ -271,6 +287,9 @@ const DB = function(onError, logger) {
 
     // Users.
     addUser: function(user) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['user'], 'readwrite');
         trx.onsuccess = (event) => {
@@ -286,6 +305,9 @@ const DB = function(onError, logger) {
     },
 
     remUser: function(uid) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['user'], 'readwrite');
         trx.onsuccess = (event) => {
@@ -295,7 +317,7 @@ const DB = function(onError, logger) {
           logger("PCache", "remUser", event.target.error);
           reject(event.target.error);
         };
-        trx.objectStore('user').delete(uid);
+        trx.objectStore('user').delete(IDBKeyRange.only([account, uid]));
         trx.commit();
       });
     },
@@ -309,6 +331,9 @@ const DB = function(onError, logger) {
      * @return {Promise} promise resolved/rejected on operation completion.
      */
     addMessage: function(topicName, msg) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['message'], 'readwrite');
         trx.onsuccess = (event) => {
@@ -331,6 +356,9 @@ const DB = function(onError, logger) {
      * @return {Promise} promise resolved/rejected on operation completion.
      */
     updMessage: function(topicName, msg) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['message'], 'readwrite');
         trx.onsuccess = (event) => {
@@ -354,13 +382,16 @@ const DB = function(onError, logger) {
      * @return {Promise} promise resolved/rejected on operation completion.
      */
     remMessages: function(topicName, from, to) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
       return new Promise((resolve, reject) => {
         if (!from && !to) {
           from = 0;
           to = Number.MAX_SAFE_INTEGER;
         }
-        const range = to > 0 ? IDBKeyRange.bound([topicName, from], [topicName, to], false, true) :
-          IDBKeyRange.only([topicName, from]);
+        const range = to > 0 ? IDBKeyRange.bound([acount, topicName, from], [account, topicName, to], false, true) :
+          IDBKeyRange.only([account, topicName, from]);
         const trx = db.transaction(['message'], 'readwrite');
         trx.onsuccess = (event) => {
           resolve(event.target.result);
@@ -386,6 +417,9 @@ const DB = function(onError, logger) {
      * @return {Promise} promise resolved/rejected on operation completion.
      */
     readMessages: function(topicName, query, callback, context) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
       return new Promise((resolve, reject) => {
         query = query || {};
         const from = query.from > 0 ? query.from : 0;
@@ -393,7 +427,7 @@ const DB = function(onError, logger) {
         const limit = query.limit | 0;
 
         const result = [];
-        const range = IDBKeyRange.bound([topicName, from], [topicName, to], false, true);
+        const range = IDBKeyRange.bound([account, topicName, from], [account, topicName, to], false, true);
         const trx = db.transaction(['message']);
         trx.onerror = (event) => {
           logger("PCache", "readMessages", event.target.error);
