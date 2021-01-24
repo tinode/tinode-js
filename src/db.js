@@ -10,13 +10,12 @@
 'use strict';
 
 const DB_VERSION = 1;
+const DB_NAME = 'tinode-web';
 
 const DB = function(onError, logger) {
   onError = onError || function() {}
   logger = logger || function() {}
 
-  // Account which owns currently open database.
-  let account = null;
   // Placeholder DB which does nothing.
   let db = null;
 
@@ -27,7 +26,6 @@ const DB = function(onError, logger) {
 
   function serializeTopic(topic) {
     const res = {
-      _acc: account,
       name: topic.name
     };
     topic_fields.forEach((f) => {
@@ -60,16 +58,13 @@ const DB = function(onError, logger) {
   }
 
   function serializeUser(user) {
-    return {
-      _acc: account
-    };
+    return {};
   }
 
   function serializeMessage(topicName, msg) {
     // Serializable fields.
     const fields = ['topic', 'seq', 'ts', 'status', 'from', 'head', 'content'];
     const res = {
-      _acc: account,
       topic: topicName
     };
     fields.forEach((f) => {
@@ -81,7 +76,6 @@ const DB = function(onError, logger) {
   }
 
   return {
-
     /**
      * Initialize persistent cache: open or create/upgrade if needed.
      * @returns {Promise} promise to be resolved/rejected when the DB is initialized.
@@ -89,7 +83,7 @@ const DB = function(onError, logger) {
     initDatabase: function() {
       return new Promise((resolve, reject) => {
         // Open the database and initialize callbacks.
-        const req = indexedDB.open(`tinode-web`, DB_VERSION);
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onerror = (event) => {
           logger("PCache", "failed to initialize", event);
           reject(event.target.error);
@@ -114,57 +108,40 @@ const DB = function(onError, logger) {
             }
           };
 
-          // Individual object stores. All stores are keyed by account name.
+          // Individual object stores.
 
           // Object store (table) for topics. The primary key is topic name.
           db.createObjectStore('topic', {
-            keyPath: ['_acc', 'name']
+            keyPath: 'name'
           });
 
           // Users object store. UID is the primary key.
           db.createObjectStore('user', {
-            keyPath: ['_acc', 'uid']
+            keyPath: 'uid'
           });
 
           // Messages object store. The primary key is topic name + seq.
           db.createObjectStore('message', {
-            keyPath: ['_acc', 'topic', 'seq']
+            keyPath: ['topic', 'seq']
           });
         };
       });
     },
 
     /**
-     * Delete currently initialized persistent cache.
-     *  @returns {Promise} promise to be resolved/rejected when the DB is initialized.
+     * Delete persistent cache.
      */
     deleteDatabase: function() {
-      if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
-      }
       return new Promise((resolve, reject) => {
-        const trx = db.transaction(['topic', 'user', 'message'], 'readwrite');
-        trx.onsuccess = (event) => {
-          resolve(true);
-        };
-        trx.onerror = (event) => {
+        const req = indexedDB.deleteDatabase(DB_NAME);
+        req.onerror = function(event) {
           logger("PCache", "deleteDatabase", event.target.error);
           reject(event.target.error);
         };
-        // Deleting all messages of all topics for the given account. The range '-' .. '~' contains all ASCII characters.
-        trx.objectStore('message').delete(IDBKeyRange.bound([account, '-', 0], [account, '~', Number.MAX_SAFE_INTEGER]));
-        trx.objectStore('user').delete(IDBKeyRange.bound([account, '-'], [account, '~']));
-        trx.objectStore('topic').delete(IDBKeyRange.bound([account, '-'], [account, '~']));
-        trx.commit();
+        req.onsuccess = function(event) {
+          resolve(true);
+        };
       });
-    },
-
-    /**
-     * Assign account for accessing the database.
-     * @param {string} acc - UID of the account to use for cache access.
-     */
-    useAccount: function(acc) {
-      account = acc;
     },
 
     /**
@@ -172,7 +149,7 @@ const DB = function(onError, logger) {
      * @returns {boolean} <code>true</code> if cache is ready, <code>false</code> otherwise.
      */
     isReady: function() {
-      return account && db;
+      return !!db;
     },
 
     // Topics.
@@ -199,6 +176,7 @@ const DB = function(onError, logger) {
         trx.commit();
       });
     },
+
     /**
      * Remove topic from the database.
      * @memberOf DB
@@ -218,9 +196,8 @@ const DB = function(onError, logger) {
           logger("PCache", "remTopic", event.target.error);
           reject(event.target.error);
         };
-        trx.objectStore('topic').delete(IDBKeyRange.only([account, name]));
-        trx.objectStore('message').delete(IDBKeyRange.bound([account, name, 0],
-          [account, name, Number.MAX_SAFE_INTEGER]));
+        trx.objectStore('topic').delete(IDBKeyRange.only(name));
+        trx.objectStore('message').delete(IDBKeyRange.bound([name, 0], [name, Number.MAX_SAFE_INTEGER]));
         trx.commit();
       });
     },
@@ -264,7 +241,7 @@ const DB = function(onError, logger) {
           logger("PCache", "mapTopics", event.target.error);
           reject(event.target.error);
         };
-        trx.objectStore('topic').getAll(IDBKeyRange.bound([account, '-'], [account, '~'])).onsuccess = (event) => {
+        trx.objectStore('topic').getAll().onsuccess = (event) => {
           if (callback) {
             event.target.result.forEach((topic) => {
               callback.call(context, topic);
@@ -317,7 +294,7 @@ const DB = function(onError, logger) {
           logger("PCache", "remUser", event.target.error);
           reject(event.target.error);
         };
-        trx.objectStore('user').delete(IDBKeyRange.only([account, uid]));
+        trx.objectStore('user').delete(IDBKeyRange.only(uid));
         trx.commit();
       });
     },
@@ -390,8 +367,8 @@ const DB = function(onError, logger) {
           from = 0;
           to = Number.MAX_SAFE_INTEGER;
         }
-        const range = to > 0 ? IDBKeyRange.bound([acount, topicName, from], [account, topicName, to], false, true) :
-          IDBKeyRange.only([account, topicName, from]);
+        const range = to > 0 ? IDBKeyRange.bound([topicName, from], [topicName, to], false, true) :
+          IDBKeyRange.only([topicName, from]);
         const trx = db.transaction(['message'], 'readwrite');
         trx.onsuccess = (event) => {
           resolve(event.target.result);
@@ -427,7 +404,7 @@ const DB = function(onError, logger) {
         const limit = query.limit | 0;
 
         const result = [];
-        const range = IDBKeyRange.bound([account, topicName, from], [account, topicName, to], false, true);
+        const range = IDBKeyRange.bound([topicName, from], [topicName, to], false, true);
         const trx = db.transaction(['message']);
         trx.onerror = (event) => {
           logger("PCache", "readMessages", event.target.error);

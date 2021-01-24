@@ -1159,10 +1159,6 @@ var Tinode = function(config) {
   // API Key.
   this._apiKey = config.apiKey;
 
-  // Use indexDB for caching topics and messages.
-  this._persist = config.persist;
-  this._db = null;
-
   // Name and version of the browser.
   this._browser = '';
   this._platform = config.platform || 'web';
@@ -1273,6 +1269,40 @@ var Tinode = function(config) {
     topic._cacheDelSelf = () => {
       return cacheDel('topic', topic.name);
     }
+  }
+
+  // Use indexDB for caching topics and messages.
+  this._persist = config.persist;
+  // Initialize object regardless. It simplifies the code.
+  this._db = DB((err) => {
+    this.logger("DB", err);
+  }, this.logger);
+
+  if (this._persist) {
+    this.logger("Persistent cache enabled.");
+
+    // Create the persistent cache and read topics into memory.
+    this._db.initDatabase().then(() => {
+      // Load topics to memory.
+      return this._db.mapTopics((data) => {
+        let topic = this.cacheGet('topic', data.name);
+        if (topic) {
+          return;
+        }
+        if (data.name == TOPIC_ME) {
+          topic = new TopicMe();
+        } else if (data.name == TOPIC_FND) {
+          topic = new TopicFnd();
+        } else {
+          topic = new Topic(data.name);
+        }
+
+        this._db.deserializeTopic(topic, data);
+        this.cachePut('topic', data.name, topic);
+        this.attachCacheToTopic(topic);
+        topic._loadMessages();
+      });
+    });
   }
 
   // Resolve or reject a pending promise.
@@ -1473,41 +1503,6 @@ var Tinode = function(config) {
       };
     } else {
       this._authToken = null;
-    }
-
-    if (this._persist) {
-      this.logger("Persistent cache enabled.");
-
-      this._db = DB((err) => {
-        this.logger("DB", err);
-      }, this.logger);
-
-      return this._db.initDatabase(this._myUID).then(() => {
-        // Load topics to memory.
-        return this._db.mapTopics((data) => {
-          let topic = this.cacheGet('topic', data.name);
-          if (topic) {
-            return;
-          }
-          if (data.name == TOPIC_ME) {
-            topic = new TopicMe();
-          } else if (data.name == TOPIC_FND) {
-            topic = new TopicFnd();
-          } else {
-            topic = new Topic(data.name);
-          }
-
-          this._db.deserializeTopic(topic, data);
-          this.cachePut('topic', data.name, topic);
-          this.attachCacheToTopic(topic);
-          topic._loadMessages();
-        });
-      }).then(() => {
-        if (this.onLogin) {
-          this.onLogin(ctrl.code, ctrl.text);
-        }
-        return ctrl;
-      });
     }
 
     if (this.onLogin) {
