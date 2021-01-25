@@ -1151,8 +1151,9 @@ var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
  * @param {boolean} config.secure - Use Secure WebSocket if <code>true</code>.
  * @param {string} config.platform - Optional platform identifier, one of <code>"ios"</code>, <code>"web"</code>, <code>"android"</code>.
  * @param {boolen} config.persist - use indexDB persistent storage.
+ * @param {function} onComplete - callback to call when initialization is completed.
  */
-var Tinode = function(config) {
+var Tinode = function(config, onComplete) {
   // Client-provided application name, format <Name>/<version number>
   this._appName = config.appName || "Undefined";
 
@@ -1215,6 +1216,9 @@ var Tinode = function(config) {
   this._connection.logger = this.logger;
   Drafty.logger = this.logger;
 
+  // Timestamp of the most recent update to topics in cache.
+  this._lastTopicUpdate = null;
+
   // Tinode's cache of objects
   this._cache = {};
 
@@ -1264,6 +1268,9 @@ var Tinode = function(config) {
       return cacheDel('user', uid);
     };
     topic._cachePutSelf = () => {
+      if (topic.updated && topic.updated > this._lastTopicUpdate) {
+        this._lastTopicUpdate = topic.updated;
+      }
       return cachePut('topic', topic.name, topic);
     }
     topic._cacheDelSelf = () => {
@@ -1279,8 +1286,6 @@ var Tinode = function(config) {
   }, this.logger);
 
   if (this._persist) {
-    this.logger("Persistent cache enabled.");
-
     // Create the persistent cache and read topics into memory.
     this._db.initDatabase().then(() => {
       // Load topics to memory.
@@ -1298,9 +1303,14 @@ var Tinode = function(config) {
         }
 
         this._db.deserializeTopic(topic, data);
-        this.cachePut('topic', data.name, topic);
         this.attachCacheToTopic(topic);
+        topic._cachePutSelf();
         topic._loadMessages();
+      }).then(() => {
+        if (onComplete) {
+          onComplete();
+        }
+        this.logger("Persistent cache initialized.");
       });
     });
   }
@@ -1769,6 +1779,18 @@ Tinode.topicType = function(name) {
     'sys': 'sys'
   };
   return types[(typeof name == 'string') ? name.substring(0, 3) : 'xxx'];
+};
+
+/**
+ * Check if the given topic name is a name of a 'me' topic.
+ * @memberof Tinode
+ * @static
+ *
+ * @param {string} name - Name of the topic to test.
+ * @returns {boolean} <code>true</code> if the name is a name of a 'me' topic, <code>false</code> otherwise.
+ */
+Tinode.isMeTopicName = function(name) {
+  return Tinode.topicType(name) == 'me';
 };
 
 /**
@@ -2659,8 +2681,8 @@ Tinode.prototype = {
       }
       // Cache management.
       this._db.addTopic(topic);
-      this.cachePut('topic', topicName, topic);
       this.attachCacheToTopic(topic);
+      topic._cachePutSelf();
     }
     return topic;
   },
@@ -2942,11 +2964,24 @@ var MetaGetBuilder = function(parent) {
 
 MetaGetBuilder.prototype = {
 
-  // Get latest timestamp
-  _get_ims: function() {
-    const cupd = this.topic && this.topic.updated;
+  // Get timestamp of the most recent desc update.
+  _get_desc_ims: function() {
     const tupd = this.topic._lastDescUpdate || 0;
-    return cupd > tupd ? cupd : tupd;
+    return this.topic.updated > tupd ? this.topic.updated : tupd;
+  },
+
+  // Get timestamp of the most recent subs update.
+  _get_subs_ims: function() {
+    if (this.topic.isP2PType()) {
+      return this._get_desc_ims();
+    }
+    if (this.topic.isMeType()) {
+      const gupd = this.topic._tinode._lastTopicUpdate || 0;
+      if (gupd > this.topic._lastSubsUpdate) {
+        return gupd;
+      }
+    }
+    return this.topic._lastSubsUpdate;
   },
 
   /**
@@ -3013,7 +3048,7 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <code>this</code> object.
    */
   withLaterDesc: function() {
-    return this.withDesc(this._get_ims());
+    return this.withDesc(this._get_desc_ims());
   },
 
   /**
@@ -3074,9 +3109,7 @@ MetaGetBuilder.prototype = {
    * @returns {Tinode.MetaGetBuilder} <code>this</code> object.
    */
   withLaterSub: function(limit) {
-    return this.withSub(this.topic.isP2P() ?
-      this._get_ims() : this.topic._lastSubsUpdate,
-      limit);
+    return this.withSub(this._get_subs_ims(), limit);
   },
 
   /**
@@ -4394,7 +4427,7 @@ Topic.prototype = {
    * @return {Object} peer's description or undefined.
    */
   p2pPeerDesc: function() {
-    if (!this.isP2P()) {
+    if (!this.isP2PType()) {
       return undefined;
     }
     return this._users[this.name];
@@ -4515,8 +4548,8 @@ Topic.prototype = {
    * The current user is excluded from the count.
    * @memberof Tinode.Topic#
    *
-   * @param {number} seq - Message id to check.
-   * @returns {number} Number of subscribers who claim to have received the message.
+   * @param {number} seq - message id to check.
+   * @returns {number} number of subscribers who claim to have received the message.
    */
   msgReadCount: function(seq) {
     return this.msgReceiptCount('read', seq);
@@ -4538,11 +4571,11 @@ Topic.prototype = {
    * Check if cached message IDs indicate that the server may have more messages.
    * @memberof Tinode.Topic#
    *
-   * @param {boolean} newer check for newer messages
+   * @param {boolean} newer - if <code>true</code>, check for newer messages only.
    */
   msgHasMoreMessages: function(newer) {
     return newer ? this.seq > this._maxSeq :
-      // _minSeq cound be more than 1, but earlier messages could have been deleted.
+      // _minSeq could be more than 1, but earlier messages could have been deleted.
       (this._minSeq > 1 && !this._noEarlierMsgs);
   },
 
@@ -4622,7 +4655,7 @@ Topic.prototype = {
    *
    * @param {number} seqId id of the message to stop sending and remove from cache.
    *
-   * @returns {boolean} true if message was cancelled, false otherwise.
+   * @returns {boolean} <code>true</code> if message was cancelled, <code>false</code> otherwise.
    */
   cancelSend: function(seqId) {
     const idx = this._messages.find({
@@ -4700,19 +4733,29 @@ Topic.prototype = {
    * Check if topic is archived, i.e. private.arch == true.
    * @memberof Tinode.Topic#
    *
-   * @returns {boolean} - true if topic is archived, false otherwise.
+   * @returns {boolean} - <code>true</code> if topic is archived, <code>false</code> otherwise.
    */
   isArchived: function() {
     return this.private && this.private.arch ? true : false;
   },
 
   /**
+   * Check if topic is a 'me' topic.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} - <code>true</code> if topic is a 'me' topic, <code>false</code> otherwise.
+   */
+  isMeType: function() {
+    return Tinode.isMeTopicName(this.name);
+  },
+
+  /**
    * Check if topic is a channel.
    * @memberof Tinode.Topic#
    *
-   * @returns {boolean} - true if topic is a channel, false otherwise.
+   * @returns {boolean} - <code>true</code> if topic is a channel, <code>false</code> otherwise.
    */
-  isChannel: function() {
+  isChannelType: function() {
     return Tinode.isChannelTopicName(this.name);
   },
 
@@ -4720,9 +4763,9 @@ Topic.prototype = {
    * Check if topic is a group topic.
    * @memberof Tinode.Topic#
    *
-   * @returns {boolean} - true if topic is a group, false otherwise.
+   * @returns {boolean} - <code>true</code> if topic is a group, <code>false</code> otherwise.
    */
-  isGroup: function() {
+  isGroupType: function() {
     return Tinode.isGroupTopicName(this.name);
   },
 
@@ -4730,9 +4773,9 @@ Topic.prototype = {
    * Check if topic is a p2p topic.
    * @memberof Tinode.Topic#
    *
-   * @returns {boolean} - true if topic is a p2p topic, false otherwise.
+   * @returns {boolean} - <code>true</code> if topic is a p2p topic, <code>false</code> otherwise.
    */
-  isP2P: function() {
+  isP2PType: function() {
     return Tinode.isP2PTopicName(this.name);
   },
 
@@ -4740,9 +4783,9 @@ Topic.prototype = {
    * Check if topic is a communication topic, i.e. a group or p2p topic.
    * @memberof Tinode.Topic#
    *
-   * @returns {boolean} - true if topic is a p2p or group topic, false otherwise.
+   * @returns {boolean} - <code>true</code> if topic is a p2p or group topic, <code>false</code> otherwise.
    */
-  isComm: function() {
+  isCommType: function() {
     return Tinode.isCommTopicName(this.name);
   },
 
@@ -4802,7 +4845,7 @@ Topic.prototype = {
     }
 
     // Update locally cached contact with the new message count.
-    const what = ((!this.isChannel() && !data.from) || this._tinode.isMe(data.from)) ? 'read' : 'msg';
+    const what = ((!this.isChannelType() && !data.from) || this._tinode.isMe(data.from)) ? 'read' : 'msg';
     const updated = this._updateReadRecv(what, data.seq, data.ts);
     const me = this._tinode.getMeTopic();
     if (updated && me.onContactUpdate) {
@@ -4929,7 +4972,7 @@ Topic.prototype = {
   _processMetaDesc: function(desc) {
     // Synthetic desc may include defacs for p2p topics which is useless.
     // Remove it.
-    if (this.isP2P()) {
+    if (this.isP2PType()) {
       delete desc.defacs;
     }
 
@@ -5486,8 +5529,9 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             dummy.topic = pres.src;
             dummy.online = false;
             dummy.acs = acs;
+            this._tinode.attachCacheToTopic(dummy);
+            dummy._cachePutSelf();
             this._db.addTopic(dummy);
-            this._tinode.cachePut('topic', pres.src, dummy);
           }
         } else if (pres.what == 'tags') {
           this.getMeta(this.startMetaQuery().withTags().build());
@@ -5567,7 +5611,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   contacts: {
     value: function(callback, filter, context) {
       this._tinode.cacheMap('topic', (c, idx) => {
-        if (c.isComm() && (!filter || filter(c))) {
+        if (c.isCommType() && (!filter || filter(c))) {
           callback.call(context, c, idx);
         }
       });

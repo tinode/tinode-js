@@ -95,7 +95,6 @@ const DB = function(onError, logger) {
         req.onsuccess = (event) => {
           db = event.target.result;
           resolve(db);
-          logger("PCache", "initialized");
         };
 
         req.onupgradeneeded = function(event) {
