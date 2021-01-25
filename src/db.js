@@ -419,6 +419,8 @@ const DB = function(onError, logger) {
             result.push(cursor.value);
             if (limit <= 0 || result.length < limit) {
               cursor.continue();
+            } else {
+              resolve(result);
             }
           } else {
             resolve(result);

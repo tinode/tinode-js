@@ -1288,6 +1288,8 @@ var Tinode = function(config, onComplete) {
   if (this._persist) {
     // Create the persistent cache and read topics into memory.
     this._db.initDatabase().then(() => {
+      // Store promises to be resolved when messages load into memory.
+      const msgs = [];
       // Load topics to memory.
       return this._db.mapTopics((data) => {
         let topic = this.cacheGet('topic', data.name);
@@ -1305,7 +1307,11 @@ var Tinode = function(config, onComplete) {
         this._db.deserializeTopic(topic, data);
         this.attachCacheToTopic(topic);
         topic._cachePutSelf();
-        topic._loadMessages();
+        // Request to load messages and save the promise.
+        msgs.push(topic._loadMessages(this._db));
+      }).then(() => {
+        // Wait for all messages to load.
+        return Promise.all(msgs);
       }).then(() => {
         if (onComplete) {
           onComplete();
@@ -5224,8 +5230,8 @@ Topic.prototype = {
   },
 
   // Load most recent messages from persistent cache.
-  _loadMessages: function() {
-    return this._tinode._db.readMessages(this.name, {
+  _loadMessages: function(db) {
+    return db.readMessages(this.name, {
         limit: DEFAULT_MESSAGES_PAGE
       })
       .then((msgs) => {
@@ -5240,6 +5246,7 @@ Topic.prototype = {
         });
 
         this._updateDeletedRanges();
+        return this.name;
       });
   }
 };
