@@ -9,7 +9,7 @@
  */
 'use strict';
 
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const DB_NAME = 'tinode-web';
 
 const DB = function(onError, logger) {
@@ -57,7 +57,8 @@ const DB = function(onError, logger) {
     }
   }
 
-  function serializeUser(user) {
+  function serializeSubscription(sub) {
+    const fields = ['topic', 'uid', 'updated', 'mode', 'read', 'recv', 'clear', 'lastSeen', 'userAgent'];
     return {};
   }
 
@@ -119,6 +120,11 @@ const DB = function(onError, logger) {
             keyPath: 'uid'
           });
 
+          // Subscriptions object store topic <-> user. Topic name + UID is the primary key.
+          db.createObjectStore('subscription', {
+            keyPath: ['topic', 'uid']
+          });
+
           // Messages object store. The primary key is topic name + seq.
           db.createObjectStore('message', {
             keyPath: ['topic', 'seq']
@@ -177,7 +183,7 @@ const DB = function(onError, logger) {
     },
 
     /**
-     * Remove topic from the database.
+     * Remove topic from persistent cache.
      * @memberOf DB
      * @param {string} name - name of the topic to remove from database.
      * @return {Promise} promise resolved/rejected on operation completion.
@@ -262,7 +268,14 @@ const DB = function(onError, logger) {
     },
 
     // Users.
-    addUser: function(user) {
+    /**
+     * Add or update user object in the persistent cache.
+     * @memberOf DB
+     * @param {string} uid - ID of the user to save.
+     * @param {Object} public - user's <code>public</code> information.
+     * @returns {Promise} promise resolved/rejected on operation completion.
+     */
+    addUser: function(uid, public) {
       if (!this.isReady()) {
         return Promise.reject(new Error("not initialized"));
       }
@@ -275,11 +288,21 @@ const DB = function(onError, logger) {
           logger("PCache", "addUser", event.target.error);
           reject(event.target.error);
         };
-        trx.objectStore('user').add(serializeUser(user));
+        const user = {uid: uid};
+        if (arguments.length > 1 && public !== undefined) {
+          user.public = public;
+        }
+        trx.objectStore('user').put(user);
         trx.commit();
       });
     },
 
+    /**
+     * Remove user from persistent cache.
+     * @memberOf DB
+     * @param {string} uid - ID of the user to remove from the cache.
+     * @return {Promise} promise resolved/rejected on operation completion.
+     */
     remUser: function(uid) {
       if (!this.isReady()) {
         return Promise.reject(new Error("not initialized"));
@@ -295,6 +318,30 @@ const DB = function(onError, logger) {
         };
         trx.objectStore('user').delete(IDBKeyRange.only(uid));
         trx.commit();
+      });
+    },
+
+    /**
+     * Read a single user from persistent cache.
+     * @memberOf DB
+     * @param {string} uid - ID of the user to fetch from cache.
+     * @return {Promise} promise resolved/rejected on operation completion.
+     */
+    getUser: function(uid) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
+      return new Promise((resolve, reject) => {
+        const trx = db.transaction(['user']);
+        trx.onsuccess = (event) => {
+          const user = event.target.result;
+          resolve({user: user.uid, public: user.public});
+        };
+        trx.onerror = (event) => {
+          logger("PCache", "getUser", event.target.error);
+          reject(event.target.error);
+        };
+        trx.objectStore('user').get(uid);
       });
     },
 
