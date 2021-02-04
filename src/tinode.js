@@ -2686,7 +2686,7 @@ Tinode.prototype = {
         topic = new Topic(topicName);
       }
       // Cache management.
-      this._db.addTopic(topic);
+      this._db.updTopic(topic);
       this.attachCacheToTopic(topic);
       topic._cachePutSelf();
     }
@@ -3904,7 +3904,7 @@ Topic.prototype = {
       pub.noecho = true;
       // Add to cache.
       this._messages.put(pub);
-      this._tinode._db.addMessage(this.name, pub);
+      this._tinode._db.addMessage(pub);
 
       if (this.onData) {
         this.onData(pub);
@@ -4322,9 +4322,9 @@ Topic.prototype = {
       this._updateReadRecv(what, seq);
 
       const me = this._tinode.getMeTopic();
-      if (this.acs != null && !this.acs.isMuted() && me.onContactUpdate) {
+      if (this.acs != null && !this.acs.isMuted()) {
         // Sent a notification to 'me' listeners.
-        me.onContactUpdate(what, this);
+        me.this._refreshContact(what, this);
       }
     }
   },
@@ -4630,7 +4630,7 @@ Topic.prototype = {
       // Add message with the new seq ID.
       pub.seq = newSeqId;
       this._messages.put(pub);
-      this._tinode._db.addMessage(this.name, pub);
+      this._tinode._db.addMessage(pub);
     }
   },
 
@@ -4800,10 +4800,12 @@ Topic.prototype = {
    * of this topic.
    * @memberof Tinode.Topic#
    *
-   * @param {Message} msg message to check for status.
+   * @param {Message} msg - message to check for status.
+   * @param {boolean} upd - update chached message status.
+   *
    * @returns message status constant.
    */
-  msgStatus: function(msg) {
+  msgStatus: function(msg, upd) {
     let status = MESSAGE_STATUS_NONE;
     if (this._tinode.isMe(msg.from)) {
       if (msg._sending) {
@@ -4822,6 +4824,12 @@ Topic.prototype = {
     } else {
       status = MESSAGE_STATUS_TO_ME;
     }
+
+    if (upd && msg._status != status) {
+      msg._status = status;
+      this._tinode._db.updMessageStatus(this.name, msg.seq, status);
+    }
+
     return status;
   },
 
@@ -4842,7 +4850,7 @@ Topic.prototype = {
 
     if (!data._noForwarding) {
       this._messages.put(data);
-      this._tinode._db.addMessage(this.name, data);
+      this._tinode._db.addMessage(data);
       this._updateDeletedRanges();
     }
 
@@ -4854,9 +4862,9 @@ Topic.prototype = {
     const what = ((!this.isChannelType() && !data.from) || this._tinode.isMe(data.from)) ? 'read' : 'msg';
     const updated = this._updateReadRecv(what, data.seq, data.ts);
     const me = this._tinode.getMeTopic();
-    if (updated && me.onContactUpdate) {
+    if (updated) {
       // Notify 'me' listeners of the change.
-      me.onContactUpdate(what, this);
+      me._refreshContact(what, this);
     }
   },
 
@@ -4956,17 +4964,16 @@ Topic.prototype = {
           user.recv = user.read;
         }
       }
+      const msg = this.latestMessage();
+      this.msgStatus(msg, true);
 
-      // If this is an update from the current user, update the cache with the new count and notify 'me' listener.
+      // If this is an update from the current user, update the cache with the new count.
       if (this._tinode.isMe(info.from)) {
-        const updated = this._updateReadRecv(info.what, info.seq);
-        if (updated) {
-          const me = this._tinode.getMeTopic();
-          if (me.onContactUpdate) {
-            me.onContactUpdate(info.what, this);
-          }
-        }
+        this._updateReadRecv(info.what, info.seq);
       }
+
+      // Notify 'me' listener of the status change.
+      this._tinode.getMeTopic()._refreshContact(info.what, this);
     }
     if (this.onInfo) {
       this.onInfo(info);
@@ -4976,16 +4983,21 @@ Topic.prototype = {
   // Called by Tinode when meta.desc packet is received.
   // Called by 'me' topic on contact update (desc._noForwarding is true).
   _processMetaDesc: function(desc) {
-    // Synthetic desc may include defacs for p2p topics which is useless.
-    // Remove it.
     if (this.isP2PType()) {
+      // Synthetic desc may include defacs for p2p topics which is useless.
+      // Remove it.
       delete desc.defacs;
+
+      // Update to p2p desc is the same as user update. Update cached user.
+      this._tinode._db.updUser(this.name, desc.public);
     }
 
     // Copy parameters from desc object to this topic.
     mergeObj(this, desc);
     // Make sure date fields are Date().
     stringToDate(this);
+    // Update persistent cache.
+    this._tinode._db.updTopic(this);
 
     // Notify 'me' listener, if available:
     if (this.name !== TOPIC_ME && !desc._noForwarding) {
@@ -5278,6 +5290,8 @@ TopicMe.prototype = Object.create(Topic.prototype, {
 
       // Copy parameters from desc object to this topic.
       mergeObj(this, desc);
+      this._tinode._db.updTopic(this);
+
       // String datetime headers to Date() objects.
       stringToDate(this);
 
@@ -5293,9 +5307,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
                 when: new Date()
               };
             }
-            if (this.onContactUpdate) {
-              this.onContactUpdate('off', cont);
-            }
+            this._refreshContact('off', cont);
           }
         });
       }
@@ -5345,6 +5357,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
 
           if (Tinode.isP2PTopicName(topicName)) {
             this._cachePutUser(topicName, cont);
+            this._tinode._db.updUser(topicName, cont.public);
           }
           // Notify topic of the update if it's an external update.
           if (!sub._noForwarding) {
@@ -5503,6 +5516,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           case 'gone':
             // topic deleted or unsubscribed from.
             this._tinode.cacheDel('topic', pres.src);
+            this._tinode._db.remTopic(pres.src);
             break;
           case 'del':
             // Update topic.del value.
@@ -5511,9 +5525,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             this._tinode.logger("INFO: Unsupported presence update in 'me'", pres.what);
         }
 
-        if (this.onContactUpdate) {
-          this.onContactUpdate(pres.what, cont);
-        }
+        this._refreshContact(pres.what, cont);
       } else {
         if (pres.what == 'acs') {
           // New subscriptions and deleted/banned subscriptions have full
@@ -5538,7 +5550,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             dummy.acs = acs;
             this._tinode.attachCacheToTopic(dummy);
             dummy._cachePutSelf();
-            this._db.addTopic(dummy);
+            this._db.updTopic(dummy);
           }
         } else if (pres.what == 'tags') {
           this.getMeta(this.startMetaQuery().withTags().build());
@@ -5547,6 +5559,17 @@ TopicMe.prototype = Object.create(Topic.prototype, {
 
       if (this.onPres) {
         this.onPres(pres);
+      }
+    },
+    enumerable: true,
+    configurable: true
+  },
+
+  // Contact is updated, execute callbacks.
+  _refreshContact: {
+    value: function(what, cont) {
+      if (this.onContactUpdate) {
+        this.onContactUpdate(what, cont);
       }
     },
     enumerable: true,

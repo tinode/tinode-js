@@ -9,7 +9,7 @@
  */
 'use strict';
 
-const DB_VERSION = 2;
+const DB_VERSION = 1;
 const DB_NAME = 'tinode-web';
 
 const DB = function(onError, logger) {
@@ -24,25 +24,26 @@ const DB = function(onError, logger) {
     'creds', 'public', 'private', 'touched'
   ];
 
-  function serializeTopic(topic) {
-    const res = {
-      name: topic.name
+  // Copy values from 'src' to 'dst'. Allocate dst if 'it's null or undefined.
+  function serializeTopic(dst, src) {
+    const res = dst || {
+      name: src.name
     };
     topic_fields.forEach((f) => {
-      if (topic.hasOwnProperty(f)) {
-        res[f] = topic[f];
+      if (src.hasOwnProperty(f)) {
+        res[f] = src[f];
       }
     });
-    if (Array.isArray(topic._tags)) {
-      res.tags = topic._tags;
+    if (Array.isArray(src._tags)) {
+      res.tags = src._tags;
     }
-    if (topic.acs) {
-      res.acs = topic.getAccessMode().jsonHelper();
+    if (src.acs) {
+      res.acs = src.getAccessMode().jsonHelper();
     }
     return res;
   }
 
-  // Copy data from src to topic.
+  // Copy data from src to Topic object.
   function deserializeTopic(topic, src) {
     topic_fields.forEach((f) => {
       if (src.hasOwnProperty(f)) {
@@ -57,22 +58,32 @@ const DB = function(onError, logger) {
     }
   }
 
-  function serializeSubscription(sub) {
-    const fields = ['topic', 'uid', 'updated', 'mode', 'read', 'recv', 'clear', 'lastSeen', 'userAgent'];
-    return {};
+  function serializeSubscription(dst, topicName, uid, sub) {
+    const fields = ['updated', 'mode', 'read', 'recv', 'clear', 'lastSeen', 'userAgent'];
+    const res = dst || {
+      topic: topicName,
+      uid: uid
+    };
+
+    fields.forEach((f) => {
+      if (sub.hasOwnProperty(f)) {
+        res[f] = sub[f];
+      }
+    });
+
+    return res;
   }
 
-  function serializeMessage(topicName, msg) {
+  function serializeMessage(dst, msg) {
     // Serializable fields.
-    const fields = ['topic', 'seq', 'ts', 'status', 'from', 'head', 'content'];
-    const res = {
-      topic: topicName
-    };
+    const fields = ['topic', 'seq', 'ts', '_status', 'from', 'head', 'content'];
+    const res = dst || {};
     fields.forEach((f) => {
       if (msg.hasOwnProperty(f)) {
         res[f] = msg[f];
       }
     });
+    console.log("serializeMessage", res);
     return res;
   }
 
@@ -85,6 +96,10 @@ const DB = function(onError, logger) {
       return new Promise((resolve, reject) => {
         // Open the database and initialize callbacks.
         const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onsuccess = (event) => {
+          db = event.target.result;
+          resolve(db);
+        };
         req.onerror = (event) => {
           logger("PCache", "failed to initialize", event);
           reject(event.target.error);
@@ -92,12 +107,6 @@ const DB = function(onError, logger) {
             onError(event.target.error);
           }
         };
-
-        req.onsuccess = (event) => {
-          db = event.target.result;
-          resolve(db);
-        };
-
         req.onupgradeneeded = function(event) {
           db = event.target.result;
 
@@ -139,12 +148,12 @@ const DB = function(onError, logger) {
     deleteDatabase: function() {
       return new Promise((resolve, reject) => {
         const req = indexedDB.deleteDatabase(DB_NAME);
+        req.onsuccess = function(event) {
+          resolve(true);
+        };
         req.onerror = function(event) {
           logger("PCache", "deleteDatabase", event.target.error);
           reject(event.target.error);
-        };
-        req.onsuccess = function(event) {
-          resolve(true);
         };
       });
     },
@@ -159,26 +168,29 @@ const DB = function(onError, logger) {
 
     // Topics.
     /**
-     * Serialize topic and write to database.
+     * Add or update topic in persistent cache.
      * @memberOf DB
      * @param {Topic} topic - topic to be added to persistent storage.
      * @returns {Promise} promise resolved/rejected on operation completion.
      */
-    addTopic: function(topic) {
+    updTopic: function(topic) {
       if (!this.isReady()) {
         return Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['topic'], 'readwrite');
-        trx.onsuccess = (event) => {
+        trx.oncomplete = (event) => {
           resolve(event.target.result);
         };
         trx.onerror = (event) => {
-          logger("PCache", "addTopic", event.target.error);
+          logger("PCache", "updTopic", event.target.error);
           reject(event.target.error);
         };
-        trx.objectStore('topic').add(serializeTopic(topic));
-        trx.commit();
+        const req = trx.objectStore('topic').get(topic.name);
+        req.onsuccess = (event) => {
+          trx.objectStore('topic').put(serializeTopic(req.result, topic));
+          trx.commit();
+        };
       });
     },
 
@@ -193,8 +205,8 @@ const DB = function(onError, logger) {
         return Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
-        const trx = db.transaction(['topic', 'message'], 'readwrite');
-        trx.onsuccess = (event) => {
+        const trx = db.transaction(['topic', 'subscription', 'message'], 'readwrite');
+        trx.oncomplete = (event) => {
           resolve(event.target.result);
         };
         trx.onerror = (event) => {
@@ -202,33 +214,12 @@ const DB = function(onError, logger) {
           reject(event.target.error);
         };
         trx.objectStore('topic').delete(IDBKeyRange.only(name));
+        trx.objectStore('subscription').delete(IDBKeyRange.bound([name, '-'], [name, '~']));
         trx.objectStore('message').delete(IDBKeyRange.bound([name, 0], [name, Number.MAX_SAFE_INTEGER]));
         trx.commit();
       });
     },
-    /**
-     * Update stored topic.
-     * @memberOf DB
-     * @param {Topic} topic - topic to update.
-     * @return {Promise} promise resolved/rejected on operation completion.
-     */
-    updTopic: function(topic) {
-      if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
-      }
-      return new Promise((resolve, reject) => {
-        const trx = db.transaction(['topic'], 'readwrite');
-        trx.onsuccess = (event) => {
-          resolve(event.target.result);
-        };
-        trx.onerror = (event) => {
-          logger("PCache", "updTopic", event.target.error);
-          reject(event.target.error);
-        };
-        trx.objectStore('topic').put(serializeTopic(topic));
-        trx.commit();
-      });
-    },
+
     /**
      * Execute a callback for each stored topic.
      * @memberOf DB
@@ -272,27 +263,30 @@ const DB = function(onError, logger) {
      * Add or update user object in the persistent cache.
      * @memberOf DB
      * @param {string} uid - ID of the user to save.
-     * @param {Object} public - user's <code>public</code> information.
+     * @param {Object} pub - user's <code>public</code> information.
      * @returns {Promise} promise resolved/rejected on operation completion.
      */
-    addUser: function(uid, public) {
+    updUser: function(uid, pub) {
+      if (arguments.length < 2 || pub === undefined) {
+        // No point inupdating user with invalid data.
+        return;
+      }
       if (!this.isReady()) {
         return Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['user'], 'readwrite');
-        trx.onsuccess = (event) => {
+        trx.oncomplete = (event) => {
           resolve(event.target.result);
         };
         trx.onerror = (event) => {
-          logger("PCache", "addUser", event.target.error);
+          logger("PCache", "updUser", event.target.error);
           reject(event.target.error);
         };
-        const user = {uid: uid};
-        if (arguments.length > 1 && public !== undefined) {
-          user.public = public;
-        }
-        trx.objectStore('user').put(user);
+        trx.objectStore('user').put({
+          uid: uid,
+          public: pub
+        });
         trx.commit();
       });
     },
@@ -309,7 +303,7 @@ const DB = function(onError, logger) {
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['user'], 'readwrite');
-        trx.onsuccess = (event) => {
+        trx.oncomplete = (event) => {
           resolve(event.target.result);
         };
         trx.onerror = (event) => {
@@ -333,9 +327,12 @@ const DB = function(onError, logger) {
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['user']);
-        trx.onsuccess = (event) => {
+        trx.oncomplete = (event) => {
           const user = event.target.result;
-          resolve({user: user.uid, public: user.public});
+          resolve({
+            user: user.uid,
+            public: user.public
+          });
         };
         trx.onerror = (event) => {
           logger("PCache", "getUser", event.target.error);
@@ -345,7 +342,67 @@ const DB = function(onError, logger) {
       });
     },
 
+    // Subscriptions.
+
+    /**
+     * Add or update subscription in persistent cache.
+     * @memberOf DB
+     * @param {string} topicName - name of the topic which owns the message.
+     * @param {string} uid - ID of the subscribed user.
+     * @param {Object} sub - subscription to save.
+     * @return {Promise} promise resolved/rejected on operation completion.
+     */
+    updSubscription: function(topicName, uid, sub) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
+      return new Promise((resolve, reject) => {
+        const trx = db.transaction(['subscription'], 'readwrite');
+        trx.oncomplete = (event) => {
+          resolve(event.target.result);
+        };
+        trx.onerror = (event) => {
+          logger("PCache", "updSubscription", event.target.error);
+          reject(event.target.error);
+        };
+        trx.objectStore('subscription').get([topicName, uid]).onsuccess = (event) => {
+          trx.objectStore('subscription').put(serializeSubscription(event.target.result, topicName, uid, sub));
+          trx.commit();
+        };
+      });
+    },
+
+    /**
+     * Execute a callback for each cached subscription in a given topic.
+     * @memberOf DB
+     * @param {string} topicName - name of the topic which owns the subscriptions.
+     * @param {function} callback - function to call for each subscription.
+     * @param {Object} context - the value or <code>this</code> inside the callback.
+     * @return {Promise} promise resolved/rejected on operation completion.
+     */
+    mapSubscriptions: function(topicName, callback, context) {
+      if (!this.isReady()) {
+        return Promise.reject(new Error("not initialized"));
+      }
+      return new Promise((resolve, reject) => {
+        const trx = db.transaction(['subscription']);
+        trx.onerror = (event) => {
+          logger("PCache", "mapSubscriptions", event.target.error);
+          reject(event.target.error);
+        };
+        trx.objectStore('subscription').getAll(IDBKeyRange.bound([topicName, '-'], [topicName, '~'])).onsuccess = (event) => {
+          if (callback) {
+            event.target.result.forEach((topic) => {
+              callback.call(context, topic);
+            });
+          }
+          resolve(event.target.result);
+        };
+      });
+    },
+
     // Messages.
+
     /**
      * Save message to persistent cache.
      * @memberOf DB
@@ -353,7 +410,7 @@ const DB = function(onError, logger) {
      * @param {Object} msg - message to save.
      * @return {Promise} promise resolved/rejected on operation completion.
      */
-    addMessage: function(topicName, msg) {
+    addMessage: function(msg) {
       if (!this.isReady()) {
         return Promise.reject(new Error("not initialized"));
       }
@@ -366,19 +423,20 @@ const DB = function(onError, logger) {
           logger("PCache", "addMesssage", event.target.error);
           reject(event.target.error);
         };
-        trx.objectStore('message').add(serializeMessage(topicName, msg));
+        trx.objectStore('message').add(serializeMessage(null, msg));
         trx.commit();
       });
     },
 
     /**
-     * Update message stored in persistent cache.
+     * Update delivery status of a message stored in persistent cache.
      * @memberOf DB
      * @param {string} topicName - name of the topic which owns the message.
-     * @param {Object} msg - message to update.
+     * @param {number} seq - ID of the message to update
+     * @param {number} status - new delivery status of the message.
      * @return {Promise} promise resolved/rejected on operation completion.
      */
-    updMessage: function(topicName, msg) {
+    updMessageStatus: function(topicName, seq, status) {
       if (!this.isReady()) {
         return Promise.reject(new Error("not initialized"));
       }
@@ -388,11 +446,23 @@ const DB = function(onError, logger) {
           resolve(event.target.result);
         };
         trx.onerror = (event) => {
-          logger("PCache", "updMessage", event.target.error);
+          logger("PCache", "updMessageStatus", event.target.error);
           reject(event.target.error);
         };
-        trx.objectStore('message').put(serializeMessage(topicName, msg));
-        trx.commit();
+        const req = trx.objectStore('message').get(IDBKeyRange.only([topicName, seq]));
+        req.onsuccess = (event) => {
+          const src = req.result || event.target.result;
+          if (!src || src._status == status) {
+            trx.commit();
+            return;
+          }
+          trx.objectStore('message').put(serializeMessage(src, {
+            topic: topicName,
+            seq: seq,
+            _status: status
+          }));
+          trx.commit();
+        };
       });
     },
 
