@@ -4860,12 +4860,9 @@ Topic.prototype = {
 
     // Update locally cached contact with the new message count.
     const what = ((!this.isChannelType() && !data.from) || this._tinode.isMe(data.from)) ? 'read' : 'msg';
-    const updated = this._updateReadRecv(what, data.seq, data.ts);
-    const me = this._tinode.getMeTopic();
-    if (updated) {
-      // Notify 'me' listeners of the change.
-      me._refreshContact(what, this);
-    }
+    this._updateReadRecv(what, data.seq, data.ts);
+    // Notify 'me' listeners of the change.
+    this._tinode.getMeTopic()._refreshContact(what, this);
   },
 
   // Process metadata message
