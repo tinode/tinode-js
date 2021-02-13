@@ -4324,7 +4324,7 @@ Topic.prototype = {
       const me = this._tinode.getMeTopic();
       if (this.acs != null && !this.acs.isMuted()) {
         // Sent a notification to 'me' listeners.
-        me.this._refreshContact(what, this);
+        me._refreshContact(what, this);
       }
     }
   },
@@ -4962,7 +4962,9 @@ Topic.prototype = {
         }
       }
       const msg = this.latestMessage();
-      this.msgStatus(msg, true);
+      if (msg) {
+        this.msgStatus(msg, true);
+      }
 
       // If this is an update from the current user, update the cache with the new count.
       if (this._tinode.isMe(info.from)) {
