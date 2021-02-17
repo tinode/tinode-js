@@ -83,7 +83,6 @@ const DB = function(onError, logger) {
         res[f] = msg[f];
       }
     });
-    console.log("serializeMessage", res);
     return res;
   }
 
