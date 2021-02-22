@@ -2194,19 +2194,21 @@ Tinode.prototype = {
    * the deviceToken can be sent to the server.
    *
    * @memberof Tinode#
-   * @param {string} dt - token obtained from the provider.
-   * @param {boolean} sendToServer - if true, send dt to server immediately.
+   * @param {string} dt - token obtained from the provider or <code>false</code>,
+   *    <code>null</code> or <code>undefined</code> to clear the token.
    *
-   * @returns true if attempt was made to send the token to the server.
+   * @returns <code>true</code> if attempt was made to send the update to the server.
    */
-  setDeviceToken: function(dt, sendToServer) {
+  setDeviceToken: function(dt) {
     let sent = false;
-    if (dt && dt != this._deviceToken) {
+    // Convert any falsish value to null.
+    dt = dt || null;
+    if (dt != this._deviceToken) {
       this._deviceToken = dt;
-      if (sendToServer && this.isConnected() && this.isAuthenticated()) {
+      if (this.isConnected() && this.isAuthenticated()) {
         this.send({
           'hi': {
-            'dev': dt
+            'dev': dt || Tinode.DEL_CHAR
           }
         });
         sent = true;
