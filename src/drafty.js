@@ -1639,7 +1639,7 @@ function copyLight(ent) {
     tp: ent.tp
   };
   if (ent.data && Object.entries(ent.data).length != 0) {
-    dc = {};
+    const dc = {};
     ["mime", "name", "width", "height", "size"].forEach((key) => {
       const val = ent.data[key];
       if (val) {
