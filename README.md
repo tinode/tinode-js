@@ -1,6 +1,9 @@
 # Javascript bindings for Tinode
 
-See it used at https://web.tinode.co/ and https://sandbox.tinode.co/ ([full source](https://github.com/tinode/webapp)).
+This SDK implements [Tinode](https://github.com/tinode/chat) client-side protocol for the browser based applications. See it in action
+at https://web.tinode.co/ and https://sandbox.tinode.co/ ([full source](https://github.com/tinode/webapp)).
+
+This is **not** a standalone project. It can only be used in conjunction with the [Tinode server](https://github.com/tinode/chat).
 
 Regularly released NPM packages are at https://www.npmjs.com/package/tinode-sdk
 
@@ -28,7 +31,7 @@ or while developing as
 This SDK is intended to be used in a browser. To use tinode-sdk in Node JS environment (such as on a server), you have to polyfill network providers, for example with [ws](https://www.npmjs.com/package/ws) and [xmlhttprequest](https://www.npmjs.com/package/xmlhttprequest) or [xhr](https://www.npmjs.com/package/xhr).
 ```js
   Tinode.setNetworkProviders(require('ws'), require('xmlhttprequest'));
-  this.tinode  = new Tinode(...);
+  this.tinode = new Tinode(...);
 ```
 or (before instantiating Tinode):
 ```js
@@ -36,4 +39,9 @@ or (before instantiating Tinode):
   window.XMLHttpRequest = require('xmlhttprequest');
 ```
 
-Keep in mind that the SDK also references `URL.createObjectURL()` which is [not currently polyfilled](https://github.com/nodejs/node/issues/16167). It will throw an exception when the user attempts to download a file attachment. See discussion: https://github.com/tinode/tinode-js/issues/28
+The SDK optionally uses `indexedDB` for caching data. If you wish to retain the functionality then polyfill `indexedDB` with something like [fake-indexeddb](https://www.npmjs.com/package/fake-indexeddb):
+```js
+  require('fake-indexeddb/auto');
+```
+
+Keep in mind that the SDK also references `URL.createObjectURL()` which is [not currently polyfilled](https://github.com/nodejs/node/issues/16167). An exception will be thrown when the user attempts to download a file attachment. See discussion: https://github.com/tinode/tinode-js/issues/28
