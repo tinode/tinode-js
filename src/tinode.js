@@ -46,21 +46,16 @@
 // non-localizable strings should be single quoted 'non-localized'.
 
 // Module imports Node.js style.
-if (typeof require == 'function') {
-  if (typeof CBuffer == 'undefined') {
-    var CBuffer = require('./cbuffer.js');
-  }
-  if (typeof Connection == 'undefined') {
-    var Connection = require('./connection.js');
-  }
-  if (typeof DBCache == 'undefined') {
-    var DBCache = require('./db.js');
-  }
-  if (typeof Drafty == 'undefined') {
-    var Drafty = require('./drafty.js');
-  }
-  var package_version = require('../version.json').version;
+if (typeof require != 'function') {
+  throw new Error("Unable to load modules: require() is not available.");
 }
+
+const CBuffer = require('./cbuffer.js');
+const Connection = require('./connection.js');
+const DBCache = require('./db.js');
+const Drafty = require('./drafty.js');
+
+const package_version = require('../version.json').version;
 
 let WebSocketProvider;
 if (typeof WebSocket != 'undefined') {
