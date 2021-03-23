@@ -9,6 +9,10 @@
  */
 'use strict';
 
+// NOTE TO DEVELOPERS:
+// Localizable strings should be double quoted "строка на другом языке",
+// non-localizable strings should be single quoted 'non-localized'.
+
 const DB_VERSION = 1;
 const DB_NAME = 'tinode-web';
 
@@ -18,6 +22,8 @@ const DB = function(onError, logger) {
 
   // Placeholder DB which does nothing.
   let db = null;
+  // Indicator that the cache is disabled.
+  let disabled = false;
 
   // Serializable topic fields.
   const topic_fields = ['created', 'updated', 'deleted', 'read', 'recv', 'seq', 'clear', 'defacs',
@@ -165,6 +171,14 @@ const DB = function(onError, logger) {
       return !!db;
     },
 
+    /**
+     * Disable persistent cache: all operations do nothing but return success.
+     */
+    disable: function() {
+      db = null;
+      disabled = true;
+    },
+
     // Topics.
     /**
      * Add or update topic in persistent cache.
@@ -174,7 +188,9 @@ const DB = function(onError, logger) {
      */
     updTopic: function(topic) {
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve() :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['topic'], 'readwrite');
@@ -201,7 +217,9 @@ const DB = function(onError, logger) {
      */
     remTopic: function(name) {
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve() :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['topic', 'subscription', 'message'], 'readwrite');
@@ -228,7 +246,9 @@ const DB = function(onError, logger) {
      */
     mapTopics: function(callback, context) {
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve([]) :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['topic']);
@@ -271,7 +291,9 @@ const DB = function(onError, logger) {
         return;
       }
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve() :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['user'], 'readwrite');
@@ -298,7 +320,9 @@ const DB = function(onError, logger) {
      */
     remUser: function(uid) {
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve() :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['user'], 'readwrite');
@@ -322,7 +346,9 @@ const DB = function(onError, logger) {
      */
     getUser: function(uid) {
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve() :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['user']);
@@ -353,7 +379,9 @@ const DB = function(onError, logger) {
      */
     updSubscription: function(topicName, uid, sub) {
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve() :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['subscription'], 'readwrite');
@@ -381,7 +409,9 @@ const DB = function(onError, logger) {
      */
     mapSubscriptions: function(topicName, callback, context) {
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve([]) :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['subscription']);
@@ -437,7 +467,9 @@ const DB = function(onError, logger) {
      */
     updMessageStatus: function(topicName, seq, status) {
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve() :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['message'], 'readwrite');
@@ -475,7 +507,9 @@ const DB = function(onError, logger) {
      */
     remMessages: function(topicName, from, to) {
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve() :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         if (!from && !to) {
@@ -510,7 +544,9 @@ const DB = function(onError, logger) {
      */
     readMessages: function(topicName, query, callback, context) {
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve([]) :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         query = query || {};

@@ -45,14 +45,21 @@
 // Localizable strings should be double quoted "строка на другом языке",
 // non-localizable strings should be single quoted 'non-localized'.
 
+// Module imports Node.js style.
 if (typeof require == 'function') {
+  if (typeof CBuffer == 'undefined') {
+    const CBuffer = require('./cbuffer.js');
+  }
+  if (typeof Connection == 'undefined') {
+    const Connection = require('./connection.js');
+  }
+  if (typeof DBCache == 'undefined') {
+    const DBCache = require('./db.js');
+  }
   if (typeof Drafty == 'undefined') {
-    var Drafty = require('./drafty.js');
+    const Drafty = require('./drafty.js');
   }
-  if (typeof DB == 'undefined') {
-    var DB = require('./db.js');
-  }
-  var package_version = require('../version.json').version;
+  const package_version = require('../version.json').version;
 }
 
 let WebSocketProvider;
@@ -67,7 +74,7 @@ if (typeof XMLHttpRequest != 'undefined') {
 initForNonBrowserApp();
 
 // Global constants
-const PROTOCOL_VERSION = '0'; // Major component of the version, 0 in 0.16.9
+const PROTOCOL_VERSION = '0'; // Major component of the version, e.g. '0' in '0.17.1'.
 const VERSION = package_version || '0.17';
 const LIBRARY = 'tinodejs/' + VERSION;
 
@@ -91,31 +98,22 @@ const MESSAGE_STATUS_RECEIVED = 5; // Received by the client.
 const MESSAGE_STATUS_READ = 6; // Read by the user.
 const MESSAGE_STATUS_TO_ME = 7; // Message from another user.
 
-// Error code to return in case of a network problem.
-const NETWORK_ERROR = 503;
-const NETWORK_ERROR_TEXT = "Connection failed";
-
 // Reject unresolved futures after this many milliseconds.
 const EXPIRE_PROMISES_TIMEOUT = 5000;
 // Periodicity of garbage collection of unresolved futures.
 const EXPIRE_PROMISES_PERIOD = 1000;
-
-// Error code to return when user disconnected from server.
-const NETWORK_USER = 418;
-const NETWORK_USER_TEXT = "Disconnected by client";
 
 // Default number of messages to pull into memory from persistent cache.
 const DEFAULT_MESSAGES_PAGE = 24;
 
 // Utility functions
 
-// Add brower missing function for non browser app, eg nodeJs
+// Polyfill for non-browser context, e.g. NodeJs.
 function initForNonBrowserApp() {
   // Tinode requirement in native mode because react native doesn't provide Base64 method
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
 
   if (typeof btoa == 'undefined') {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
     global.btoa = function(input = '') {
       let str = input;
       let output = '';
@@ -166,6 +164,8 @@ function initForNonBrowserApp() {
       }
     }
   }
+
+  Connection.setNetworkProviders(WebSocketProvider, XHRProvider);
 }
 
 // RFC3339 formater of Date
@@ -371,7 +371,7 @@ function getBrowserInfo(ua, product) {
   if (m) {
     // List of common strings, from more useful to less useful.
     let priority = ['chrome', 'safari', 'mobile', 'version'];
-    let tmp = ua.substr(m.index + m[0].length).split(" ");
+    let tmp = ua.substr(m.index + m[0].length).split(' ');
     let tokens = [];
     // Split Name/0.0.0 into Name and version 0.0.0
     for (let i = 0; i < tmp.length; i++) {
@@ -437,708 +437,6 @@ function getBrowserInfo(ua, product) {
   }
   return reactnative + result;
 }
-
-/**
- * In-memory sorted cache of objects.
- *
- * @class CBuffer
- * @memberof Tinode
- * @protected
- *
- * @param {function} compare custom comparator of objects. Takes two parameters <code>a</code> and <code>b</code>;
- *    returns <code>-1</code> if <code>a < b</code>, <code>0</code> if <code>a == b</code>, <code>1</code> otherwise.
- * @param {boolean} unique enforce element uniqueness: when <code>true</code> replace existing element with a new
- *    one on conflict; when <code>false</code> keep both elements.
- */
-var CBuffer = function(compare, unique) {
-  let buffer = [];
-
-  compare = compare || function(a, b) {
-    return a === b ? 0 : a < b ? -1 : 1;
-  };
-
-  function findNearest(elem, arr, exact) {
-    let start = 0;
-    let end = arr.length - 1;
-    let pivot = 0;
-    let diff = 0;
-    let found = false;
-
-    while (start <= end) {
-      pivot = (start + end) / 2 | 0;
-      diff = compare(arr[pivot], elem);
-      if (diff < 0) {
-        start = pivot + 1;
-      } else if (diff > 0) {
-        end = pivot - 1;
-      } else {
-        found = true;
-        break;
-      }
-    }
-    if (found) {
-      return {
-        idx: pivot,
-        exact: true
-      };
-    }
-    if (exact) {
-      return {
-        idx: -1
-      };
-    }
-    // Not exact - insertion point
-    return {
-      idx: diff < 0 ? pivot + 1 : pivot
-    };
-  }
-
-  // Insert element into a sorted array.
-  function insertSorted(elem, arr) {
-    const found = findNearest(elem, arr, false);
-    const count = (found.exact && unique) ? 1 : 0;
-    arr.splice(found.idx, count, elem);
-    return arr;
-  }
-
-  return {
-    /**
-     * Get an element at the given position.
-     * @memberof Tinode.CBuffer#
-     * @param {number} at - Position to fetch from.
-     * @returns {Object} Element at the given position or <code>undefined</code>.
-     */
-    getAt: function(at) {
-      return buffer[at];
-    },
-
-    /**
-     * Convenience method for getting the last element of the buffer.
-     * @memberof Tinode.CBuffer#
-     * @returns {Object} The last element in the buffer or <code>undefined</code> if buffer is empty.
-     */
-    getLast: function() {
-      return buffer.length > 0 ? buffer[buffer.length - 1] : undefined;
-    },
-
-    /**
-     * Add new element(s) to the buffer. Variadic: takes one or more arguments. If an array is passed as a single
-     * argument, its elements are inserted individually.
-     * @memberof Tinode.CBuffer#
-     *
-     * @param {...Object|Array} - One or more objects to insert.
-     */
-    put: function() {
-      let insert;
-      // inspect arguments: if array, insert its elements, if one or more non-array arguments, insert them one by one
-      if (arguments.length == 1 && Array.isArray(arguments[0])) {
-        insert = arguments[0];
-      } else {
-        insert = arguments;
-      }
-      for (let idx in insert) {
-        insertSorted(insert[idx], buffer);
-      }
-    },
-
-    /**
-     * Remove element at the given position.
-     * @memberof Tinode.CBuffer#
-     * @param {number} at - Position to delete at.
-     * @returns {Object} Element at the given position or <code>undefined</code>.
-     */
-    delAt: function(at) {
-      let r = buffer.splice(at, 1);
-      if (r && r.length > 0) {
-        return r[0];
-      }
-      return undefined;
-    },
-
-    /**
-     * Remove elements between two positions.
-     * @memberof Tinode.CBuffer#
-     * @param {number} since - Position to delete from (inclusive).
-     * @param {number} before - Position to delete to (exclusive).
-     *
-     * @returns {Array} array of removed elements (could be zero length).
-     */
-    delRange: function(since, before) {
-      return buffer.splice(since, before - since);
-    },
-
-    /**
-     * Return the number of elements the buffer holds.
-     * @memberof Tinode.CBuffer#
-     * @return {number} Number of elements in the buffer.
-     */
-    length: function() {
-      return buffer.length;
-    },
-
-    /**
-     * Reset the buffer discarding all elements
-     * @memberof Tinode.CBuffer#
-     */
-    reset: function() {
-      buffer = [];
-    },
-
-    /**
-     * Callback for iterating contents of buffer. See {@link Tinode.CBuffer#forEach}.
-     * @callback ForEachCallbackType
-     * @memberof Tinode.CBuffer#
-     * @param {Object} elem - Element of the buffer.
-     * @param {number} index - Index of the current element.
-     */
-
-    /**
-     * Apply given <code>callback</code> to all elements of the buffer.
-     * @memberof Tinode.CBuffer#
-     *
-     * @param {Tinode.ForEachCallbackType} callback - Function to call for each element.
-     * @param {number} startIdx - Optional index to start iterating from (inclusive).
-     * @param {number} beforeIdx - Optional index to stop iterating before (exclusive).
-     * @param {Object} context - calling context (i.e. value of <code>this</code> in callback)
-     */
-    forEach: function(callback, startIdx, beforeIdx, context) {
-      startIdx = startIdx | 0;
-      beforeIdx = beforeIdx || buffer.length;
-      for (let i = startIdx; i < beforeIdx; i++) {
-        callback.call(context, buffer[i], i);
-      }
-    },
-
-    /**
-     * Find element in buffer using buffer's comparison function.
-     * @memberof Tinode.CBuffer#
-     *
-     * @param {Object} elem - element to find.
-     * @param {boolean=} nearest - when true and exact match is not found, return the nearest element (insertion point).
-     * @returns {number} index of the element in the buffer or -1.
-     */
-    find: function(elem, nearest) {
-      const {
-        idx
-      } = findNearest(elem, buffer, !nearest);
-      return idx;
-    }
-  }
-}
-
-// Helper function for creating an endpoint URL.
-function makeBaseUrl(host, protocol, apiKey) {
-  let url = null;
-
-  if (protocol === 'http' || protocol === 'https' || protocol === 'ws' || protocol === 'wss') {
-    url = protocol + '://';
-    url += host;
-    if (url.charAt(url.length - 1) !== '/') {
-      url += '/';
-    }
-    url += 'v' + PROTOCOL_VERSION + '/channels';
-    if (protocol === 'http' || protocol === 'https') {
-      // Long polling endpoint end with "lp", i.e.
-      // '/v0/channels/lp' vs just '/v0/channels' for ws
-      url += '/lp';
-    }
-    url += '?apikey=' + apiKey;
-  }
-
-  return url;
-}
-
-/**
- * An abstraction for a websocket or a long polling connection.
- *
- * @class Connection
- * @memberof Tinode
- *
- * @param {string} host_ - Host name and port number to connect to.
- * @param {string} apiKey_ - API key generated by keygen
- * @param {string} transport_ - Network transport to use, either <code>"ws"<code>/<code>"wss"</code> for websocket or
- *      <code>lp</code> for long polling.
- * @param {boolean} secure_ - Use secure WebSocket (wss) if <code>true</code>.
- * @param {boolean} autoreconnect_ - If connection is lost, try to reconnect automatically.
- */
-var Connection = function(host_, apiKey_, transport_, secure_, autoreconnect_) {
-  let host = host_;
-  let secure = secure_;
-  let apiKey = apiKey_;
-
-  let autoreconnect = autoreconnect_;
-
-  // Settings for exponential backoff
-  const _BOFF_BASE = 2000; // 2000 milliseconds, minimum delay between reconnects
-  const _BOFF_MAX_ITER = 10; // Maximum delay between reconnects 2^10 * 2000 ~ 34 minutes
-  const _BOFF_JITTER = 0.3; // Add random delay
-
-  let _boffTimer = null;
-  let _boffIteration = 0;
-  let _boffClosed = false; // Indicator if the socket was manually closed - don't autoreconnect if true.
-
-  let log = (text, ...args) => {
-    if (this.logger) {
-      this.logger(text, ...args);
-    }
-  }
-
-  // Backoff implementation - reconnect after a timeout.
-  function boffReconnect() {
-    // Clear timer
-    clearTimeout(_boffTimer);
-    // Calculate when to fire the reconnect attempt
-    const timeout = _BOFF_BASE * (Math.pow(2, _boffIteration) * (1.0 + _BOFF_JITTER * Math.random()));
-    // Update iteration counter for future use
-    _boffIteration = (_boffIteration >= _BOFF_MAX_ITER ? _boffIteration : _boffIteration + 1);
-    if (this.onAutoreconnectIteration) {
-      this.onAutoreconnectIteration(timeout);
-    }
-
-    _boffTimer = setTimeout(() => {
-      log(`Reconnecting, iter=${_boffIteration}, timeout=${timeout}`);
-      // Maybe the socket was closed while we waited for the timer?
-      if (!_boffClosed) {
-        const prom = this.connect();
-        if (this.onAutoreconnectIteration) {
-          this.onAutoreconnectIteration(0, prom);
-        } else {
-          // Suppress error if it's not used.
-          prom.catch(() => {
-            /* do nothing */
-          });
-        }
-      } else if (this.onAutoreconnectIteration) {
-        this.onAutoreconnectIteration(-1);
-      }
-    }, timeout);
-  }
-
-  // Terminate auto-reconnect process.
-  function boffStop() {
-    clearTimeout(_boffTimer);
-    _boffTimer = null;
-  }
-
-  // Reset auto-reconnect iteration counter.
-  function boffReset() {
-    _boffIteration = 0;
-  }
-
-  // Initialization for Websocket
-  function init_ws(instance) {
-    let _socket = null;
-
-    /**
-     * Initiate a new connection
-     * @memberof Tinode.Connection#
-     * @param {string} host_ Host name to connect to; if <code>null</code> the old host name will be used.
-     * @param {boolean} force Force new connection even if one already exists.
-     * @return {Promise} Promise resolved/rejected when the connection call completes, resolution is called without
-     *  parameters, rejection passes the {Error} as parameter.
-     */
-    instance.connect = function(host_, force) {
-      _boffClosed = false;
-
-      if (_socket) {
-        if (!force && _socket.readyState == _socket.OPEN) {
-          return Promise.resolve();
-        }
-        _socket.close();
-        _socket = null;
-      }
-
-      if (host_) {
-        host = host_;
-      }
-
-      return new Promise(function(resolve, reject) {
-        const url = makeBaseUrl(host, secure ? 'wss' : 'ws', apiKey);
-
-        log("Connecting to: ", url);
-
-        // It throws when the server is not accessible but the exception cannot be caught:
-        // https://stackoverflow.com/questions/31002592/javascript-doesnt-catch-error-in-websocket-instantiation/31003057
-        const conn = new WebSocketProvider(url);
-
-        conn.onerror = function(err) {
-          reject(err);
-        }
-
-        conn.onopen = function(evt) {
-          if (autoreconnect) {
-            boffStop();
-          }
-
-          if (instance.onOpen) {
-            instance.onOpen();
-          }
-
-          resolve();
-        }
-
-        conn.onclose = function(evt) {
-          _socket = null;
-
-          if (instance.onDisconnect) {
-            const code = _boffClosed ? NETWORK_USER : NETWORK_ERROR;
-            instance.onDisconnect(new Error(_boffClosed ? NETWORK_USER_TEXT : NETWORK_ERROR_TEXT +
-              ' (' + code + ')'), code);
-          }
-
-          if (!_boffClosed && autoreconnect) {
-            boffReconnect.call(instance);
-          }
-        }
-
-        conn.onmessage = function(evt) {
-          if (instance.onMessage) {
-            instance.onMessage(evt.data);
-          }
-        }
-        _socket = conn;
-      });
-    }
-
-    /**
-     * Try to restore a network connection, also reset backoff.
-     * @memberof Tinode.Connection#
-     *
-     * @param {boolean} force - reconnect even if there is a live connection already.
-     */
-    instance.reconnect = function(force) {
-      boffStop();
-      instance.connect(null, force);
-    }
-
-    /**
-     * Terminate the network connection
-     * @memberof Tinode.Connection#
-     */
-    instance.disconnect = function() {
-      _boffClosed = true;
-      boffStop();
-
-      if (!_socket) {
-        return;
-      }
-      _socket.close();
-      _socket = null;
-    }
-
-    /**
-     * Send a string to the server.
-     * @memberof Tinode.Connection#
-     *
-     * @param {string} msg - String to send.
-     * @throws Throws an exception if the underlying connection is not live.
-     */
-    instance.sendText = function(msg) {
-      if (_socket && (_socket.readyState == _socket.OPEN)) {
-        _socket.send(msg);
-      } else {
-        throw new Error("Websocket is not connected");
-      }
-    };
-
-    /**
-     * Check if socket is alive.
-     * @memberof Tinode.Connection#
-     * @returns {boolean} <code>true</code> if connection is live, <code>false</code> otherwise.
-     */
-    instance.isConnected = function() {
-      return (_socket && (_socket.readyState == _socket.OPEN));
-    }
-
-    /**
-     * Get the name of the current network transport.
-     * @memberof Tinode.Connection#
-     * @returns {string} name of the transport such as <code>"ws"</code> or <code>"lp"</code>.
-     */
-    instance.transport = function() {
-      return 'ws';
-    }
-
-    /**
-     * Send network probe to check if connection is indeed live.
-     * @memberof Tinode.Connection#
-     */
-    instance.probe = function() {
-      instance.sendText('1');
-    }
-  }
-
-  // Initialization for long polling.
-  function init_lp(instance) {
-    const XDR_UNSENT = 0; //	Client has been created. open() not called yet.
-    const XDR_OPENED = 1; //	open() has been called.
-    const XDR_HEADERS_RECEIVED = 2; // send() has been called, and headers and status are available.
-    const XDR_LOADING = 3; //	Downloading; responseText holds partial data.
-    const XDR_DONE = 4; // The operation is complete.
-    // Fully composed endpoint URL, with API key & SID
-    let _lpURL = null;
-
-    let _poller = null;
-    let _sender = null;
-
-    function lp_sender(url_) {
-      let sender = new XMLHttpRequest();
-      sender.onreadystatechange = function(evt) {
-        if (sender.readyState == XDR_DONE && sender.status >= 400) {
-          // Some sort of error response
-          throw new Error(`LP sender failed, ${sender.status}`);
-        }
-      }
-
-      sender.open('POST', url_, true);
-      return sender;
-    }
-
-    function lp_poller(url_, resolve, reject) {
-      let poller = new XMLHttpRequest();
-      let promiseCompleted = false;
-
-      poller.onreadystatechange = function(evt) {
-
-        if (poller.readyState == XDR_DONE) {
-          if (poller.status == 201) { // 201 == HTTP.Created, get SID
-            let pkt = JSON.parse(poller.responseText, jsonParseHelper);
-            _lpURL = url_ + '&sid=' + pkt.ctrl.params.sid
-            poller = lp_poller(_lpURL);
-            poller.send(null)
-            if (instance.onOpen) {
-              instance.onOpen();
-            }
-
-            if (resolve) {
-              promiseCompleted = true;
-              resolve();
-            }
-
-            if (autoreconnect) {
-              boffStop();
-            }
-          } else if (poller.status < 400) { // 400 = HTTP.BadRequest
-            if (instance.onMessage) {
-              instance.onMessage(poller.responseText)
-            }
-            poller = lp_poller(_lpURL);
-            poller.send(null);
-          } else {
-            // Don't throw an error here, gracefully handle server errors
-            if (reject && !promiseCompleted) {
-              promiseCompleted = true;
-              reject(poller.responseText);
-            }
-            if (instance.onMessage && poller.responseText) {
-              instance.onMessage(poller.responseText);
-            }
-            if (instance.onDisconnect) {
-              const code = poller.status || (_boffClosed ? NETWORK_USER : NETWORK_ERROR);
-              const text = poller.responseText || (_boffClosed ? NETWORK_USER_TEXT : NETWORK_ERROR_TEXT);
-              instance.onDisconnect(new Error(text + ' (' + code + ')'), code);
-            }
-
-            // Polling has stopped. Indicate it by setting poller to null.
-            poller = null;
-            if (!_boffClosed && autoreconnect) {
-              boffReconnect.call(instance);
-            }
-          }
-        }
-      }
-      poller.open('GET', url_, true);
-      return poller;
-    }
-
-    instance.connect = function(host_, force) {
-      _boffClosed = false;
-
-      if (_poller) {
-        if (!force) {
-          return Promise.resolve();
-        }
-        _poller.onreadystatechange = undefined;
-        _poller.abort();
-        _poller = null;
-      }
-
-      if (host_) {
-        host = host_;
-      }
-
-      return new Promise(function(resolve, reject) {
-        const url = makeBaseUrl(host, secure ? 'https' : 'http', apiKey);
-        log("Connecting to: ", url);
-        _poller = lp_poller(url, resolve, reject);
-        _poller.send(null)
-      }).catch((err) => {
-        log("LP connection failed:", err);
-      });
-    };
-
-    instance.reconnect = function(force) {
-      boffStop();
-      instance.connect(null, force);
-    };
-
-    instance.disconnect = function() {
-      _boffClosed = true;
-      boffStop();
-
-      if (_sender) {
-        _sender.onreadystatechange = undefined;
-        _sender.abort();
-        _sender = null;
-      }
-      if (_poller) {
-        _poller.onreadystatechange = undefined;
-        _poller.abort();
-        _poller = null;
-      }
-
-      if (instance.onDisconnect) {
-        instance.onDisconnect(new Error(NETWORK_USER_TEXT + ' (' + NETWORK_USER + ')'), NETWORK_USER);
-      }
-      // Ensure it's reconstructed
-      _lpURL = null;
-    }
-
-    instance.sendText = function(msg) {
-      _sender = lp_sender(_lpURL);
-      if (_sender && (_sender.readyState == 1)) { // 1 == OPENED
-        _sender.send(msg);
-      } else {
-        throw new Error("Long poller failed to connect");
-      }
-    };
-
-    instance.isConnected = function() {
-      return (_poller && true);
-    }
-
-    instance.transport = function() {
-      return 'lp';
-    }
-
-    instance.probe = function() {
-      instance.sendText('1');
-    }
-  }
-
-  let initialized = false;
-  if (transport_ === 'lp') {
-    // explicit request to use long polling
-    init_lp(this);
-    initialized = true;
-  } else if (transport_ === 'ws') {
-    // explicit request to use web socket
-    // if websockets are not available, horrible things will happen
-    init_ws(this);
-    initialized = true;
-
-    // Default transport selection
-  } else if (typeof window == 'object') {
-    if (window['WebSocket']) {
-      // Using web sockets -- default.
-      init_ws(this);
-      initialized = true;
-    } else if (window['XMLHttpRequest']) {
-      // The browser has no websockets, using long polling.
-      init_lp(this);
-      initialized = true;
-    }
-  }
-
-  if (!initialized) {
-    // No transport is avaiilable.
-    log("No network transport is available. Running under Node? Call 'Tinode.setNetworkProviders()'.");
-    throw new Error("No network transport is available. Running under Node? Call 'Tinode.setNetworkProviders()'.");
-  }
-
-  /**
-   * Check if the given network transport is available.
-   * @memberof Tinode.Connection#
-   * @param {string} trans - either <code>"ws"</code> (websocket) or <code>"lp"</code> (long polling).
-   * @returns true if given transport is available, false otherwise.
-   */
-  this.transportAvailable = function(transp) {
-    switch (transp) {
-      case 'ws':
-        return typeof window == 'object' && window['WebSocket'];
-      case 'lp':
-        return typeof window == 'object' && window['XMLHttpRequest'];
-      default:
-        log("Request for unknown transport", transp);
-        return false;
-    }
-  }
-
-  /**
-   * Reset autoreconnect counter to zero.
-   * @memberof Tinode.Connection#
-   */
-  this.backoffReset = function() {
-    boffReset();
-  }
-
-  // Callbacks:
-  /**
-   * A callback to pass incoming messages to. See {@link Tinode.Connection#onMessage}.
-   * @callback Tinode.Connection.OnMessage
-   * @memberof Tinode.Connection
-   * @param {string} message - Message to process.
-   */
-  /**
-   * A callback to pass incoming messages to.
-   * @type {Tinode.Connection.OnMessage}
-   * @memberof Tinode.Connection#
-   */
-  this.onMessage = undefined;
-
-  /**
-   * A callback for reporting a dropped connection.
-   * @type {function}
-   * @memberof Tinode.Connection#
-   */
-  this.onDisconnect = undefined;
-
-  /**
-   * A callback called when the connection is ready to be used for sending. For websockets it's socket open,
-   * for long polling it's <code>readyState=1</code> (OPENED)
-   * @type {function}
-   * @memberof Tinode.Connection#
-   */
-  this.onOpen = undefined;
-
-  /**
-   * A callback to notify of reconnection attempts. See {@link Tinode.Connection#onAutoreconnectIteration}.
-   * @memberof Tinode.Connection
-   * @callback AutoreconnectIterationType
-   * @param {string} timeout - time till the next reconnect attempt in milliseconds. <code>-1</code> means reconnect was skipped.
-   * @param {Promise} promise resolved or rejected when the reconnect attemp completes.
-   *
-   */
-  /**
-   * A callback to inform when the next attampt to reconnect will happen and to receive connection promise.
-   * @memberof Tinode.Connection#
-   * @type {Tinode.Connection.AutoreconnectIterationType}
-   */
-  this.onAutoreconnectIteration = undefined;
-
-  /**
-   * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
-   * @memberof Tinode.Connection
-   * @callback LoggerCallbackType
-   * @param {string} event - Event to log.
-   */
-  /**
-   * A callback to report logging events.
-   * @memberof Tinode.Connection#
-   * @type {Tinode.Connection.LoggerCallbackType}
-   */
-  this.logger = undefined;
-};
 
 /**
  * @class Tinode
@@ -1281,7 +579,7 @@ var Tinode = function(config, onComplete) {
   // Use indexDB for caching topics and messages.
   this._persist = config.persist;
   // Initialize object regardless. It simplifies the code.
-  this._db = DB((err) => {
+  this._db = DBCache((err) => {
     this.logger("DB", err);
   }, this.logger);
 
@@ -1319,6 +617,8 @@ var Tinode = function(config, onComplete) {
         this.logger("Persistent cache initialized.");
       });
     });
+  } else {
+    this._db.disable();
   }
 
   // Resolve or reject a pending promise.
@@ -1495,7 +795,7 @@ var Tinode = function(config, onComplete) {
     } catch (err) {
       // If sendText throws, wrap the error in a promise or rethrow.
       if (id) {
-        execPromise(id, NETWORK_ERROR, null, err.message);
+        execPromise(id, Connection.NETWORK_ERROR, null, err.message);
       } else {
         throw err;
       }

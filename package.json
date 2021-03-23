@@ -1,9 +1,9 @@
 {
   "name": "tinode-sdk",
   "description": "Tinode SDK",
-  "version": "0.17.0-alpha2",
+  "version": "0.17.0-alpha3",
   "scripts": {
-    "format": "js-beautify -r src/tinode.js && js-beautify -r src/drafty.js && js-beautify -r src/db.js",
+    "format": "js-beautify -r src/tinode.js && js-beautify -r src/drafty.js && js-beautify -r src/db.js && js-beautify -r src/connection.js && js-beautify -r src/cbuffer.js",
     "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
     "build:prod": "browserify ./src/tinode.js --standalone Tinode -t [ babelify ] --plugin tinyify > ./umd/tinode.prod.js",
     "build:dev": "browserify ./src/tinode.js --debug --standalone Tinode > ./umd/tinode.dev.js",
@@ -17,8 +17,11 @@
     "url": "git+https://github.com/tinode/tinode-js.git"
   },
   "files": [
-    "src/tinode.js",
+    "src/cbuffer.js",
+    "src/connection.js",
+    "src/db.js",
     "src/drafty.js",
+    "src/tinode.js",
     "umd/tinode.dev.js",
     "umd/tinode.prod.js",
     "version.json"

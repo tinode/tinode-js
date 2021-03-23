@@ -55,6 +55,10 @@
 
 'use strict';
 
+// NOTE TO DEVELOPERS:
+// Localizable strings should be double quoted "строка на другом языке",
+// non-localizable strings should be single quoted 'non-localized'.
+
 const MAX_FORM_ELEMENTS = 8;
 const JSON_MIME_TYPE = 'application/json';
 
