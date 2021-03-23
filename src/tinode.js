@@ -48,18 +48,18 @@
 // Module imports Node.js style.
 if (typeof require == 'function') {
   if (typeof CBuffer == 'undefined') {
-    const CBuffer = require('./cbuffer.js');
+    var CBuffer = require('./cbuffer.js');
   }
   if (typeof Connection == 'undefined') {
-    const Connection = require('./connection.js');
+    var Connection = require('./connection.js');
   }
   if (typeof DBCache == 'undefined') {
-    const DBCache = require('./db.js');
+    var DBCache = require('./db.js');
   }
   if (typeof Drafty == 'undefined') {
-    const Drafty = require('./drafty.js');
+    var Drafty = require('./drafty.js');
   }
-  const package_version = require('../version.json').version;
+  var package_version = require('../version.json').version;
 }
 
 let WebSocketProvider;
@@ -71,6 +71,7 @@ let XHRProvider;
 if (typeof XMLHttpRequest != 'undefined') {
   XHRProvider = XMLHttpRequest;
 }
+
 initForNonBrowserApp();
 
 // Global constants
@@ -125,7 +126,6 @@ function initForNonBrowserApp() {
         if (charCode > 0xFF) {
           throw new Error("'btoa' failed: The string to be encoded contains characters outside of the Latin1 range.");
         }
-
         block = block << 8 | charCode;
       }
 
@@ -498,7 +498,7 @@ var Tinode = function(config, onComplete) {
   this._expirePromises = null;
 
   /** A connection object, see {@link Tinode.Connection}. */
-  this._connection = new Connection(config.host, config.apiKey, config.transport, config.secure, true);
+  this._connection = new Connection(config.host, PROTOCOL_VERSION, config.apiKey, config.transport, config.secure, true);
   // Console logger. Babel somehow fails to parse '...rest' parameter.
   this.logger = (str, ...args) => {
     if (this._loggingEnabled) {
