@@ -1873,11 +1873,7 @@ Tinode.prototype = {
     pkt.del.what = 'topic';
     pkt.del.hard = hard;
 
-    return this.send(pkt, pkt.del.id).then((ctrl) => {
-      this._db.remTopic(topicName);
-      this.cacheDel('topic', topicName);
-      return this.ctrl;
-    });
+    return this.send(pkt, pkt.del.id);
   },
 
   /**
@@ -3619,8 +3615,8 @@ Topic.prototype = {
       // Update locally cached contact with the new count.
       this._updateReadRecv(what, seq);
 
-      const me = this._tinode.getMeTopic();
       if (this.acs != null && !this.acs.isMuted()) {
+        const me = this._tinode.getMeTopic();
         // Sent a notification to 'me' listeners.
         me._refreshContact(what, this);
       }
