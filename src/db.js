@@ -441,7 +441,9 @@ const DB = function(onError, logger) {
      */
     addMessage: function(msg) {
       if (!this.isReady()) {
-        return Promise.reject(new Error("not initialized"));
+        return disabled ?
+          Promise.resolve() :
+          Promise.reject(new Error("not initialized"));
       }
       return new Promise((resolve, reject) => {
         const trx = db.transaction(['message'], 'readwrite');
