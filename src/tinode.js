@@ -4314,8 +4314,10 @@ Topic.prototype = {
     for (let idx in subs) {
       const sub = subs[idx];
 
+      // Fill defaults.
       sub.updated = new Date(sub.updated);
       sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
+      sub.online = !!sub.online;
 
       let user = null;
       if (!sub.deleted) {
@@ -4626,6 +4628,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         sub.updated = new Date(sub.updated);
         sub.touched = sub.touched ? new Date(sub.touched) : undefined;
         sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
+        sub.online = !!sub.online;
 
         let cont = null;
         if (sub.deleted) {
