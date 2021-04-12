@@ -1529,8 +1529,7 @@ Tinode.prototype = {
 
     return this.send(pkt, pkt.login.id)
       .then((ctrl) => {
-        const x = this.loginSuccessful(ctrl);
-        return x;
+        return this.loginSuccessful(ctrl);
       });
   },
 
@@ -1758,6 +1757,22 @@ Tinode.prototype = {
     return this.send({
       pub: pub
     }, pub.id);
+  },
+
+  /**
+   * Out of band notification: notify topic that an external (push) notification was recived by the client.
+   * @memberof Tinode#
+   *
+   * @param {string} topicName - name of the updated topic.
+   * @param {number} seq - seq ID of the new message.
+   * @param {string=} act - UID of the sender; default is current.
+   */
+  oobNotification: function(topicName, seq, act) {
+    const topic = this.cacheGet('topic', topicName);
+    if (topic) {
+      topic._updateReceived(seq, act);
+      this.getMeTopic()._refreshContact('msg', topic);
+    }
   },
 
   /**
@@ -4555,6 +4570,18 @@ Topic.prototype = {
         this._updateDeletedRanges();
         return this.name;
       });
+  },
+
+  // Push or {pres}: message received.
+  _updateReceived: function(seq, act) {
+    this.touched = new Date();
+    this.seq = seq | 0;
+    // Check if message is sent by the current user. If so it's been read already.
+    if (!act || this._tinode.isMe(act)) {
+      this.read = this.read ? Math.max(this.read, this.seq) : this.seq;
+      this.recv = this.recv ? Math.max(this.read, this.recv) : this.read;
+    }
+    this.unread = this.seq - (this.read | 0);
   }
 };
 
@@ -4769,14 +4796,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             }
             break;
           case 'msg': // new message received
-            cont.touched = new Date();
-            cont.seq = pres.seq | 0;
-            // Check if message is sent by the current user. If so it's been read already.
-            if (!pres.act || this._tinode.isMe(pres.act)) {
-              cont.read = cont.read ? Math.max(cont.read, cont.seq) : cont.seq;
-              cont.recv = cont.recv ? Math.max(cont.read, cont.recv) : cont.read;
-            }
-            cont.unread = cont.seq - (cont.read | 0);
+            cont._updateReceived(pres.seq, pres.act);
             break;
           case 'upd': // desc updated
             // Request updated subscription.
