@@ -614,6 +614,9 @@ var Tinode = function(config, onComplete) {
     });
   } else {
     this._db.disable();
+    if (onComplete) {
+      onComplete();
+    }
   }
 
   // Resolve or reject a pending promise.
