@@ -579,11 +579,11 @@ var Tinode = function(config, onComplete) {
   }, this.logger);
 
   if (this._persist) {
-    // Create the persistent cache and read topics into memory.
+    // Create the persistent cache.
+    // Store promises to be resolved when messages load into memory.
+    const msgs = [];
     this._db.initDatabase().then(() => {
-      // Store promises to be resolved when messages load into memory.
-      const msgs = [];
-      // Load topics to memory.
+      // First load topics into memory.
       return this._db.mapTopics((data) => {
         let topic = this.cacheGet('topic', data.name);
         if (topic) {
@@ -602,15 +602,20 @@ var Tinode = function(config, onComplete) {
         topic._cachePutSelf();
         // Request to load messages and save the promise.
         msgs.push(topic._loadMessages(this._db));
-      }).then(() => {
-        // Wait for all messages to load.
-        return Promise.all(msgs);
-      }).then(() => {
-        if (onComplete) {
-          onComplete();
-        }
-        this.logger("Persistent cache initialized.");
       });
+    }).then(() => {
+      // Then load users.
+      return this._db.mapUsers((data) => {
+        return cachePut('user', data.uid, mergeObj({}, data.public));
+      });
+    }).then(() => {
+      // Now wait for all messages to finish loading.
+      return Promise.all(msgs);
+    }).then(() => {
+      if (onComplete) {
+        onComplete();
+      }
+      this.logger("Persistent cache initialized.");
     });
   } else {
     this._db.disable();

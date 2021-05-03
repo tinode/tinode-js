@@ -92,6 +92,30 @@ const DB = function(onError, logger) {
     return res;
   }
 
+  function mapObjects(source, callback, context) {
+    if (!db) {
+      return disabled ?
+        Promise.resolve([]) :
+        Promise.reject(new Error("not initialized"));
+    }
+
+    return new Promise((resolve, reject) => {
+      const trx = db.transaction([source]);
+      trx.onerror = (event) => {
+        logger("PCache", "mapObjects", source, event.target.error);
+        reject(event.target.error);
+      };
+      trx.objectStore(source).getAll().onsuccess = (event) => {
+        if (callback) {
+          event.target.result.forEach((topic) => {
+            callback.call(context, topic);
+          });
+        }
+        resolve(event.target.result);
+      };
+    });
+  }
+
   return {
     /**
      * Initialize persistent cache: open or create/upgrade if needed.
@@ -245,26 +269,7 @@ const DB = function(onError, logger) {
      * @return {Promise} promise resolved/rejected on operation completion.
      */
     mapTopics: function(callback, context) {
-      if (!this.isReady()) {
-        return disabled ?
-          Promise.resolve([]) :
-          Promise.reject(new Error("not initialized"));
-      }
-      return new Promise((resolve, reject) => {
-        const trx = db.transaction(['topic']);
-        trx.onerror = (event) => {
-          logger("PCache", "mapTopics", event.target.error);
-          reject(event.target.error);
-        };
-        trx.objectStore('topic').getAll().onsuccess = (event) => {
-          if (callback) {
-            event.target.result.forEach((topic) => {
-              callback.call(context, topic);
-            });
-          }
-          resolve(event.target.result);
-        };
-      });
+      return mapObjects('topic', callback, context);
     },
 
     /**
@@ -336,6 +341,17 @@ const DB = function(onError, logger) {
         trx.objectStore('user').delete(IDBKeyRange.only(uid));
         trx.commit();
       });
+    },
+
+    /**
+     * Execute a callback for each stored user.
+     * @memberOf DB
+     * @param {function} callback - function to call for each topic.
+     * @param {Object} context - the value or <code>this</code> inside the callback.
+     * @return {Promise} promise resolved/rejected on operation completion.
+     */
+    mapUsers: function(callback, context) {
+      return mapObjects('user', callback, context);
     },
 
     /**
