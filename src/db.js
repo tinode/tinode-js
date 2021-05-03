@@ -30,7 +30,7 @@ const DB = function(onError, logger) {
     'creds', 'public', 'private', 'touched'
   ];
 
-  // Copy values from 'src' to 'dst'. Allocate dst if 'it's null or undefined.
+  // Copy values from 'src' to 'dst'. Allocate dst if it's null or undefined.
   function serializeTopic(dst, src) {
     const res = dst || {
       name: src.name

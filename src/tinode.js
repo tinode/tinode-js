@@ -879,18 +879,20 @@ var Tinode = function(config, onComplete) {
                 topic._gone();
               }
             }
-          } else if (pkt.ctrl.params && pkt.ctrl.params.what == 'data') {
-            // All messages received: "params":{"count":11,"what":"data"},
-            const topic = cacheGet('topic', pkt.ctrl.topic);
-            if (topic) {
-              topic._allMessagesReceived(pkt.ctrl.params.count);
-            }
-          } else if (pkt.ctrl.params && pkt.ctrl.params.what == 'sub') {
-            // The topic has no subscriptions.
-            const topic = cacheGet('topic', pkt.ctrl.topic);
-            if (topic) {
-              // Trigger topic.onSubsUpdated.
-              topic._processMetaSub([]);
+          } else if (pkt.ctrl.code < 300 && pkt.ctrl.params) {
+            if (pkt.ctrl.params.what == 'data') {
+              // code=208, all messages received: "params":{"count":11,"what":"data"},
+              const topic = cacheGet('topic', pkt.ctrl.topic);
+              if (topic) {
+                topic._allMessagesReceived(pkt.ctrl.params.count);
+              }
+            } else if (pkt.ctrl.params.what == 'sub') {
+              // code=204, the topic has no (refreshed) subscriptions.
+              const topic = cacheGet('topic', pkt.ctrl.topic);
+              if (topic) {
+                // Trigger topic.onSubsUpdated.
+                topic._processMetaSub([]);
+              }
             }
           }
         }, 0);
