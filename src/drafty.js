@@ -1573,15 +1573,11 @@ Drafty.preview = function(original, length) {
   const preview = {
     txt: ''
   };
-  let len = 0;
+
   if (typeof txt == 'string') {
-    if (txt.length > length) {
-      preview.txt = txt.substr(0, length);
-    } else {
-      preview.txt = txt;
-    }
-    len = preview.txt.length;
+    preview.txt = txt.substr(0, length);
   }
+  let len = preview.txt.length;
 
   if (Array.isArray(fmt) && fmt.length > 0) {
     // Old key to new key entity mapping.
@@ -1590,12 +1586,13 @@ Drafty.preview = function(original, length) {
     let fmt_count = 0;
     let ent_count = 0;
     fmt.forEach((st) => {
+      st.at |= 0;
       if (st.at < len) {
         fmt_count++;
         if (!st.tp) {
-          const key = st.key | 0;
-          if (!ent_refs[key]) {
-            ent_refs[key] = ent_count;
+          st.key |= 0;
+          if (!ent_refs[st.key]) {
+            ent_refs[st.key] = ent_count;
             ent_count++;
           }
         }
@@ -1618,14 +1615,13 @@ Drafty.preview = function(original, length) {
       if (st.at < len) {
         const style = {
           at: st.at,
-          len: st.len
+          len: st.len | 0
         };
-        const key = st.key | 0;
         if (st.tp) {
           style.tp = '' + st.tp;
-        } else if (Array.isArray(ent) && ent.length > key && typeof ent_refs[key] == 'number') {
-          style.key = ent_refs[key];
-          preview.ent[style.key] = copyLight(ent[key]);
+        } else if (Array.isArray(ent) && ent.length > st.key && typeof ent_refs[st.key] == 'number') {
+          style.key = ent_refs[st.key];
+          preview.ent[style.key] = copyLight(ent[st.key]);
         } else {
           return;
         }
