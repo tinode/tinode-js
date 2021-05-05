@@ -38,15 +38,14 @@ const NETWORK_USER_TEXT = "Disconnected by client";
 function makeBaseUrl(host, protocol, version, apiKey) {
   let url = null;
 
-  if (protocol === 'http' || protocol === 'https' || protocol === 'ws' || protocol === 'wss') {
-    url = protocol + '://';
-    url += host;
+  if (['http', 'https', 'ws', 'wss'].includes(protocol)) {
+    url = protocol + '://' + host;
     if (url.charAt(url.length - 1) !== '/') {
       url += '/';
     }
     url += 'v' + version + '/channels';
-    if (protocol === 'http' || protocol === 'https') {
-      // Long polling endpoint end with "lp", i.e.
+    if (['http', 'https'].includes(protocol)) {
+      // Long polling endpoint ends with "lp", i.e.
       // '/v0/channels/lp' vs just '/v0/channels' for ws
       url += '/lp';
     }
