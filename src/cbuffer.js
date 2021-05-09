@@ -1,5 +1,5 @@
 /**
- * @file In-memory sorted cache of objects..
+ * @file In-memory sorted cache of objects.
  *
  * @copyright 2015-2021 Tinode
  * @summary Javascript bindings for Tinode.
