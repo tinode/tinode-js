@@ -94,6 +94,7 @@ const MESSAGE_STATUS_SENT = 4; // Delivered to the server.
 const MESSAGE_STATUS_RECEIVED = 5; // Received by the client.
 const MESSAGE_STATUS_READ = 6; // Read by the user.
 const MESSAGE_STATUS_TO_ME = 7; // Message from another user.
+const MESSAGE_STATUS_DEL_RANGE = 8; // Message is a deleted range.
 
 // Reject unresolved futures after this many milliseconds.
 const EXPIRE_PROMISES_TIMEOUT = 5000;
@@ -1225,6 +1226,7 @@ Tinode.MESSAGE_STATUS_SENT = MESSAGE_STATUS_SENT;
 Tinode.MESSAGE_STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED;
 Tinode.MESSAGE_STATUS_READ = MESSAGE_STATUS_READ;
 Tinode.MESSAGE_STATUS_TO_ME = MESSAGE_STATUS_TO_ME;
+Tinode.MESSAGE_STATUS_DEL_RANGE = MESSAGE_STATUS_DEL_RANGE;
 
 // Unicode [del] symbol.
 Tinode.DEL_CHAR = '\u2421';
@@ -3840,10 +3842,15 @@ Topic.prototype = {
    * Get the most recent message from cache.
    * @memberof Tinode.Topic#
    *
+   * @param {boolen} skipDeleted - if the last message is a deleted range, get the one before it.
    * @returns {Object} the most recent cached message or <code>undefined</code>, if no messages are cached.
    */
-  latestMessage: function() {
-    return this._messages.getLast();
+  latestMessage: function(skipDeleted) {
+    const msg = this._messages.getLast();
+    if (!skipDeleted || !msg || msg._status != MESSAGE_STATUS_DEL_RANGE) {
+      return msg;
+    }
+    return this._messages.getLast(1);
   },
 
   /**
@@ -4156,6 +4163,8 @@ Topic.prototype = {
       } else if (msg.seq > 0) {
         status = MESSAGE_STATUS_SENT;
       }
+    } else if (msg._status == MESSAGE_STATUS_DEL_RANGE) {
+      status == MESSAGE_STATUS_DEL_RANGE;
     } else {
       status = MESSAGE_STATUS_TO_ME;
     }
@@ -4573,6 +4582,7 @@ Topic.prototype = {
 
     // Insert new gaps into cache.
     ranges.map((gap) => {
+      gap._status = MESSAGE_STATUS_DEL_RANGE;
       this._messages.put(gap);
     });
   },

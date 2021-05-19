@@ -83,12 +83,15 @@ const CBuffer = function(compare, unique) {
     },
 
     /**
-     * Convenience method for getting the last element of the buffer.
+     * Convenience method for getting the element from the end of the buffer.
      * @memberof Tinode.CBuffer#
+     * @param {number} at - position to fetch from, counting from the end;
+     *    <code>undefined</code> or <code>null</code>  mean "last".
      * @returns {Object} The last element in the buffer or <code>undefined</code> if buffer is empty.
      */
-    getLast: function() {
-      return buffer.length > 0 ? buffer[buffer.length - 1] : undefined;
+    getLast: function(at) {
+      at |= 0;
+      return buffer.length > at ? buffer[buffer.length - 1 - at] : undefined;
     },
 
     /**
