@@ -62,6 +62,9 @@ const DB = function(onError, logger) {
     if (src.acs) {
       topic.setAccessMode(src.acs);
     }
+    topic.seq |= 0;
+    topic.read |= 0;
+    topic.unread = Math.max(0, topic.seq - topic.read);
   }
 
   function serializeSubscription(dst, topicName, uid, sub) {
@@ -205,9 +208,9 @@ const DB = function(onError, logger) {
 
     // Topics.
     /**
-     * Add or update topic in persistent cache.
+     * Save to cache or update topic in persistent cache.
      * @memberOf DB
-     * @param {Topic} topic - topic to be added to persistent storage.
+     * @param {Topic} topic - topic to be added or updated.
      * @returns {Promise} promise resolved/rejected on operation completion.
      */
     updTopic: function(topic) {
@@ -286,7 +289,7 @@ const DB = function(onError, logger) {
     /**
      * Add or update user object in the persistent cache.
      * @memberOf DB
-     * @param {string} uid - ID of the user to save.
+     * @param {string} uid - ID of the user to save or update.
      * @param {Object} pub - user's <code>public</code> information.
      * @returns {Promise} promise resolved/rejected on operation completion.
      */

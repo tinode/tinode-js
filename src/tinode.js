@@ -4608,6 +4608,7 @@ Topic.prototype = {
       this.recv = this.recv ? Math.max(this.read, this.recv) : this.read;
     }
     this.unread = this.seq - (this.read | 0);
+    this._tinode._db.updTopic(this);
   }
 };
 
