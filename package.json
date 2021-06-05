@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Tinode SDK",
-  "version": "0.17.1",
+  "version": "0.17.2-alpha1",
   "scripts": {
     "format": "js-beautify -r src/tinode.js && js-beautify -r src/drafty.js && js-beautify -r src/db.js && js-beautify -r src/connection.js && js-beautify -r src/cbuffer.js",
     "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
@@ -11,17 +11,12 @@
     "vers": "echo \"{\\\"version\\\": \\\"`node -p -e \"require('./package.json').version\"`\\\"}\" > version.json",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "browserslist": "> 0.5%, not IE 11",
+  "browserslist": "> 0.5%, not IE 11, not op_mini all, not and_uc >0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tinode/tinode-js.git"
   },
   "files": [
-    "src/cbuffer.js",
-    "src/connection.js",
-    "src/db.js",
-    "src/drafty.js",
-    "src/tinode.js",
     "umd/tinode.dev.js",
     "umd/tinode.prod.js",
     "version.json"
