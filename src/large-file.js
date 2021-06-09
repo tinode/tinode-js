@@ -11,8 +11,8 @@
 let XHRProvider;
 
 /**
- * @class LargeFileHelper - utilities for uploading and downloading files.
- * out of band. Don't instantiate this class directly. Use {Tinode.getLargeFileHelper} instead.
+ * @class LargeFileHelper - utilities for uploading and downloading files out of band.
+ * Don't instantiate this class directly. Use {Tinode.getLargeFileHelper} instead.
  * @memberof Tinode
  *
  * @param {Tinode} tinode - the main Tinode object.
@@ -24,7 +24,7 @@ const LargeFileHelper = function(tinode, version) {
 
   this._apiKey = tinode._apiKey;
   this._authToken = tinode.getAuthToken();
-  this._msgId = tinode.getNextUniqueId();
+  this._reqId = tinode.getNextUniqueId();
   this.xhr = new XHRProvider();
 
   // Promise
@@ -44,14 +44,15 @@ LargeFileHelper.prototype = {
    * @memberof Tinode.LargeFileHelper#
    *
    * @param {string} baseUrl alternative base URL of upload server.
-   * @param {File|Blob} data to upload
+   * @param {File|Blob} data to upload.
+   * @param {string} avatarFor topic name if the upload represents an avatar.
    * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
    * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
    * @param {Callback} onFailure callback. Called in case of a failure.
    *
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
-  uploadWithBaseUrl: function(baseUrl, data, onProgress, onSuccess, onFailure) {
+  uploadWithBaseUrl: function(baseUrl, data, avatarFor, onProgress, onSuccess, onFailure) {
     if (!this._authToken) {
       throw new Error("Must authenticate first");
     }
@@ -59,8 +60,13 @@ LargeFileHelper.prototype = {
 
     let url = `/v${this._version}/file/u/`;
     if (baseUrl) {
-      if (baseUrl.startsWith('http://') || baseUrl.startsWith('https://')) {
-        url = baseUrl + url;
+      let base = baseUrl;
+      if (base.endsWith('/')) {
+        // Removing trailing slash.
+        base = base.slice(0, -1);
+      }
+      if (base.startsWith('http://') || base.startsWith('https://')) {
+        url = base + url;
       } else {
         throw new Error(`Invalid base URL '${baseUrl}'`);
       }
@@ -137,7 +143,10 @@ LargeFileHelper.prototype = {
     try {
       const form = new FormData();
       form.append('file', data);
-      form.set('id', this._msgId);
+      form.set('id', this._reqId);
+      if (avatarFor) {
+        form.set('topic', avatarFor);
+      }
       this.xhr.send(form);
     } catch (err) {
       if (this.toReject) {
@@ -157,14 +166,16 @@ LargeFileHelper.prototype = {
    * @memberof Tinode.LargeFileHelper#
    *
    * @param {File|Blob} data to upload
+   * @param {string} avatarFor topic name if the upload represents an avatar.
    * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
    * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
    * @param {Callback} onFailure callback. Called in case of a failure.
    *
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
-  upload: function(data, onProgress, onSuccess, onFailure) {
-    return this.uploadWithBaseUrl(undefined, data, onProgress, onSuccess, onFailure);
+  upload: function(data, avatarFor, onProgress, onSuccess, onFailure) {
+    const baseUrl = (this._tinode._secure ? 'https://' : 'http://') + this.tinode._host;
+    return this.uploadWithBaseUrl(baseUrl, data, avatarFor, onProgress, onSuccess, onFailure);
   },
 
   /**
@@ -288,7 +299,7 @@ LargeFileHelper.prototype = {
    * @returns {string} unique id
    */
   getId: function() {
-    return this._msgId;
+    return this._reqId;
   }
 };
 

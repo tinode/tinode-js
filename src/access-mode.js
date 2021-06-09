@@ -8,6 +8,10 @@
  */
 'use strict';
 
+// NOTE TO DEVELOPERS:
+// Localizable strings should be double quoted "строка на другом языке",
+// non-localizable strings should be single quoted 'non-localized'.
+
 /**
  * Helper class for handling access mode.
  *
