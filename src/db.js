@@ -20,7 +20,7 @@ const DB = function(onError, logger) {
   onError = onError || function() {}
   logger = logger || function() {}
 
-  // Placeholder DB which does nothing.
+  // Instance of IndexDB.
   let db = null;
   // Indicator that the cache is disabled.
   let disabled = false;
@@ -130,23 +130,20 @@ const DB = function(onError, logger) {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onsuccess = (event) => {
           db = event.target.result;
+          disabled = false;
           resolve(db);
         };
         req.onerror = (event) => {
           logger("PCache", "failed to initialize", event);
           reject(event.target.error);
-          if (onError) {
-            onError(event.target.error);
-          }
+          onError(event.target.error);
         };
         req.onupgradeneeded = function(event) {
           db = event.target.result;
 
           db.onerror = function(event) {
             logger("PCache", "failed to create storage", event);
-            if (onError) {
-              onError(event.target.error);
-            }
+            onError(event.target.error);
           };
 
           // Individual object stores.
@@ -180,10 +177,17 @@ const DB = function(onError, logger) {
     deleteDatabase: function() {
       return new Promise((resolve, reject) => {
         const req = indexedDB.deleteDatabase(DB_NAME);
-        req.onsuccess = function(event) {
+        req.onblocked = function(event) {
+          if (db) {
+            db.close();
+          }
+        };
+        req.onsuccess = (event) => {
+          db = null;
+          disabled = true;
           resolve(true);
         };
-        req.onerror = function(event) {
+        req.onerror = (event) => {
           logger("PCache", "deleteDatabase", event.target.error);
           reject(event.target.error);
         };
@@ -192,18 +196,11 @@ const DB = function(onError, logger) {
 
     /**
      * Check if persistent cache is ready for use.
+     * @memberOf DB
      * @returns {boolean} <code>true</code> if cache is ready, <code>false</code> otherwise.
      */
     isReady: function() {
       return !!db;
-    },
-
-    /**
-     * Disable persistent cache: all operations do nothing but return success.
-     */
-    disable: function() {
-      db = null;
-      disabled = true;
     },
 
     // Topics.

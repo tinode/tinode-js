@@ -461,6 +461,9 @@ function getBrowserInfo(ua, product) {
  * @param {function} onComplete - callback to call when initialization is completed.
  */
 var Tinode = function(config, onComplete) {
+  this._host = config.host;
+  this._secure = config.secure;
+
   // Client-provided application name, format <Name>/<version number>
   this._appName = config.appName || "Undefined";
 
@@ -470,6 +473,7 @@ var Tinode = function(config, onComplete) {
   // Name and version of the browser.
   this._browser = '';
   this._platform = config.platform || 'web';
+  // Hardware
   this._hwos = 'undefined';
   this._humanLanguage = 'xx';
   // Underlying OS.
@@ -636,10 +640,11 @@ var Tinode = function(config, onComplete) {
       this.logger("Persistent cache initialized.");
     });
   } else {
-    this._db.disable();
-    if (onComplete) {
-      onComplete();
-    }
+    this._db.deleteDatabase().then(() => {
+      if (onComplete) {
+        onComplete();
+      }
+    });
   }
 
   // Resolve or reject a pending promise.
@@ -1305,12 +1310,27 @@ Tinode.prototype = {
   },
 
   /**
-   * Clear persistent cache: remove indexDB cache of the most recently logged in user.
+   * Clear persistent cache: remove IndexedDB.
+   * @memberof Tinode#
+   * @return {Promise} Promise resolved/rejected when the operation is completed.
    */
   clearStorage: function() {
-    if (this._db) {
-      this._db.deleteDatabase();
+    if (this._db.isReady()) {
+      return this._db.deleteDatabase();
     }
+    return Promise.resolve();
+  },
+
+  /**
+   * Initialize persistent cache: create IndexedDB cache.
+   * @memberof Tinode#
+   * @return {Promise} Promise resolved/rejected when the operation is completed.
+   */
+  initStorage: function() {
+    if (!this._db.isReady()) {
+      return this._db.initDatabase();
+    }
+    return Promise.resolve();
   },
 
   /**
@@ -1397,6 +1417,8 @@ Tinode.prototype = {
    * @param {string} secret - Authentication secret, assumed to be already base64 encoded.
    * @param {boolean=} login - Use new account to authenticate current session
    * @param {Tinode.AccountParams=} params - User data to pass to the server.
+   *
+   * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
   account: function(uid, scheme, secret, login, params) {
     const pkt = this.initPacket('acc');
