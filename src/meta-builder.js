@@ -33,12 +33,6 @@ MetaGetBuilder.prototype = {
     if (this.topic.isP2PType()) {
       return this._get_desc_ims();
     }
-    if (this.topic.isMeType()) {
-      const gupd = this.topic._tinode._lastTopicUpdate || 0;
-      if (gupd > this.topic._lastSubsUpdate) {
-        return gupd;
-      }
-    }
     return this.topic._lastSubsUpdate;
   },
 

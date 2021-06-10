@@ -228,8 +228,8 @@ function mergeObj(dst, src, ignore) {
   }
 
   // Handle Date
-  if (src instanceof Date) {
-    return (!dst || !(dst instanceof Date) || dst < src) ? src : dst;
+  if (src instanceof Date && !isNaN(src)) {
+    return (!dst || !(dst instanceof Date) || isNaN(dst) || dst < src) ? src : dst;
   }
 
   // Access mode
@@ -532,9 +532,6 @@ var Tinode = function(config, onComplete) {
   }
   this._connection = new Connection(config, PROTOCOL_VERSION, /* autoreconnect */ true);
 
-  // Timestamp of the most recent update to topics in cache.
-  this._lastTopicUpdate = null;
-
   // Tinode's cache of objects
   this._cache = {};
 
@@ -584,9 +581,6 @@ var Tinode = function(config, onComplete) {
       return cacheDel('user', uid);
     };
     topic._cachePutSelf = () => {
-      if (topic.updated && topic.updated > this._lastTopicUpdate) {
-        this._lastTopicUpdate = topic.updated;
-      }
       return cachePut('topic', topic.name, topic);
     }
     topic._cacheDelSelf = () => {
