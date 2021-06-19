@@ -181,16 +181,21 @@ function detectTransport() {
   return null;
 }
 
+// Checks if 'd' is a valid non-zero date;
+function isValidDate(d) {
+  return (d instanceof Date) && !isNaN(d) && (d.getTime() != 0);
+}
+
 // RFC3339 formater of Date
 function rfc3339DateString(d) {
-  if (!d || d.getTime() == 0) {
+  if (!isValidDate(d)) {
     return undefined;
   }
 
-  function pad(val, sp) {
+  const pad = function(val, sp) {
     sp = sp || 2;
     return '0'.repeat(sp - ('' + val).length) + val;
-  }
+  };
 
   const millis = d.getUTCMilliseconds();
   return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
@@ -293,8 +298,9 @@ function jsonBuildHelper(key, val) {
 };
 
 // Strips all values from an object of they evaluate to false or if their name starts with '_'.
+// Used on all outgoing object before serialization to string.
 function simplify(obj) {
-  Object.keys(obj).forEach(function(key) {
+  Object.keys(obj).forEach((key) => {
     if (key[0] == '_') {
       // Strip fields like "obj._key".
       delete obj[key];
@@ -307,7 +313,12 @@ function simplify(obj) {
     } else if (!obj[key]) {
       // Strip fields which evaluate to false.
       delete obj[key];
-    } else if (typeof obj[key] == 'object' && !(obj[key] instanceof Date)) {
+    } else if (obj[key] instanceof Date) {
+      // Strip invalid or zero date.
+      if (!isValidDate(obj[key])) {
+        delete obj[key];
+      }
+    } else if (typeof obj[key] == 'object') {
       simplify(obj[key]);
       // Strip empty objects.
       if (Object.getOwnPropertyNames(obj[key]).length == 0) {
@@ -351,8 +362,8 @@ function jsonParseHelper(key, val) {
   // 2015-09-02T01:45:43[.123]Z
   if (key === 'ts' && typeof val === 'string' &&
     val.length >= 20 && val.length <= 24) {
-    let date = new Date(val);
-    if (date) {
+    const date = new Date(val);
+    if (!isNaN(date)) {
       return date;
     }
   } else if (key === 'acs' && typeof val === 'object') {
@@ -2040,9 +2051,9 @@ Tinode.prototype = {
         topic = new Topic(topicName);
       }
       // Cache management.
-      this._db.updTopic(topic);
       this.attachCacheToTopic(topic);
       topic._cachePutSelf();
+      // Don't save to DB here: a record will be added when the topic is subscribed.
     }
     return topic;
   },
@@ -2439,14 +2450,16 @@ Topic.prototype = {
       if (this._new) {
         this._new = false;
 
-        // Name may change new123456 -> grpAbCdEf
-        this.name = ctrl.topic;
+        if (this.name != ctrl.topic) {
+          // Name may change new123456 -> grpAbCdEf. Remove from cache under the old name.
+          this._cacheDelSelf();
+          this.name = ctrl.topic;
+        }
+        this._cachePutSelf();
 
         this.created = ctrl.ts;
         this.updated = ctrl.ts;
-        // Don't assign touched, otherwise topic will be put on top of the list on subscribe.
-
-        this._cachePutSelf();
+        this.touched = ctrl.ts;
 
         if (this.name != TOPIC_ME && this.name != TOPIC_FND) {
           // Add the new topic to the list of contacts maintained by the 'me' topic.
