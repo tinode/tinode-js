@@ -1407,13 +1407,14 @@ Drafty.hasAttachments = function(content) {
 
 /**
  * Callback for applying custom formatting/transformation to a Drafty document.
- * Called once for each syle span.
+ * Called once for each entity.
  * @memberof Drafty
  * @static
  *
- * @callback AttachmentCallback
- * @param {Object} data attachment data
- * @param {number} index attachment's index in `content.ent`.
+ * @callback EntityCallback
+ * @param {Object} data entity data.
+ * @param {string} entity type.
+ * @param {number} index entity's index in `content.ent`.
  */
 
 /**
@@ -1422,14 +1423,45 @@ Drafty.hasAttachments = function(content) {
  * @static
  *
  * @param {Drafty} content - document to process for attachments.
- * @param {AttachmentCallback} callback - callback to call for each attachment.
+ * @param {EntityCallback} callback - callback to call for each attachment.
  * @param {Object} context - value of "this" for callback.
  */
 Drafty.attachments = function(content, callback, context) {
   if (content.ent && content.ent.length > 0) {
     for (let i in content.ent) {
       if (content.ent[i] && content.ent[i].tp == 'EX') {
-        callback.call(context, content.ent[i].data, i);
+        callback.call(context, content.ent[i].data, i, 'EX');
+      }
+    }
+  }
+}
+
+/**
+ * Check if the drafty document has entities.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document to check for entities.
+ * @returns <code>true</code> if there are entities.
+ */
+Drafty.hasEntities = function(content) {
+  return content.ent && content.ent.length > 0;
+}
+
+/**
+ * Enumerate entities.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document with entities to enumerate.
+ * @param {EntityCallback} callback - callback to call for each entity.
+ * @param {Object} context - value of "this" for callback.
+ */
+Drafty.entities = function(content, callback, context) {
+  if (content.ent && content.ent.length > 0) {
+    for (let i in content.ent) {
+      if (content.ent[i]) {
+        callback.call(context, content.ent[i].data, i, content.ent[i].tp);
       }
     }
   }

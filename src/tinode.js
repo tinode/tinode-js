@@ -2508,13 +2508,17 @@ Topic.prototype = {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
     }
 
-    // Update header with attachment records.
-    if (Drafty.hasAttachments(pub.content) && !pub.head.attachments) {
-      let attachments = [];
-      Drafty.attachments(pub.content, (data) => {
-        attachments.push(data.ref);
+    // Update header with attachment and out of band image records.
+    if (Drafty.hasEntities(pub.content) && !pub.head.attachments) {
+      const entities = [];
+      Drafty.entities(pub.content, (data) => {
+        if (data.ref) {
+          entities.push(data.ref);
+        }
       });
-      pub.head.attachments = attachments;
+      if (entities.length > 0) {
+        pub.head.attachments = entities;
+      }
     }
 
     // Send data.
