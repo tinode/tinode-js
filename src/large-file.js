@@ -8,6 +8,8 @@
  */
 'use strict';
 
+const { jsonParseHelper } = require('./utils.js');
+
 let XHRProvider;
 
 /**
@@ -174,7 +176,7 @@ LargeFileHelper.prototype = {
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
   upload: function(data, avatarFor, onProgress, onSuccess, onFailure) {
-    const baseUrl = (this._tinode._secure ? 'https://' : 'http://') + this.tinode._host;
+    const baseUrl = (this._tinode._secure ? 'https://' : 'http://') + this._tinode._host;
     return this.uploadWithBaseUrl(baseUrl, data, avatarFor, onProgress, onSuccess, onFailure);
   },
 

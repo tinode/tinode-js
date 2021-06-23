@@ -9,6 +9,10 @@
  */
 'use strict';
 
+const {
+  jsonParseHelper
+} = require('./utils.js');
+
 let WebSocketProvider;
 let XHRProvider;
 

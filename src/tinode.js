@@ -57,6 +57,9 @@ const DBCache = require('./db.js');
 const Drafty = require('./drafty.js');
 const LargeFileHelper = require('./large-file.js');
 const MetaGetBuilder = require('./meta-builder.js');
+const {
+  jsonParseHelper
+} = require('./utils.js');
 
 const package_version = require('../version.json').version;
 
@@ -355,22 +358,6 @@ function normalizeArray(arr) {
   }
   return out;
 }
-
-// Attempt to convert date strings to objects.
-function jsonParseHelper(key, val) {
-  // Convert string timestamps with optional milliseconds to Date
-  // 2015-09-02T01:45:43[.123]Z
-  if (key === 'ts' && typeof val === 'string' &&
-    val.length >= 20 && val.length <= 24) {
-    const date = new Date(val);
-    if (!isNaN(date)) {
-      return date;
-    }
-  } else if (key === 'acs' && typeof val === 'object') {
-    return new AccessMode(val);
-  }
-  return val;
-};
 
 // Trims very long strings (encoded images) to make logged packets more readable.
 function jsonLoggerHelper(key, val) {
