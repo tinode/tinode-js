@@ -2512,7 +2512,7 @@ Topic.prototype = {
     if (Drafty.hasEntities(pub.content) && !pub.head.attachments) {
       const entities = [];
       Drafty.entities(pub.content, (data) => {
-        if (data.ref) {
+        if (data && data.ref) {
           entities.push(data.ref);
         }
       });

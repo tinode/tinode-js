@@ -1397,7 +1397,7 @@ Drafty.isValid = function(content) {
 Drafty.hasAttachments = function(content) {
   if (content.ent && content.ent.length > 0) {
     for (let i in content.ent) {
-      if (content.ent[i] && content.ent[i].tp == 'EX') {
+      if (content.ent[i] && content.ent[i].data && content.ent[i].tp == 'EX') {
         return true;
       }
     }
@@ -1429,7 +1429,7 @@ Drafty.hasAttachments = function(content) {
 Drafty.attachments = function(content, callback, context) {
   if (content.ent && content.ent.length > 0) {
     for (let i in content.ent) {
-      if (content.ent[i] && content.ent[i].tp == 'EX') {
+      if (content.ent[i] && content.ent[i].tp == 'EX' && content.ent[i].data) {
         callback.call(context, content.ent[i].data, i, 'EX');
       }
     }
