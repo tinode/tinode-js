@@ -3416,7 +3416,37 @@ Topic.prototype = {
    * @returns {boolean} - <code>true</code> if topic is archived, <code>false</code> otherwise.
    */
   isArchived: function() {
-    return this.private && this.private.arch ? true : false;
+    return !!(this.private && this.private.arch);
+  },
+
+  /**
+   * Check if topic is verified.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} - <code>true</code> if topic is verified, <code>false</code> otherwise.
+   */
+  isVerified: function() {
+    return !!(this.trusted && this.trusted.verified);
+  },
+
+  /**
+   * Check if topic is managed by staff.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} - <code>true</code> if topic is managed by staff, <code>false</code> otherwise.
+   */
+  isStaff: function() {
+    return !!(this.trusted && this.trusted.staff);
+  },
+
+  /**
+   * Check if topic is marked as suspicious.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} - <code>true</code> if topic is suspicious, <code>false</code> otherwise.
+   */
+  isDangerous: function() {
+    return !!(this.trusted && this.trusted.danger);
   },
 
   /**
