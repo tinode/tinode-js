@@ -16,6 +16,8 @@
 const DB_VERSION = 1;
 const DB_NAME = 'tinode-web';
 
+let IDBProvider;
+
 const DB = function(onError, logger) {
   onError = onError || function() {}
   logger = logger || function() {}
@@ -127,7 +129,7 @@ const DB = function(onError, logger) {
     initDatabase: function() {
       return new Promise((resolve, reject) => {
         // Open the database and initialize callbacks.
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        const req = IDBProvider.open(DB_NAME, DB_VERSION);
         req.onsuccess = (event) => {
           db = event.target.result;
           disabled = false;
@@ -176,7 +178,7 @@ const DB = function(onError, logger) {
      */
     deleteDatabase: function() {
       return new Promise((resolve, reject) => {
-        const req = indexedDB.deleteDatabase(DB_NAME);
+        const req = IDBProvider.deleteDatabase(DB_NAME);
         req.onblocked = function(event) {
           if (db) {
             db.close();
@@ -600,6 +602,16 @@ const DB = function(onError, logger) {
     }
   };
 }
+
+/**
+ * To use DB in a non browser context, supply indexedDB provider.
+ * @static
+ * @memberof DB
+ * @param idbProvider indexedDB provider, e.g. for node <code>require('fake-indexeddb')</code>.
+ */
+DB.setDatabaseProvider = function(idbProvider) {
+  IDBProvider = idbProvider;
+};
 
 if (typeof module != 'undefined') {
   module.exports = DB;
