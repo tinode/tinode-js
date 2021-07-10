@@ -28,20 +28,12 @@ or while developing as
 
 ## Node JS compatibility
 
-This SDK is intended to be used in a browser. To use tinode-sdk in Node JS environment (such as on a server), you have to polyfill network providers, for example with [ws](https://www.npmjs.com/package/ws) and [xmlhttprequest](https://www.npmjs.com/package/xmlhttprequest) or [xhr](https://www.npmjs.com/package/xhr).
+This SDK is intended to be used in a browser. To use `tinode-sdk` in Node JS environment (such as on a server), you have to polyfill network providers, for example with [ws](https://www.npmjs.com/package/ws) and [xmlhttprequest](https://www.npmjs.com/package/xmlhttprequest) or [xhr](https://www.npmjs.com/package/xhr), as well as `indexedDB` with something like [fake-indexeddb](https://www.npmjs.com/package/fake-indexeddb):
+
 ```js
   Tinode.setNetworkProviders(require('ws'), require('xmlhttprequest'));
+  Tinode.setDatabaseProvider(require('fake-indexeddb'));
   this.tinode = new Tinode(...);
-```
-or (before instantiating Tinode):
-```js
-  window.WebSocket = require('ws');
-  window.XMLHttpRequest = require('xmlhttprequest');
-```
-
-The SDK optionally uses `indexedDB` for caching data. If you wish to retain the functionality then polyfill `indexedDB` with something like [fake-indexeddb](https://www.npmjs.com/package/fake-indexeddb):
-```js
-  require('fake-indexeddb/auto');
 ```
 
 Keep in mind that the SDK also references `URL.createObjectURL()` which is [not currently polyfilled](https://github.com/nodejs/node/issues/16167). An exception will be thrown when the user attempts to download a file attachment. See discussion: https://github.com/tinode/tinode-js/issues/28
