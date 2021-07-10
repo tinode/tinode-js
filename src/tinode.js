@@ -73,6 +73,11 @@ if (typeof XMLHttpRequest != 'undefined') {
   XHRProvider = XMLHttpRequest;
 }
 
+let IndexedDBProvider;
+if (typeof indexedDB != 'undefined') {
+  IndexedDBProvider = indexedDB;
+}
+
 initForNonBrowserApp();
 
 // Global constants
@@ -159,6 +164,7 @@ function initForNonBrowserApp() {
     global.window = {
       WebSocket: WebSocketProvider,
       XMLHttpRequest: XHRProvider,
+      indexedDB: IndexedDBProvider,
       URL: {
         createObjectURL: function() {
           throw new Error("Unable to use URL.createObjectURL in a non-browser application");
@@ -169,6 +175,7 @@ function initForNonBrowserApp() {
 
   Connection.setNetworkProviders(WebSocketProvider, XHRProvider);
   LargeFileHelper.setNetworkProvider(XHRProvider);
+  DBCache.setDatabaseProvider(IndexedDBProvider);
 }
 
 // Detect find most useful network transport.
@@ -1197,12 +1204,22 @@ Tinode.getVersion = function() {
  * To use Tinode in a non browser context, supply WebSocket and XMLHttpRequest providers.
  * @static
  * @memberof Tinode
- * @param wsProvider WebSocket provider, e.g. for nodeJS , <code>require('ws')</code>.
- * @param xhrProvider XMLHttpRequest provider, e.g. for node <code>require('xhr')</code>.
+ * @param wsProvider <code>WebSocket</code> provider, e.g. for nodeJS , <code>require('ws')</code>.
+ * @param xhrProvider <code>XMLHttpRequest</code> provider, e.g. for node <code>require('xhr')</code>.
  */
 Tinode.setNetworkProviders = function(wsProvider, xhrProvider) {
   WebSocketProvider = wsProvider;
   XHRProvider = xhrProvider;
+};
+
+/**
+ * To use Tinode in a non browser context, supply <code>indexedDB</code> provider.
+ * @static
+ * @memberof Tinode
+ * @param idbProvider <code>indexedDB</code> provider, e.g. for nodeJS , <code>require('fake-indexeddb')</code>.
+ */
+Tinode.setDatabaseProvider = function(idbProvider) {
+  IndexedDBProvider = idbProvider;
 };
 
 /**

@@ -62,7 +62,7 @@ function makeBaseUrl(host, protocol, version, apiKey) {
  */
 // config.host, PROTOCOL_VERSION, config.apiKey, config.transport, config.secure, true
 const Connection = function(config, version_, autoreconnect_) {
-  const host = config.host;
+  let host = config.host;
   const secure = config.secure;
   const apiKey = config.apiKey;
 
