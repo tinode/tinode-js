@@ -1379,7 +1379,7 @@ Tinode.prototype = {
    * @returns {string} URL with appended API key and token, if valid token is present.
    */
   authorizeURL: function(url) {
-    if (!url) {
+    if (typeof url != 'string') {
       return url;
     }
 
