@@ -1407,8 +1407,10 @@ Tinode.prototype = {
    * @property {Tinode.DefAcs=} defacs - Default access parameters for user's <code>me</code> topic.
    * @property {Object=} public - Public application-defined data exposed on <code>me</code> topic.
    * @property {Object=} private - Private application-defined data accessible on <code>me</code> topic.
-   * @property {Array} tags - array of string tags for user discovery.
+   * @property {Object=} trusted - Trusted user data which can be set by a root user only.
+   * @property {Array.<string>} tags - array of string tags for user discovery.
    * @property {string=} token - authentication token to use.
+   * @property {Array.<string>=} attachments - Array of references to out of band attachments used in account description.
    */
   /**
    * @typedef DefAcs
@@ -1442,11 +1444,18 @@ Tinode.prototype = {
       pkt.acc.desc.defacs = params.defacs;
       pkt.acc.desc.public = params.public;
       pkt.acc.desc.private = params.private;
+      pkt.acc.desc.trusted = params.trusted;
 
       pkt.acc.tags = params.tags;
       pkt.acc.cred = params.cred;
 
       pkt.acc.token = params.token;
+
+      if (Array.isArray(params.attachments) && params.attachments.length > 0) {
+        pkt.extra = {
+          attachments: params.attachments
+        };
+      }
     }
 
     return this.send(pkt, pkt.acc.id);
@@ -1673,6 +1682,7 @@ Tinode.prototype = {
    * @memberof Tinode
    * @property {Tinode.SetDesc=} desc - Topic initialization parameters when creating a new topic or a new subscription.
    * @property {Tinode.SetSub=} sub - Subscription initialization parameters.
+   * @property {Array.<string>=} attachments - URLs of out of band attachments used in parameters.
    */
   /**
    * @typedef SetDesc
@@ -1680,7 +1690,8 @@ Tinode.prototype = {
    * @memberof Tinode
    * @property {Tinode.DefAcs=} defacs - Default access mode.
    * @property {Object=} public - Free-form topic description, publically accessible.
-   * @property {Object=} private - Free-form topic descriptionaccessible only to the owner.
+   * @property {Object=} private - Free-form topic description accessible only to the owner.
+   * @property {Object=} trusted - Trusted user data which can be set by a root user only.
    */
   /**
    * @typedef SetSub
@@ -1688,7 +1699,6 @@ Tinode.prototype = {
    * @memberof Tinode
    * @property {string=} user - UID of the user affected by the request. Default (empty) - current user.
    * @property {string=} mode - User access mode, either requested or assigned dependent on context.
-   * @property {Object=} info - Free-form payload to pass to the invited user or topic manager.
    */
   /**
    * Parameters passed to {@link Tinode#subscribe}.
@@ -1724,15 +1734,23 @@ Tinode.prototype = {
       }
 
       if (setParams.desc) {
+        const desc = setParams.desc;
         if (Tinode.isNewGroupTopicName(topicName)) {
           // Full set.desc params are used for new topics only
-          pkt.sub.set.desc = setParams.desc;
-        } else if (Tinode.isP2PTopicName(topicName) && setParams.desc.defacs) {
+          pkt.sub.set.desc = desc;
+        } else if (Tinode.isP2PTopicName(topicName) && desc.defacs) {
           // Use optional default permissions only.
           pkt.sub.set.desc = {
-            defacs: setParams.desc.defacs
+            defacs: desc.defacs
           };
         }
+      }
+
+      // See if external objects were used in topic description.
+      if (Array.isArray(setParams.attachments) && setParams.attachments.length > 0) {
+        pkt.extra = {
+          attachments: attachments
+        };
       }
 
       if (setParams.tags) {
@@ -1806,17 +1824,21 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {Object} pub - Message to publish.
+   * @param {Array.<string>=} attachments - array of URLs with attachments.
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publishMessage: function(pub) {
+  publishMessage: function(pub, attachments) {
     // Make a shallow copy. Needed in order to clear locally-assigned temp values;
     pub = Object.assign({}, pub);
     pub.seq = undefined;
     pub.from = undefined;
     pub.ts = undefined;
     return this.send({
-      pub: pub
+      pub: pub,
+      extra: {
+        attachments: attachments
+      },
     }, pub.id);
   },
 
@@ -1898,6 +1920,12 @@ Tinode.prototype = {
           pkt.set[key] = params[key];
         }
       });
+
+      if (Array.isArray(params.attachments) && params.attachments.length > 0) {
+        pkt.extra = {
+          attachments: params.attachments
+        };
+      }
     }
 
     if (what.length == 0) {
@@ -2360,10 +2388,12 @@ var Topic = function(name, callbacks) {
   this.touched = new Date(0);
   // Access mode, see AccessMode
   this.acs = new AccessMode(null);
-  // per-topic private data
+  // Per-topic private data (accessible by current user only).
   this.private = null;
-  // per-topic public data
+  // Per-topic public data (accessible by all users).
   this.public = null;
+  // Per-topic system-provided data (accessible by all users).
+  this.trusted = null;
 
   // Locally cached data
   // Subscribed users, for tracking read/recv/msg notifications.
@@ -2525,23 +2555,24 @@ Topic.prototype = {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
     }
 
-    // Update header with attachment and out of band image records.
-    if (Drafty.hasEntities(pub.content) && !pub.head.attachments) {
-      const entities = [];
+    // Extract refereces to attachments and out of band image records.
+    let attachments = null;
+    if (Drafty.hasEntities(pub.content)) {
+      attachments = [];
       Drafty.entities(pub.content, (data) => {
         if (data && data.ref) {
-          entities.push(data.ref);
+          attachments.push(data.ref);
         }
       });
-      if (entities.length > 0) {
-        pub.head.attachments = entities;
+      if (attachments.length == 0) {
+        attachments = null;
       }
     }
 
     // Send data.
     pub._sending = true;
     pub._failed = false;
-    return this._tinode.publishMessage(pub).then((ctrl) => {
+    return this._tinode.publishMessage(pub, attachments).then((ctrl) => {
       pub._sending = false;
       pub.ts = ctrl.ts;
       this.swapMessageId(pub, ctrl.params.seq);
@@ -3811,6 +3842,7 @@ Topic.prototype = {
     this.acs = new AccessMode(null);
     this.private = null;
     this.public = null;
+    this.trusted = null;
     this._maxSeq = 0;
     this._minSeq = 0;
     this._subscribed = false;
