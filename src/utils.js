@@ -25,7 +25,19 @@ function jsonParseHelper(key, val) {
   return val;
 }
 
+// Checks if URL is a relative url, i.e. has no 'scheme://', including the case of missing scheme '//'.
+// The scheme is expected to be RFC-compliant, e.g. [a-z][a-z0-9+.-]*
+// example.html - ok
+// https:example.com - not ok.
+// http:/example.com - not ok.
+// ' ↲ https://example.com' - not ok. (↲ means carriage return)
+function isUrlRelative(url) {
+  return url && !/^\s*([a-z][a-z0-9+.-]*:|\/\/)/im.test(url);
+}
 
 if (typeof module != 'undefined') {
-  module.exports.jsonParseHelper = jsonParseHelper;
+  module.exports = {
+    jsonParseHelper: jsonParseHelper,
+    isUrlRelative: isUrlRelative
+  };
 }
