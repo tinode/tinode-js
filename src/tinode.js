@@ -2463,7 +2463,6 @@ Topic.prototype = {
 
         this.created = ctrl.ts;
         this.updated = ctrl.ts;
-        this.touched = ctrl.ts;
 
         if (this.name != TOPIC_ME && this.name != TOPIC_FND) {
           // Add the new topic to the list of contacts maintained by the 'me' topic.
@@ -4244,7 +4243,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
             // Create a dummy entry to catch online status update.
             const dummy = this._tinode.getTopic(pres.src);
-            dummy.touched = new Date();
             dummy.topic = pres.src;
             dummy.online = false;
             dummy.acs = acs;
