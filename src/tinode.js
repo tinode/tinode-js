@@ -58,7 +58,8 @@ const Drafty = require('./drafty.js');
 const LargeFileHelper = require('./large-file.js');
 const MetaGetBuilder = require('./meta-builder.js');
 const {
-  jsonParseHelper, isUrlRelative
+  jsonParseHelper,
+  isUrlRelative
 } = require('./utils.js');
 
 const package_version = require('../version.json').version;
