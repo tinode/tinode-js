@@ -189,7 +189,11 @@ const HTML_TAGS = {
   HL: {
     name: 'span',
     isVoid: false
-  }
+  },
+  QQ: {
+    name: 'blockquote',
+    isVoid: false
+  },
 };
 
 // Convert base64-encoded string into Blob.
@@ -396,6 +400,20 @@ const DECORATORS = {
     close: function(data) {
       return '</div>';
     }
+  },
+  QQ: {
+    open: function(data) {
+      return '<blockquote>';
+    },
+    close: function(data) {
+      return '</blockquote>';
+    },
+    props: function(data) {
+      if (!data) return null;
+      return {
+        // TODO: add more content.
+      };
+    },
   }
 };
 
@@ -800,6 +818,47 @@ Drafty.init = function(plainText) {
 }
 
 /**
+ * Deep copy message content.
+ *
+ * @param {Drafty} msg - message to be copied.
+ *
+ * @returns copy of msg without quotes.
+ */
+function clone(msg) {
+  if (msg == null) {
+    return null;
+  }
+  if (Drafty.isPlainText(msg)) {
+    return msg;
+  }
+  let res = {
+    txt: msg.txt
+  };
+
+  if (Array.isArray(msg.fmt)) {
+    res.fmt = [];
+    if (Array.isArray(msg.ent)) {
+      res.ent = [];
+    }
+    msg.fmt.forEach(src => {
+      const fmt = {
+        at: src.at,
+        len: src.len
+      };
+      if (src.tp) {
+        fmt.tp = src.tp;
+      } else {
+        fmt.key = res.ent.length;
+        res.ent.push(msg.ent[src.key || 0]);
+      }
+      res.fmt.push(fmt);
+    });
+  }
+
+  return res;
+}
+
+/**
  * Append one Drafty document to another.
  *
  * @param {Drafty} first - Drafty document to append to.
@@ -911,6 +970,71 @@ Drafty.insertImage = function(content, at, imageDesc) {
     );
   }
 
+  content.ent.push(ex);
+
+  return content;
+}
+
+/**
+ * Add a quote to Drafty document.
+ *
+ * @param {Drafty} content - Original Drafty message to attach quote header to.
+ * @param {Drafty} quote - Drafty message to be quoted.
+ *
+ * @returns content with the added quote header.
+ */
+Drafty.attachQuote = function(content, quote) {
+  content = content || {
+    txt: " "
+  };
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+  if (quote.qte) {
+    quote = clone(quote);
+  }
+  content.qte = quote;
+
+  const qteLen = quote.txt.length;
+  quote = Drafty.appendLineBreak(quote);
+
+  quote.fmt.push({
+    at: 0,
+    len: qteLen,
+    tp: 'QQ'
+  });
+
+  return content;
+}
+
+/**
+ * Append a link to a Drafty document.
+ *
+ * @param {Drafty} content - Drafty document to append link to.
+ * @param {} linkData - Link info in format { txt, url }.
+ *
+ * @returns {Drafty} the same document as <code>content</code>.
+ */
+Drafty.appendLink = function(content, linkData) {
+  content = content || {
+    txt: ""
+  };
+
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: content.txt.length,
+    len: linkData.txt.length,
+    key: content.ent.length
+  });
+  content.txt += linkData.txt;
+
+  const ex = {
+    tp: 'LN',
+    data: {
+      url: linkData.url
+    }
+  }
   content.ent.push(ex);
 
   return content;
@@ -1168,7 +1292,7 @@ Drafty.appendLineBreak = function(content) {
  * @memberof Tinode.Drafty
  * @static
  *
- * @param {Drafy} content - document to convert.
+ * @param {Drafty} content - document to convert.
  *
  * @returns {string} HTML-representation of content.
  */
@@ -1176,7 +1300,7 @@ Drafty.UNSAFE_toHTML = function(content) {
   let {
     txt,
     fmt,
-    ent
+    ent,
   } = content;
 
   const markup = [];
@@ -1224,56 +1348,8 @@ Drafty.UNSAFE_toHTML = function(content) {
   return txt;
 }
 
-/**
- * Callback for applying custom formatting/transformation to a Drafty document.
- * Called once for each syle span.
- * @memberof Drafty
- * @static
- *
- * @callback Formatter
- * @param {string} style - style code such as "ST" or "IM".
- * @param {Object} data - entity's data
- * @param {Object} values - possibly styled subspans contained in this style span.
- * @param {number} index - of the current element among its siblings.
- */
-
-/**
- * Transform Drafty document using custom formatting.
- * @memberof Drafty
- * @static
- *
- * @param {Drafty} content - content to transform.
- * @param {Formatter} formatter - callback which transforms individual elements
- * @param {Object} context - context provided to formatter as <code>this</code>.
- *
- * @return {Object} transformed object
- */
-Drafty.format = function(content, formatter, context) {
-  let {
-    txt,
-    fmt,
-    ent
-  } = content;
-
-  // Assign default values.
-  txt = txt || "";
-  if (!Array.isArray(ent)) {
-    ent = [];
-  }
-
-  if (!Array.isArray(fmt)) {
-    // Handle special case when all values in fmt are 0 and fmt is skipped.
-    if (ent.length == 1) {
-      fmt = [{
-        at: 0,
-        len: 0,
-        key: 0
-      }];
-    } else {
-      return [txt];
-    }
-  }
-
+// Denormalizes formatting and entity data into a simple span array.
+function prepareSpans(fmt, ent) {
   let spans = [].concat(fmt);
 
   // Zero values may have been stripped. Restore them.
@@ -1320,6 +1396,77 @@ Drafty.format = function(content, formatter, context) {
       len: s.len
     };
   });
+
+  return spans;
+}
+
+/**
+ * Callback for applying custom formatting/transformation to a Drafty document.
+ * Called once for each syle span.
+ * @memberof Drafty
+ * @static
+ *
+ * @callback Formatter
+ * @param {string} style - style code such as "ST" or "IM".
+ * @param {Object} data - entity's data
+ * @param {Object} values - possibly styled subspans contained in this style span.
+ * @param {number} index - of the current element among its siblings.
+ */
+
+/**
+ * Transform Drafty document using custom formatting.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - content to transform.
+ * @param {Formatter} formatter - callback which transforms individual elements
+ * @param {Object} context - context provided to formatter as <code>this</code>.
+ *
+ * @return {Object} transformed object
+ */
+Drafty.format = function(content, formatter, context) {
+  let {
+    txt,
+    fmt,
+    ent,
+    qte
+  } = content;
+
+  // Assign default values.
+  txt = txt || "";
+  if (!Array.isArray(ent)) {
+    ent = [];
+  }
+
+  if (!Array.isArray(fmt)) {
+    // Handle special case when all values in fmt are 0 and fmt is skipped.
+    if (ent.length == 1) {
+      fmt = [{
+        at: 0,
+        len: 0,
+        key: 0
+      }];
+    } else if (!qte) {
+      return [txt];
+    } else {
+      // We still have a quote - need to deal with it.
+      fmt = [];
+    }
+  }
+
+  let spans = prepareSpans(fmt, ent);
+  if (qte) {
+    // Quote formatting does not overlap with the main content.
+    // Simply concatenate the plain text string and formatting.
+    // And shift the positions in the main spans by the quote length.
+    let quoteSpans = prepareSpans(qte.fmt, qte.ent);
+    const shift = qte.txt.length;
+    spans.map(function(s) {
+      s.at += shift;
+    });
+    txt = qte.txt + txt;
+    spans = quoteSpans.concat(spans);
+  }
 
   return forEach(txt, 0, txt.length, spans, formatter, context);
 }
