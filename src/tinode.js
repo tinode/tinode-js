@@ -467,7 +467,7 @@ function getBrowserInfo(ua, product) {
  * @param {boolen} config.persist - Use IndexedDB persistent storage.
  * @param {function} onComplete - callback to call when initialization is completed.
  */
-var Tinode = function(config, onComplete) {
+const Tinode = function(config, onComplete) {
   this._host = config.host;
   this._secure = config.secure;
 
@@ -2374,7 +2374,7 @@ Tinode.prototype = {
  * @param {callback} callbacks.onDeleteTopic - Called after the topic is deleted.
  * @param {callback} callbacls.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
  */
-var Topic = function(name, callbacks) {
+const Topic = function(name, callbacks) {
   // Parent Tinode object.
   this._tinode = null;
 
@@ -4009,7 +4009,7 @@ Topic.prototype = {
  *
  * @param {TopicMe.Callbacks} callbacks - Callbacks to receive various events.
  */
-var TopicMe = function(callbacks) {
+const TopicMe = function(callbacks) {
   Topic.call(this, TOPIC_ME, callbacks);
 
   // me-specific callbacks
@@ -4464,7 +4464,7 @@ TopicMe.prototype.constructor = TopicMe;
  *
  * @param {TopicFnd.Callbacks} callbacks - Callbacks to receive various events.
  */
-var TopicFnd = function(callbacks) {
+const TopicFnd = function(callbacks) {
   Topic.call(this, TOPIC_FND, callbacks);
   // List of users and topics uid or topic_name -> Contact object)
   this._contacts = {};
@@ -4568,7 +4568,7 @@ TopicFnd.prototype.constructor = TopicFnd;
  * @param {string} topic_ - name of the topic the message belongs to.
  * @param {string | Drafty} content_ - message contant.
  */
-var Message = function(topic_, content_) {
+const Message = function(topic_, content_) {
   this.status = Message.STATUS_NONE;
   this.topic = topic_;
   this.content = content_;
