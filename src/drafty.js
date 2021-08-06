@@ -300,7 +300,7 @@ const DECORATORS = {
     props: function(data) {
       return data ? {
         href: data.url,
-        target: "_blank"
+        target: '_blank'
       } : null;
     },
   },
@@ -1672,7 +1672,7 @@ function copyLight(ent) {
   };
   if (ent.data && Object.entries(ent.data).length != 0) {
     const dc = {};
-    ["mime", "name", "width", "height", "size"].forEach((key) => {
+    ['mime', 'name', 'width', 'height', 'size'].forEach((key) => {
       const val = ent.data[key];
       if (val) {
         dc[key] = val;
