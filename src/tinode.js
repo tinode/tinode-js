@@ -1454,7 +1454,7 @@ Tinode.prototype = {
 
       if (Array.isArray(params.attachments) && params.attachments.length > 0) {
         pkt.extra = {
-          attachments: params.attachments.filter(ref => isRelativeURL(ref))
+          attachments: params.attachments.filter(ref => Tinode.isRelativeURL(ref))
         };
       }
     }
@@ -1750,7 +1750,7 @@ Tinode.prototype = {
       // See if external objects were used in topic description.
       if (Array.isArray(setParams.attachments) && setParams.attachments.length > 0) {
         pkt.extra = {
-          attachments: setParams.attachments.filter(ref => isRelativeURL(ref))
+          attachments: setParams.attachments.filter(ref => Tinode.isRelativeURL(ref))
         };
       }
 
@@ -1838,7 +1838,7 @@ Tinode.prototype = {
     return this.send({
       pub: pub,
       extra: {
-        attachments: attachments.filter(ref => isRelativeURL(ref))
+        attachments: attachments.filter(ref => Tinode.isRelativeURL(ref))
       },
     }, pub.id);
   },
@@ -1924,7 +1924,7 @@ Tinode.prototype = {
 
       if (Array.isArray(params.attachments) && params.attachments.length > 0) {
         pkt.extra = {
-          attachments: params.attachments.filter(ref => isRelativeURL(ref))
+          attachments: params.attachments.filter(ref => Tinode.isRelativeURL(ref))
         };
       }
     }
