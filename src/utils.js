@@ -12,9 +12,9 @@ const AccessMode = require('./access-mode.js');
 
 // Attempt to convert date strings to objects.
 function jsonParseHelper(key, val) {
-  // Convert string timestamps with optional milliseconds to Date
-  // 2015-09-02T01:45:43[.123]Z
-  if (key === 'ts' && typeof val === 'string' && val.length >= 20 && val.length <= 24) {
+  // Try to convert string timestamps with optional milliseconds to Date,
+  // e.g. 2015-09-02T01:45:43[.123]Z
+  if ((key === 'ts' || key === 'when') && typeof val === 'string' && val.length >= 20 && val.length <= 24) {
     const date = new Date(val);
     if (!isNaN(date)) {
       return date;
