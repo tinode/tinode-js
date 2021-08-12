@@ -191,9 +191,17 @@ const HTML_TAGS = {
     isVoid: false
   },
   QQ: {
-    name: 'blockquote',
+    name: 'div',
     isVoid: false
   },
+  QH: {
+    name: 'div',
+    isVoid: false
+  },
+  QB: {
+    name: 'div',
+    isVoid: false
+  }
 };
 
 // Convert base64-encoded string into Blob.
@@ -401,18 +409,43 @@ const DECORATORS = {
       return '</div>';
     }
   },
+  // Reply quote.
   QQ: {
     open: function(data) {
-      return '<blockquote>';
+      return '<div>';
     },
     close: function(data) {
-      return '</blockquote>';
+      return '</div>';
     },
     props: function(data) {
       if (!data) return null;
-      return {
-        // TODO: add more content.
-      };
+      return {};
+    },
+  },
+  // Reply quote header.
+  QH: {
+    open: function(data) {
+      return '<div>';
+    },
+    close: function(data) {
+      return '</div>';
+    },
+    props: function(data) {
+      if (!data) return null;
+      return {};
+    },
+  },
+  // Reply quote body.
+  QB: {
+    open: function(data) {
+      return '<div>';
+    },
+    close: function(data) {
+      return '</div>';
+    },
+    props: function(data) {
+      if (!data) return null;
+      return {};
     },
   }
 };
@@ -473,7 +506,7 @@ function chunkify(line, start, end, spans) {
 }
 
 // Inverse of chunkify. Returns a tree of formatted spans.
-function forEach(line, start, end, spans, formatter, context) {
+function forEach(line, start, end, spans, formatter, context, keyOffset = 0) {
   const result = [];
 
   // Process ranges calling formatter for each range.
@@ -481,7 +514,7 @@ function forEach(line, start, end, spans, formatter, context) {
     const span = spans[i];
     if (span.at < 0) {
       // Ask formatter if it wants to do anything with the non-visual span.
-      const s = formatter.call(context, span.tp, span.data, undefined, result.length);
+      const s = formatter.call(context, span.tp, span.data, undefined, keyOffset + result.length);
       if (s) {
         result.push(s);
       }
@@ -489,7 +522,7 @@ function forEach(line, start, end, spans, formatter, context) {
     }
     // Add un-styled range before the styled span starts.
     if (start < span.at) {
-      result.push(formatter.call(context, null, undefined, line.slice(start, span.at), result.length));
+      result.push(formatter.call(context, null, undefined, line.slice(start, span.at), keyOffset + result.length));
       start = span.at;
     }
     // Get all spans which are within current span.
@@ -502,14 +535,14 @@ function forEach(line, start, end, spans, formatter, context) {
     const tag = HTML_TAGS[span.tp] || {}
     result.push(formatter.call(context, span.tp, span.data,
       tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context),
-      result.length));
+      keyOffset + result.length));
 
     start = span.at + span.len;
   }
 
   // Add the last unformatted range.
   if (start < end) {
-    result.push(formatter.call(context, null, undefined, line.slice(start, end), result.length));
+    result.push(formatter.call(context, null, undefined, line.slice(start, end), keyOffset + result.length));
   }
 
   return result;
@@ -976,12 +1009,56 @@ Drafty.insertImage = function(content, at, imageDesc) {
 }
 
 /**
- * Add a quote to Drafty document.
+ * Create a quote to Drafty document.
  *
- * @param {Drafty} content - Original Drafty message to attach quote header to.
- * @param {Drafty} quote - Drafty message to be quoted.
+ * @param {Drafty} header - Quote header (title, etc.).
+ * @param {Drafty} body - Body of the quoted message.
  *
- * @returns content with the added quote header.
+ * @returns Reply quote Drafty doc with the quote formatting.
+ */
+Drafty.createQuote = function(header, body) {
+  // Add an extra space to make sure QB and QH tags actually wrap all the other formatting
+  // in both the header and in the body.
+  header.txt += " ";
+  body.txt += " ";
+
+  let headerLen = header.txt.length;
+  header.ent = header.ent || [];
+  header.fmt = header.fmt || [];
+  let bodyLen = body.txt.length;
+  body.ent = body.ent || [];
+  body.fmt = body.fmt || [];
+
+  let quote = Drafty.append(header, body);
+
+  quote.fmt.push({
+    at: 0,
+    len: headerLen,
+    tp: 'QH'
+  });
+
+  quote.fmt.push({
+    at: headerLen,
+    len: bodyLen,
+    tp: 'QB'
+  });
+
+  quote.fmt.push({
+    at: 0,
+    len: quote.txt.length,
+    tp: 'QQ'
+  });
+
+  return quote;
+}
+
+/**
+ * Attach a reply quote to Drafty document.
+ *
+ * @param {Drafty} content - Document to attach quote to.
+ * @param {Drafty} quote - Quote to be attached.
+ *
+ * @returns content with the attached quote.
  */
 Drafty.attachQuote = function(content, quote) {
   content = content || {
@@ -989,19 +1066,7 @@ Drafty.attachQuote = function(content, quote) {
   };
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
-  if (quote.qte) {
-    quote = clone(quote);
-  }
   content.qte = quote;
-
-  const qteLen = quote.txt.length;
-  quote = Drafty.appendLineBreak(quote);
-
-  quote.fmt.push({
-    at: 0,
-    len: qteLen,
-    tp: 'QQ'
-  });
 
   return content;
 }
@@ -1084,12 +1149,15 @@ Drafty.attachFile = function(content, attachmentDesc) {
   content = content || {
     txt: ""
   };
+
+  const insertAt = content.txt.length;
+  content.txt += " ";
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
 
   content.fmt.push({
-    at: -1,
-    len: 0,
+    at: insertAt,
+    len: 1,
     key: content.ent.length
   });
 
@@ -1421,15 +1489,15 @@ function prepareSpans(fmt, ent) {
  * @param {Drafty} content - content to transform.
  * @param {Formatter} formatter - callback which transforms individual elements
  * @param {Object} context - context provided to formatter as <code>this</code>.
+ * @param {number} tlKeyOffset - offset to add to the top level React element keys.
  *
  * @return {Object} transformed object
  */
-Drafty.format = function(content, formatter, context) {
+Drafty.format = function(content, formatter, context, tlKeyOffset = 0) {
   let {
     txt,
     fmt,
-    ent,
-    qte
+    ent
   } = content;
 
   // Assign default values.
@@ -1446,29 +1514,13 @@ Drafty.format = function(content, formatter, context) {
         len: 0,
         key: 0
       }];
-    } else if (!qte) {
-      return [txt];
     } else {
-      // We still have a quote - need to deal with it.
-      fmt = [];
+      return [txt];
     }
   }
 
   let spans = prepareSpans(fmt, ent);
-  if (qte) {
-    // Quote formatting does not overlap with the main content.
-    // Simply concatenate the plain text string and formatting.
-    // And shift the positions in the main spans by the quote length.
-    let quoteSpans = prepareSpans(qte.fmt, qte.ent);
-    const shift = qte.txt.length;
-    spans.map(function(s) {
-      s.at += shift;
-    });
-    txt = qte.txt + txt;
-    spans = quoteSpans.concat(spans);
-  }
-
-  return forEach(txt, 0, txt.length, spans, formatter, context);
+  return forEach(txt, 0, txt.length, spans, formatter, context, tlKeyOffset);
 }
 
 /**
@@ -1730,15 +1782,27 @@ Drafty.getContentType = function() {
 }
 
 /**
+ * Callback for applying extra custom processing to entity data in previews.
+ * Called once for each entity.
+ * @memberof Drafty
+ * @static
+ *
+ * @callback OnCopyEntityCallback
+ * @param {Object} src original entity entity data.
+ * @param {string} target a copy of the original entity data.
+ */
+
+/**
  * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
  * @memberof Drafty
  * @static
  *
  * @param {Drafty} original - Drafty object to shorten.
  * @param {number} length - length in characters to shorten to.
+ * @param {OnCopyEntityCallback} onCopyEntity - callback for custom entity data processing in preview.
  * @returns new shortened Drafty object leaving the original intact.
  */
-Drafty.preview = function(original, length) {
+Drafty.preview = function(original, length, onCopyEntity) {
   if (!original || length <= 0 || typeof original != 'object') {
     return null;
   }
@@ -1800,7 +1864,12 @@ Drafty.preview = function(original, length) {
           style.tp = '' + st.tp;
         } else if (Array.isArray(ent) && ent.length > st.key && typeof ent_refs[st.key] == 'number') {
           style.key = ent_refs[st.key];
-          preview.ent[style.key] = copyLight(ent[st.key]);
+          const src = ent[st.key];
+          let copiedEnt = copyLight(src);
+          if (onCopyEntity) {
+            onCopyEntity(src, copiedEnt);
+          }
+          preview.ent[style.key] = copiedEnt;
         } else {
           return;
         }
@@ -1819,7 +1888,8 @@ function copyLight(ent) {
   };
   if (ent.data && Object.entries(ent.data).length != 0) {
     const dc = {};
-    ["mime", "name", "width", "height", "size"].forEach((key) => {
+    let entries = ["mime", "name", "width", "height", "size"];
+    entries.forEach((key) => {
       const val = ent.data[key];
       if (val) {
         dc[key] = val;
