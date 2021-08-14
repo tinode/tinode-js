@@ -4,7 +4,7 @@
  * @copyright 2015-2021 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.17
+ * @version 0.18
  */
 'use strict';
 
@@ -14,7 +14,8 @@ const AccessMode = require('./access-mode.js');
 function jsonParseHelper(key, val) {
   // Try to convert string timestamps with optional milliseconds to Date,
   // e.g. 2015-09-02T01:45:43[.123]Z
-  if ((key === 'ts' || key === 'when') && typeof val === 'string' && val.length >= 20 && val.length <= 24) {
+  if (typeof val == 'string' && val.length >= 20 && val.length <= 24 &&
+    ['ts', 'touched', 'updated', 'created', 'when', 'deleted'].includes(key)) {
     const date = new Date(val);
     if (!isNaN(date)) {
       return date;

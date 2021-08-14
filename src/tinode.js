@@ -6,7 +6,7 @@
  * @copyright 2015-2021 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.17
+ * @version 0.18
  *
  * @example
  * <head>
@@ -277,18 +277,6 @@ function mergeObj(dst, src, ignore) {
 function mergeToCache(cache, key, newval, ignore) {
   cache[key] = mergeObj(cache[key], newval, ignore);
   return cache[key];
-}
-
-function stringToDate(obj) {
-  if (typeof obj.created == 'string') {
-    obj.created = new Date(obj.created);
-  }
-  if (typeof obj.updated == 'string') {
-    obj.updated = new Date(obj.updated);
-  }
-  if (typeof obj.touched == 'string') {
-    obj.touched = new Date(obj.touched);
-  }
 }
 
 // JSON stringify helper - pre-processor for JSON.stringify
@@ -3713,8 +3701,6 @@ Topic.prototype = {
 
     // Copy parameters from desc object to this topic.
     mergeObj(this, desc);
-    // Make sure date fields are Date().
-    stringToDate(this);
     // Update persistent cache.
     this._tinode._db.updTopic(this);
 
@@ -3741,8 +3727,6 @@ Topic.prototype = {
       const sub = subs[idx];
 
       // Fill defaults.
-      sub.updated = new Date(sub.updated);
-      sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
       sub.online = !!sub.online;
       // Update timestamp of the most recent subscription update.
       this._lastSubsUpdate = new Date(Math.max(this._lastSubsUpdate, sub.updated));
@@ -3754,7 +3738,7 @@ Topic.prototype = {
         if (this._tinode.isMe(sub.user) && sub.acs) {
           this._processMetaDesc({
             updated: sub.updated,
-            touched: sub.updated,
+            touched: sub.touched,
             acs: sub.acs
           });
         }
@@ -4030,21 +4014,14 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       mergeObj(this, desc);
       this._tinode._db.updTopic(this);
 
-      // String datetime headers to Date() objects.
-      stringToDate(this);
-
       // 'P' permission was removed. All topics are offline now.
       if (turnOff) {
         this._tinode.cacheMap('topic', (cont) => {
           if (cont.online) {
             cont.online = false;
-            if (cont.seen) {
-              cont.seen.when = new Date();
-            } else {
-              cont.seen = {
-                when: new Date()
-              };
-            }
+            cont.seen = Object.assign(cont.seen || {}, {
+              when: new Date()
+            });
             this._refreshContact('off', cont);
           }
         });
@@ -4068,9 +4045,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         if (topicName == TOPIC_FND || topicName == TOPIC_ME) {
           return;
         }
-        sub.updated = new Date(sub.updated);
-        sub.touched = sub.touched ? new Date(sub.touched) : undefined;
-        sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
         sub.online = !!sub.online;
 
         let cont = null;
@@ -4085,10 +4059,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             sub.recv = sub.recv | 0;
             sub.read = sub.read | 0;
             sub.unread = sub.seq - sub.read;
-          }
-
-          if (sub.seen && sub.seen.when) {
-            sub.seen.when = new Date(sub.seen.when);
           }
 
           cont = mergeObj(this._tinode.getTopic(topicName), sub);
@@ -4202,13 +4172,9 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           case 'off': // topic went offline
             if (cont.online) {
               cont.online = false;
-              if (cont.seen) {
-                cont.seen.when = new Date();
-              } else {
-                cont.seen = {
-                  when: new Date()
-                };
-              }
+              cont.seen = Object.assign(cont.seen || {}, {
+                when: new Date()
+              });
             }
             break;
           case 'msg': // new message received
@@ -4481,11 +4447,6 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
       for (let idx in subs) {
         let sub = subs[idx];
         const indexBy = sub.topic ? sub.topic : sub.user;
-
-        sub.updated = new Date(sub.updated);
-        if (sub.seen && sub.seen.when) {
-          sub.seen.when = new Date(sub.seen.when);
-        }
 
         sub = mergeToCache(this._contacts, indexBy, sub);
         updateCount++;
