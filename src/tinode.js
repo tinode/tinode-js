@@ -2345,7 +2345,7 @@ Tinode.prototype = {
  * @param {callback} callbacks.onDeleteTopic - Called after the topic is deleted.
  * @param {callback} callbacls.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
  */
-var Topic = function(name, callbacks) {
+const Topic = function(name, callbacks) {
   // Parent Tinode object.
   this._tinode = null;
 
@@ -3161,21 +3161,22 @@ Topic.prototype = {
   },
 
   /**
-   * Iterate over cached messages. If callback is undefined, use this.onData.
+   * Iterate over cached messages: call <code>callback</code> for each message in the range [sindeIdx, beforeIdx).
+   * If <code>callback</code> is undefined, use <code>this.onData</code>.
    * @memberof Tinode.Topic#
    *
-   * @param {function} callback - Callback which will receive messages one by one. See {@link Tinode.CBuffer#forEach}
+   * @param {Tinode.ForEachCallbackType} callback - Callback which will receive messages one by one. See {@link Tinode.CBuffer#forEach}
    * @param {number} sinceId - Optional seqId to start iterating from (inclusive).
-   * @param {number} beforeId - Optional seqId to stop iterating before (exclusive).
+   * @param {number} beforeId - Optional seqId to stop iterating before it is reached (exclusive).
    * @param {Object} context - Value of `this` inside the `callback`.
    */
   messages: function(callback, sinceId, beforeId, context) {
     const cb = (callback || this.onData);
     if (cb) {
-      let startIdx = typeof sinceId == 'number' ? this._messages.find({
+      const startIdx = typeof sinceId == 'number' ? this._messages.find({
         seq: sinceId
       }, true) : undefined;
-      let beforeIdx = typeof beforeId == 'number' ? this._messages.find({
+      const beforeIdx = typeof beforeId == 'number' ? this._messages.find({
         seq: beforeId
       }, true) : undefined;
       if (startIdx != -1 && beforeIdx != -1) {
@@ -3185,7 +3186,24 @@ Topic.prototype = {
   },
 
   /**
-   * Get the most recent message from cache.
+   * Get the message from cache by <code>seq</code>.
+   * @memberof Tinode.Topic#
+   *
+   * @param {number} seq - message seqId to search for.
+   * @returns {Object} the message with the given <code>seq</code> or <code>undefined</code>, if no such message is found.
+   */
+  findMessage: function(seq) {
+    const idx = this._messages.find({
+      seq: seq
+    });
+    if (idx >= 0) {
+      return this._messages.getAt(idx);
+    }
+    return undefined;
+  },
+
+  /**
+   * Get the most recent message from cache. This method counts all messages, including deleted ranges.
    * @memberof Tinode.Topic#
    *
    * @param {boolen} skipDeleted - if the last message is a deleted range, get the one before it.
@@ -3197,6 +3215,36 @@ Topic.prototype = {
       return msg;
     }
     return this._messages.getLast(1);
+  },
+
+  /**
+   * Get the maximum cached seq ID.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {number} the greatest seq ID in cache.
+   */
+  maxMsgSeq: function() {
+    return this._maxSeq;
+  },
+
+  /**
+   * Get the maximum deletion ID.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {number} the greatest deletion ID.
+   */
+  maxClearId: function() {
+    return this._maxDel;
+  },
+
+  /**
+   * Get the number of messages in the cache.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {number} count of cached messages.
+   */
+  messageCount: function() {
+    return this._messages.length();
   },
 
   /**
@@ -3848,7 +3896,9 @@ Topic.prototype = {
   _updateDeletedRanges: function() {
     const ranges = [];
 
+    // Gap marker, possibly empty.
     let prev = null;
+
     // Check for gap in the beginning, before the first message.
     const first = this._messages.getAt(0);
     if (first && this._minSeq > 1 && !this._noEarlierMsgs) {
@@ -3878,8 +3928,8 @@ Topic.prototype = {
       };
     }
 
-    // Find gaps in the list of received messages. The list contains messages-proper as well
-    // as placeholers for deleted ranges.
+    // Find new gaps in the list of received messages. The list contains messages-proper as well
+    // as placeholders for deleted ranges.
     // The messages are iterated by seq ID in ascending order.
     this._messages.forEach((data) => {
       // Do not create a gap between the last sent message and the first unsent.
@@ -3887,16 +3937,24 @@ Topic.prototype = {
         return;
       }
 
-      // New message is reducing the existing gap
+      // Check for a gap between the previous message/gap marker and this message/marker.
       if (data.seq == (prev.hi || prev.seq) + 1) {
-        // No new gap. Replace previous with current.
+        // No gap between the new message and the previous.
+        if (data.hi && prev.hi) {
+          // Two gap markers in a row. Extend the previous one instead of creating new.
+          prev.hi = data.hi;
+          return;
+        }
+
+        // The current is not a gap marker. Just keep it as previous.
         prev = data;
         return;
       }
 
       // Found a new gap.
+
+      // Check if the previous is also a gap, alter it instead of creating a new one.
       if (prev.hi) {
-        // Previous is also a gap, alter it.
         prev.hi = data.hi || data.seq;
         return;
       }

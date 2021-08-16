@@ -22,6 +22,7 @@
  */
 const CBuffer = function(compare, unique) {
   let buffer = [];
+  let state = 0;
 
   compare = compare || function(a, b) {
     return a === b ? 0 : a < b ? -1 : 1;
@@ -67,11 +68,21 @@ const CBuffer = function(compare, unique) {
   function insertSorted(elem, arr) {
     const found = findNearest(elem, arr, false);
     const count = (found.exact && unique) ? 1 : 0;
+    state++;
     arr.splice(found.idx, count, elem);
     return arr;
   }
 
   return {
+    /**
+     * Get mutation state: unique value which changes with every mutation of the buffer.
+     * @memberof Tinode.CBuffer#
+     * @returns {number} Unique mutation value.
+     */
+    state: function() {
+      return state;
+    },
+
     /**
      * Get an element at the given position.
      * @memberof Tinode.CBuffer#
@@ -121,6 +132,7 @@ const CBuffer = function(compare, unique) {
      * @returns {Object} Element at the given position or <code>undefined</code>.
      */
     delAt: function(at) {
+      at |= 0;
       let r = buffer.splice(at, 1);
       if (r && r.length > 0) {
         return r[0];
@@ -137,6 +149,7 @@ const CBuffer = function(compare, unique) {
      * @returns {Array} array of removed elements (could be zero length).
      */
     delRange: function(since, before) {
+      state++;
       return buffer.splice(since, before - since);
     },
 
@@ -154,6 +167,7 @@ const CBuffer = function(compare, unique) {
      * @memberof Tinode.CBuffer#
      */
     reset: function() {
+      state++;
       buffer = [];
     },
 
@@ -161,7 +175,9 @@ const CBuffer = function(compare, unique) {
      * Callback for iterating contents of buffer. See {@link Tinode.CBuffer#forEach}.
      * @callback ForEachCallbackType
      * @memberof Tinode.CBuffer#
-     * @param {Object} elem - Element of the buffer.
+     * @param {Object} elem - Current element of the buffer.
+     * @param {Object} prev - Previous element of the buffer.
+     * @param {Object} next - Next element of the buffer.
      * @param {number} index - Index of the current element.
      */
 
@@ -178,7 +194,9 @@ const CBuffer = function(compare, unique) {
       startIdx = startIdx | 0;
       beforeIdx = beforeIdx || buffer.length;
       for (let i = startIdx; i < beforeIdx; i++) {
-        callback.call(context, buffer[i], i);
+        callback.call(context, buffer[i],
+          (i > startIdx ? buffer[i - 1] : undefined),
+          (i < beforeIdx - 1 ? buffer[i + 1] : undefined), i);
       }
     },
 
