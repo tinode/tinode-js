@@ -557,8 +557,8 @@ const DB = function(onError, logger) {
      * @param {string} topicName - name of the topic to retrieve messages from.
      * @param {function} callback to call for each retrieved message.
      * @param {Object} query - parameters of the message range to retrieve.
-     * @param {number=} query.from - the least message ID to retrieve (inclusive).
-     * @param {number=} query.to - the greatest message ID to retrieve (exclusive).
+     * @param {number=} query.since - the least message ID to retrieve (inclusive).
+     * @param {number=} query.before - the greatest message ID to retrieve (exclusive).
      * @param {number=} query.limit - the maximum number of messages to retrieve.
      * @return {Promise} promise resolved/rejected on operation completion.
      */
@@ -570,12 +570,12 @@ const DB = function(onError, logger) {
       }
       return new Promise((resolve, reject) => {
         query = query || {};
-        const from = query.from > 0 ? query.from : 0;
-        const to = query.to > 0 ? query.to : Number.MAX_SAFE_INTEGER;
+        const since = query.since > 0 ? query.since : 0;
+        const before = query.before > 0 ? query.before : Number.MAX_SAFE_INTEGER;
         const limit = query.limit | 0;
 
         const result = [];
-        const range = IDBKeyRange.bound([topicName, from], [topicName, to], false, true);
+        const range = IDBKeyRange.bound([topicName, since], [topicName, before], false, true);
         const trx = db.transaction(['message']);
         trx.onerror = (event) => {
           logger("PCache", "readMessages", event.target.error);

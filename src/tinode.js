@@ -603,7 +603,7 @@ var Tinode = function(config, onComplete) {
   if (this._persist) {
     // Create the persistent cache.
     // Store promises to be resolved when messages load into memory.
-    const msgs = [];
+    const prom = [];
     this._db.initDatabase().then(() => {
       // First load topics into memory.
       return this._db.mapTopics((data) => {
@@ -623,7 +623,7 @@ var Tinode = function(config, onComplete) {
         this.attachCacheToTopic(topic);
         topic._cachePutSelf();
         // Request to load messages and save the promise.
-        msgs.push(topic._loadMessages(this._db));
+        prom.push(topic._loadMessages(this._db));
       });
     }).then(() => {
       // Then load users.
@@ -632,7 +632,7 @@ var Tinode = function(config, onComplete) {
       });
     }).then(() => {
       // Now wait for all messages to finish loading.
-      return Promise.all(msgs);
+      return Promise.all(prom);
     }).then(() => {
       if (onComplete) {
         onComplete();
@@ -2665,21 +2665,38 @@ Topic.prototype = {
    * @param {boolean} forward if true, request newer messages.
    */
   getMessagesPage: function(limit, forward) {
-    const query = this.startMetaQuery();
-    if (forward) {
-      query.withLaterData(limit);
-    } else {
-      query.withEarlierData(limit);
-    }
-    let promise = this.getMeta(query.build());
-    if (!forward) {
-      promise = promise.then((ctrl) => {
-        if (ctrl && ctrl.params && !ctrl.params.count) {
-          this._noEarlierMsgs = true;
-        }
-      });
-    }
-    return promise;
+    let query = forward ?
+      this.startMetaQuery().withLaterData(limit) :
+      this.startMetaQuery().withEarlierData(limit);
+
+    // First try fetching from DB, then from the server.
+    return this._tinode._loadMessages(this._tinode._db, query.extract('data')).then((count) => {
+      if (count == limit) {
+        // Got enough messages from local cache.
+        return Promise.resolve({
+          topic: this.name,
+          code: 200,
+          params: {
+            count: count
+          }
+        });
+      }
+
+      // Reduce the count of requested messages.
+      limit -= count;
+      // Update query with new values loaded from DB.
+      query = forward ? this.startMetaQuery().withLaterData(limit) :
+        this.startMetaQuery().withEarlierData(limit);
+      let promise = this.getMeta(query.build());
+      if (!forward) {
+        promise = promise.then((ctrl) => {
+          if (ctrl && ctrl.params && !ctrl.params.count) {
+            this._noEarlierMsgs = true;
+          }
+        });
+      }
+      return promise;
+    });
   },
 
   /**
@@ -3576,6 +3593,7 @@ Topic.prototype = {
     if (data.content) {
       if (!this.touched || this.touched < data.ts) {
         this.touched = data.ts;
+        this._tinode._db.updTopic(this);
       }
     }
 
@@ -4002,8 +4020,10 @@ Topic.prototype = {
   },
 
   // Load most recent messages from persistent cache.
-  _loadMessages: function(db) {
+  _loadMessages: function(db, since, before) {
     return db.readMessages(this.name, {
+        since: since,
+        before: before,
         limit: DEFAULT_MESSAGES_PAGE
       })
       .then((msgs) => {
@@ -4018,7 +4038,7 @@ Topic.prototype = {
         });
 
         this._updateDeletedRanges();
-        return this.name;
+        return msgs.length;
       });
   },
 
