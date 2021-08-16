@@ -121,6 +121,7 @@ const CBuffer = function(compare, unique) {
      * @returns {Object} Element at the given position or <code>undefined</code>.
      */
     delAt: function(at) {
+      at |= 0;
       let r = buffer.splice(at, 1);
       if (r && r.length > 0) {
         return r[0];
@@ -161,7 +162,9 @@ const CBuffer = function(compare, unique) {
      * Callback for iterating contents of buffer. See {@link Tinode.CBuffer#forEach}.
      * @callback ForEachCallbackType
      * @memberof Tinode.CBuffer#
-     * @param {Object} elem - Element of the buffer.
+     * @param {Object} elem - Current element of the buffer.
+     * @param {Object} prev - Previous element of the buffer.
+     * @param {Object} next - Next element of the buffer.
      * @param {number} index - Index of the current element.
      */
 
@@ -178,7 +181,9 @@ const CBuffer = function(compare, unique) {
       startIdx = startIdx | 0;
       beforeIdx = beforeIdx || buffer.length;
       for (let i = startIdx; i < beforeIdx; i++) {
-        callback.call(context, buffer[i], i);
+        callback.call(context, buffer[i],
+          (i > startIdx ? buffer[i - 1] : undefined),
+          (i < beforeIdx - 1 ? buffer[i + 1] : undefined), i);
       }
     },
 
@@ -195,6 +200,34 @@ const CBuffer = function(compare, unique) {
         idx
       } = findNearest(elem, buffer, !nearest);
       return idx;
+    },
+
+    /**
+     * Callback for filtering the buffer. See {@link Tinode.CBuffer#filter}.
+     * @callback ForEachCallbackType
+     * @memberof Tinode.CBuffer#
+     * @param {Object} elem - Current element of the buffer.
+     * @param {number} index - Index of the current element.
+     * @returns {boolen} <code>true</code> to keep the element, <code>false</code> to remove.
+     */
+
+    /**
+     * Remove all elements that do not pass the test implemented by the provided callback function.
+     * @memberof Tinode.CBuffer#
+     *
+     * @param {Tinode.FilterCallbackType} callback - Function to call for each element.
+     * @param {Object} context - calling context (i.e. value of <code>this</code> in the callback)
+     */
+    filter: function(callback, context) {
+      let count = 0;
+      for (let i = 0; i < buffer.length; i++) {
+        if (callback.call(context, buffer[i], i)) {
+          buffer[count] = buffer[i];
+          count++;
+        }
+      }
+
+      buffer.splice(count);
     }
   }
 }
