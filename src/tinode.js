@@ -3931,40 +3931,50 @@ Topic.prototype = {
     // Find new gaps in the list of received messages. The list contains messages-proper as well
     // as placeholders for deleted ranges.
     // The messages are iterated by seq ID in ascending order.
-    this._messages.forEach((data) => {
-      // Do not create a gap between the last sent message and the first unsent.
+    this._messages.filter((data) => {
+      // Do not create a gap between the last sent message and the first unsent as well as between unsent messages.
       if (data.seq >= LOCAL_SEQID) {
-        return;
+        return true;
       }
 
-      // Check for a gap between the previous message/gap marker and this message/marker.
+      // Check for a gap between the previous message/marker and this message/marker.
       if (data.seq == (prev.hi || prev.seq) + 1) {
-        // No gap between the new message and the previous.
+        // No gap between this message and the previous.
         if (data.hi && prev.hi) {
-          // Two gap markers in a row. Extend the previous one instead of creating new.
+          // Two gap markers in a row. Extend the previous one, discard the current.
           prev.hi = data.hi;
-          return;
+          return false;
         }
-
-        // The current is not a gap marker. Just keep it as previous.
         prev = data;
-        return;
+
+        // Keep current.
+        return true;
       }
 
       // Found a new gap.
 
-      // Check if the previous is also a gap, alter it instead of creating a new one.
+      // Check if the previous is also a gap marker.
       if (prev.hi) {
+        // Alter it instead of creating a new one.
         prev.hi = data.hi || data.seq;
-        return;
+      } else {
+        // Previous is not a gap marker. Create a new one.
+        prev = {
+          seq: prev.seq + 1,
+          hi: data.hi || data.seq
+        };
+        ranges.push(prev);
       }
 
-      // Previous is not a gap. Create a new gap.
-      prev = {
-        seq: (prev.hi || prev.seq) + 1,
-        hi: data.hi || data.seq
-      };
-      ranges.push(prev);
+      // If marker, remove; keep if regular message.
+      if (!data.hi) {
+        // Keeping the current regular message, save it as previous.
+        prev = data;
+        return true;
+      }
+
+      // Discard the current gap marker: we either created an earlier gap, or extended the prevous one.
+      return false;
     });
 
     // Check for missing messages at the end.
