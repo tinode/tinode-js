@@ -469,7 +469,7 @@ const DB = function(onError, logger) {
           resolve(event.target.result);
         };
         trx.onerror = (event) => {
-          logger("PCache", "addMesssage", event.target.error);
+          logger("PCache", "addMessage", event.target.error);
           reject(event.target.error);
         };
         trx.objectStore('message').add(serializeMessage(null, msg));
