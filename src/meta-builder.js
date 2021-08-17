@@ -224,6 +224,16 @@ MetaGetBuilder.prototype = {
   },
 
   /**
+   * Extract subquery: get an object that contains specified subquery.
+   * @memberof Tinode.MetaGetBuilder#
+   * @param {string} what - subquery to return: one of 'data', 'sub', 'desc', 'tags', 'cred', 'del'.
+   * @returns {Object} requested subquery or <code>undefined</code>.
+   */
+  extract: function(what) {
+    return this.what[what];
+  },
+
+  /**
    * Construct parameters.
    * @memberof Tinode.MetaGetBuilder#
    *
@@ -231,13 +241,12 @@ MetaGetBuilder.prototype = {
    */
   build: function() {
     const what = [];
-    const instance = this;
     let params = {};
-    ['data', 'sub', 'desc', 'tags', 'cred', 'del'].map(function(key) {
-      if (instance.what.hasOwnProperty(key)) {
+    ['data', 'sub', 'desc', 'tags', 'cred', 'del'].map((key) => {
+      if (this.what.hasOwnProperty(key)) {
         what.push(key);
-        if (Object.getOwnPropertyNames(instance.what[key]).length > 0) {
-          params[key] = instance.what[key];
+        if (Object.getOwnPropertyNames(this.what[key]).length > 0) {
+          params[key] = this.what[key];
         }
       }
     });
