@@ -1066,7 +1066,9 @@ Drafty.attachQuote = function(content, quote) {
   };
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
-  content.qte = quote;
+  //content.qte = quote;
+
+  content = Drafty.append(Drafty.appendLineBreak(quote), content);
 
   return content;
 }
@@ -1781,6 +1783,128 @@ Drafty.getContentType = function() {
   return 'text/x-drafty';
 }
 
+function stripQuotes(original) {
+  if (!original || Drafty.isPlainText(original)) {
+    return original;
+  }
+
+  const {
+    txt,
+    fmt,
+    ent
+  } = original;
+
+  const preview = {
+    txt: ''
+  };
+
+  let origSpans = [];
+  fmt.forEach(fmt => {
+    if (fmt.tp && fmt.tp == 'QQ') {
+      // strip.
+      origSpans.push({
+        at: fmt.at || 0,
+        len: fmt.len
+      });
+    }
+  });
+  if (origSpans.length == 0) {
+    return original;
+  }
+  origSpans.sort((x, y) => {
+    // at asc.
+    if (x.at != y.at) {
+      return y.at - x.at;
+    }
+    // break ties by len desc.
+    return x.len - y.len;
+  });
+  let spans = [];
+  let idx = -1;
+  let bound = -1;
+  origSpans.forEach(s => {
+    if (s.at > bound) {
+      spans.push({
+        at: s.at,
+        len: s.len
+      });
+      bound = s.at + s.len;
+      idx = spans.length - 1;
+    } else {
+      bound = s.at + s.len;
+      spans[idx].len = bound - spans[idx].at;
+    }
+  });
+
+  // Cumulative length of QQ spans.
+  let newTxt = '';
+  let sum = 0;
+  spans.forEach((s, idx, _) => {
+    sum += s.len;
+    s.totalLen = sum;
+
+    const from = idx > 0 ? spans[idx - 1].at + spans[idx - 1].len : 0;
+    const len = s.at - from;
+    newTxt += txt.substr(from, len);
+  });
+  const last = spans[spans.length - 1];
+  newTxt += txt.substring(last.at + last.len, txt.length - 1);
+  // spans is a list of non-overlapping QQ intervals.
+  function nearest(pos) {
+    let l = -1;
+    let r = spans.length;
+    while (r > l + 1) {
+      const m = Math.floor((l + r) / 2);
+      if (spans[m].at > pos) {
+        r = m;
+      } else {
+        l = m;
+      }
+    }
+    return l;
+  }
+  let newFmt = [];
+  let ent_refs = [];
+  let ent_count = 0;
+  let newEnt = [];
+  fmt.forEach(fmt => {
+    if (fmt.tp && fmt.tp == 'QQ') {
+      return;
+    }
+    const before = nearest(fmt.at);
+    const after = before + 1;
+    if ((before >= 0 && spans[before].at + spans[before].len > fmt.at) || (after < spans.length && fmt.at + fmt.len - 1 >= spans[after].at)) {
+      // Overlaps with QQ. Filter out.
+      return;
+    }
+    if (before >= 0) {
+      newFmt.push({
+        at: fmt.at - spans[before].totalLen,
+        len: fmt.len,
+        key: fmt.key,
+        tp: fmt.tp
+      });
+    }
+    if (!fmt.tp) {
+      if (fmt.key in ent_refs) {
+        newFmt.key = ent_refs[key];
+      } else {
+        newFmt.key = ent_count;
+        ent_refs[fmt.key] = ent_count;
+        // !!!! COPY a ref only.
+        newEnt.push(ent[fmt.key]);
+        ent_count++;
+      }
+    }
+  });
+
+  return {
+    txt: newTxt,
+    fmt: newFmt,
+    ent: newEnt
+  };
+}
+
 /**
  * Callback for applying extra custom processing to entity data in previews.
  * Called once for each entity.
@@ -1806,6 +1930,8 @@ Drafty.preview = function(original, length, onCopyEntity) {
   if (!original || length <= 0 || typeof original != 'object') {
     return null;
   }
+
+  original = stripQuotes(original);
 
   const {
     txt,
@@ -1904,4 +2030,54 @@ function copyLight(ent) {
 
 if (typeof module != 'undefined') {
   module.exports = Drafty;
+}
+
+Drafty.replyPreview = function(original, length, onCopyStyle) {
+  if (!original || length <= 0 || typeof original != 'object') {
+    return null;
+  }
+
+  original = stripQuotes(original);
+
+  const {
+    txt,
+    fmt,
+    ent
+  } = original;
+
+  const preview = {
+    txt: ''
+  };
+
+  if (typeof txt == 'string') {
+    preview.txt = txt.substr(0, length);
+  }
+
+  if (Array.isArray(fmt) && fmt.length > 0) {
+    const len = preview.txt.length;
+    // Old key to new key entity mapping.
+    const new_ref = [];
+    //const ent_refs = {};
+    const new_fmt = [];
+    // Count styles which start within the new length of the text and save entity keys as a set.
+    fmt.forEach((st) => {
+      st.at |= 0;
+      if (st.at < len) {
+        let [st1, ent1] = onCopyStyle(st, !st.tp ? ent[st.key] : null);
+        if (st1) {
+          new_fmt.push(st1);
+          new_ent.push(ent1);
+        }
+      }
+    });
+
+    if (new_fmt.length > 0) {
+      preview.fmt = new_fmt;
+    }
+
+    if (new_ent.length > 0) {
+      preview.ent = new_ent;
+    }
+  }
+  return preview;
 }
