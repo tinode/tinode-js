@@ -2825,7 +2825,7 @@ Topic.prototype = {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   archive: function(arch) {
-    if (this.private && this.private.arch == arch) {
+    if (this.private && (!this.private.arch == !arch)) {
       return Promise.resolve(arch);
     }
     return this.setMeta({
@@ -3515,7 +3515,7 @@ Topic.prototype = {
    * @returns {boolean} - <code>true</code> if topic is archived, <code>false</code> otherwise.
    */
   isArchived: function() {
-    return !!(this.private && this.private.arch);
+    return this.private && !!this.private.arch;
   },
 
   /**
@@ -4480,7 +4480,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
   isArchived: {
     value: function(name) {
       const cont = this._tinode.cacheGet('topic', name);
-      return cont ? ((cont.private && cont.private.arch) ? true : false) : null;
+      return cont && cont.private && !!cont.private.arch;
     },
     enumerable: true,
     configurable: true
