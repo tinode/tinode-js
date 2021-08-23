@@ -194,6 +194,10 @@ const HTML_TAGS = {
     name: 'div',
     isVoid: false
   },
+  IC: {
+    name: 'i',
+    isVoid: false,
+  },
   QH: {
     name: 'div',
     isVoid: false
@@ -422,6 +426,19 @@ const DECORATORS = {
       return {};
     },
   },
+  // Icon.
+  IC: {
+    open: function(data) {
+      return '<i>';
+    },
+    close: function(data) {
+      return '</i>';
+    },
+    props: function(data) {
+      if (!data) return null;
+      return {};
+    }
+  },
   // Reply quote header.
   QH: {
     open: function(data) {
@@ -506,7 +523,7 @@ function chunkify(line, start, end, spans) {
 }
 
 // Inverse of chunkify. Returns a tree of formatted spans.
-function forEach(line, start, end, spans, formatter, context, keyOffset = 0) {
+function forEach(line, start, end, spans, formatter, context) {
   const result = [];
 
   // Process ranges calling formatter for each range.
@@ -514,7 +531,7 @@ function forEach(line, start, end, spans, formatter, context, keyOffset = 0) {
     const span = spans[i];
     if (span.at < 0) {
       // Ask formatter if it wants to do anything with the non-visual span.
-      const s = formatter.call(context, span.tp, span.data, undefined, keyOffset + result.length);
+      const s = formatter.call(context, span.tp, span.data, undefined, result.length);
       if (s) {
         result.push(s);
       }
@@ -522,7 +539,7 @@ function forEach(line, start, end, spans, formatter, context, keyOffset = 0) {
     }
     // Add un-styled range before the styled span starts.
     if (start < span.at) {
-      result.push(formatter.call(context, null, undefined, line.slice(start, span.at), keyOffset + result.length));
+      result.push(formatter.call(context, null, undefined, line.slice(start, span.at), result.length));
       start = span.at;
     }
     // Get all spans which are within current span.
@@ -535,14 +552,14 @@ function forEach(line, start, end, spans, formatter, context, keyOffset = 0) {
     const tag = HTML_TAGS[span.tp] || {}
     result.push(formatter.call(context, span.tp, span.data,
       tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context),
-      keyOffset + result.length));
+      result.length));
 
     start = span.at + span.len;
   }
 
   // Add the last unformatted range.
   if (start < end) {
-    result.push(formatter.call(context, null, undefined, line.slice(start, end), keyOffset + result.length));
+    result.push(formatter.call(context, null, undefined, line.slice(start, end), result.length));
   }
 
   return result;
@@ -1491,11 +1508,10 @@ function prepareSpans(fmt, ent) {
  * @param {Drafty} content - content to transform.
  * @param {Formatter} formatter - callback which transforms individual elements
  * @param {Object} context - context provided to formatter as <code>this</code>.
- * @param {number} tlKeyOffset - offset to add to the top level React element keys.
  *
  * @return {Object} transformed object
  */
-Drafty.format = function(content, formatter, context, tlKeyOffset = 0) {
+Drafty.format = function(content, formatter, context) {
   let {
     txt,
     fmt,
@@ -1522,7 +1538,7 @@ Drafty.format = function(content, formatter, context, tlKeyOffset = 0) {
   }
 
   let spans = prepareSpans(fmt, ent);
-  return forEach(txt, 0, txt.length, spans, formatter, context, tlKeyOffset);
+  return forEach(txt, 0, txt.length, spans, formatter, context);
 }
 
 /**
@@ -1848,7 +1864,8 @@ function stripQuotes(original) {
     newTxt += txt.substr(from, len);
   });
   const last = spans[spans.length - 1];
-  newTxt += txt.substring(last.at + last.len, txt.length - 1);
+  // Copy the remainder of the txt.
+  newTxt += txt.substring(last.at + last.len);
   // spans is a list of non-overlapping QQ intervals.
   function nearest(pos) {
     let l = -1;
@@ -1877,25 +1894,27 @@ function stripQuotes(original) {
       // Overlaps with QQ. Filter out.
       return;
     }
+    let fmt1 = {
+      at: fmt.at,
+      len: fmt.len,
+      key: fmt.key,
+      tp: fmt.tp
+    };
     if (before >= 0) {
-      newFmt.push({
-        at: fmt.at - spans[before].totalLen,
-        len: fmt.len,
-        key: fmt.key,
-        tp: fmt.tp
-      });
+      fmt1.at -= spans[before].totalLen;
     }
     if (!fmt.tp) {
       if (fmt.key in ent_refs) {
-        newFmt.key = ent_refs[key];
+        fmt1.key = ent_refs[fmt.key];
       } else {
-        newFmt.key = ent_count;
+        fmt1.key = ent_count;
         ent_refs[fmt.key] = ent_count;
         // !!!! COPY a ref only.
         newEnt.push(ent[fmt.key]);
         ent_count++;
       }
     }
+    newFmt.push(fmt1);
   });
 
   return {
@@ -1906,24 +1925,12 @@ function stripQuotes(original) {
 }
 
 /**
- * Callback for applying extra custom processing to entity data in previews.
- * Called once for each entity.
- * @memberof Drafty
- * @static
- *
- * @callback OnCopyEntityCallback
- * @param {Object} src original entity entity data.
- * @param {string} target a copy of the original entity data.
- */
-
-/**
  * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
  * @memberof Drafty
  * @static
  *
  * @param {Drafty} original - Drafty object to shorten.
  * @param {number} length - length in characters to shorten to.
- * @param {OnCopyEntityCallback} onCopyEntity - callback for custom entity data processing in preview.
  * @returns new shortened Drafty object leaving the original intact.
  */
 Drafty.preview = function(original, length, onCopyEntity) {
@@ -1991,10 +1998,7 @@ Drafty.preview = function(original, length, onCopyEntity) {
         } else if (Array.isArray(ent) && ent.length > st.key && typeof ent_refs[st.key] == 'number') {
           style.key = ent_refs[st.key];
           const src = ent[st.key];
-          let copiedEnt = copyLight(src);
-          if (onCopyEntity) {
-            onCopyEntity(src, copiedEnt);
-          }
+          let copiedEnt = copyEnt(src, true);
           preview.ent[style.key] = copiedEnt;
         } else {
           return;
@@ -2008,13 +2012,13 @@ Drafty.preview = function(original, length, onCopyEntity) {
 }
 
 // Create a copy of an entity without large data.
-function copyLight(ent) {
+function copyEnt(ent, light) {
   let result = {
     tp: ent.tp
   };
   if (ent.data && Object.entries(ent.data).length != 0) {
     const dc = {};
-    let entries = ["mime", "name", "width", "height", "size"];
+    let entries = light ? ["mime", "name", "width", "height", "size"] : Object.keys(ent.data);
     entries.forEach((key) => {
       const val = ent.data[key];
       if (val) {
@@ -2056,7 +2060,7 @@ Drafty.replyPreview = function(original, length, onCopyStyle) {
   if (Array.isArray(fmt) && fmt.length > 0) {
     const len = preview.txt.length;
     // Old key to new key entity mapping.
-    const new_ref = [];
+    const new_ent = [];
     //const ent_refs = {};
     const new_fmt = [];
     // Count styles which start within the new length of the text and save entity keys as a set.
@@ -2065,8 +2069,22 @@ Drafty.replyPreview = function(original, length, onCopyStyle) {
       if (st.at < len) {
         let [st1, ent1] = onCopyStyle(st, !st.tp ? ent[st.key] : null);
         if (st1) {
-          new_fmt.push(st1);
-          new_ent.push(ent1);
+          let copiedSt = {
+            at: st1.at,
+            len: st1.len | 0
+          };
+          if (st1.tp) {
+            copiedSt.tp = st1.tp;
+          }
+          if (ent1) {
+            copiedSt.key = new_ent.length;
+            let copiedEnt = copyEnt(ent1, false);
+            new_ent.push(copiedEnt);
+          }
+          if (copiedSt.at + copiedSt.len > len) {
+            copiedSt.len = len - copiedSt.at;
+          }
+          new_fmt.push(copiedSt);
         }
       }
     });
