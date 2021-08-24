@@ -2670,33 +2670,34 @@ Topic.prototype = {
       this.startMetaQuery().withEarlierData(limit);
 
     // First try fetching from DB, then from the server.
-    return this._tinode._loadMessages(this._tinode._db, query.extract('data')).then((count) => {
-      if (count == limit) {
-        // Got enough messages from local cache.
-        return Promise.resolve({
-          topic: this.name,
-          code: 200,
-          params: {
-            count: count
-          }
-        });
-      }
+    return this._loadMessages(this._tinode._db, query.extract('data'))
+      .then((count) => {
+        if (count == limit) {
+          // Got enough messages from local cache.
+          return Promise.resolve({
+            topic: this.name,
+            code: 200,
+            params: {
+              count: count
+            }
+          });
+        }
 
-      // Reduce the count of requested messages.
-      limit -= count;
-      // Update query with new values loaded from DB.
-      query = forward ? this.startMetaQuery().withLaterData(limit) :
-        this.startMetaQuery().withEarlierData(limit);
-      let promise = this.getMeta(query.build());
-      if (!forward) {
-        promise = promise.then((ctrl) => {
-          if (ctrl && ctrl.params && !ctrl.params.count) {
-            this._noEarlierMsgs = true;
-          }
-        });
-      }
-      return promise;
-    });
+        // Reduce the count of requested messages.
+        limit -= count;
+        // Update query with new values loaded from DB.
+        query = forward ? this.startMetaQuery().withLaterData(limit) :
+          this.startMetaQuery().withEarlierData(limit);
+        let promise = this.getMeta(query.build());
+        if (!forward) {
+          promise = promise.then((ctrl) => {
+            if (ctrl && ctrl.params && !ctrl.params.count) {
+              this._noEarlierMsgs = true;
+            }
+          });
+        }
+        return promise;
+      });
   },
 
   /**
@@ -4020,11 +4021,16 @@ Topic.prototype = {
   },
 
   // Load most recent messages from persistent cache.
-  _loadMessages: function(db, since, before) {
+  _loadMessages: function(db, params) {
+    const {
+      since,
+      before,
+      limit
+    } = params || {};
     return db.readMessages(this.name, {
         since: since,
         before: before,
-        limit: DEFAULT_MESSAGES_PAGE
+        limit: limit || DEFAULT_MESSAGES_PAGE
       })
       .then((msgs) => {
         msgs.forEach((data) => {
@@ -4036,8 +4042,9 @@ Topic.prototype = {
           }
           this._messages.put(data);
         });
-
-        this._updateDeletedRanges();
+        if (msgs.length > 0) {
+          this._updateDeletedRanges();
+        }
         return msgs.length;
       });
   },
