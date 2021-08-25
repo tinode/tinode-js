@@ -3667,7 +3667,7 @@ Topic.prototype = {
 
   // Process presence change message
   _routePres: function(pres) {
-    let user;
+    let user, uid;
     switch (pres.what) {
       case 'del':
         // Delete cached messages.
@@ -3688,11 +3688,16 @@ Topic.prototype = {
         this._resetSub();
         break;
       case 'upd':
-        // A subscriber updated description. Issue {get desc} only if the current user has
-        // no relationship with the updated user. Otherwise 'me' will issue a {get desc} request.
+        // A topic subscriber has updated his description.
+        uid = pres.src || this._tinode.getCurrentUserID();
+        if (!this._tinode.isTopicCached()) {
+          // Issue {get sub} only if the current user has no relationship with the updated user.
+          // Otherwise 'me' will issue a {get desc} request.
+          this.getMeta(this.startMetaQuery().withLaterOneSub(uid).build());
+        }
         break;
       case 'acs':
-        const uid = pres.src || this._tinode.getCurrentUserID();
+        uid = pres.src || this._tinode.getCurrentUserID();
         user = this._users[uid];
         if (!user) {
           // Update for an unknown user: notification of a new subscription.
