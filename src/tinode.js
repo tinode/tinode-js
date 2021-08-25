@@ -57,6 +57,7 @@ const DBCache = require('./db.js');
 const Drafty = require('./drafty.js');
 const LargeFileHelper = require('./large-file.js');
 const MetaGetBuilder = require('./meta-builder.js');
+
 const {
   jsonParseHelper,
   isUrlRelative
@@ -3686,6 +3687,10 @@ Topic.prototype = {
         // Attachment to topic is terminated probably due to cluster rehashing.
         this._resetSub();
         break;
+      case 'upd':
+        // A subscriber updated description. Issue {get desc} only if the current user has
+        // no relationship with the updated user. Otherwise 'me' will issue a {get desc} request.
+        break;
       case 'acs':
         const uid = pres.src || this._tinode.getCurrentUserID();
         user = this._users[uid];
@@ -4615,45 +4620,6 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
   }
 });
 TopicFnd.prototype.constructor = TopicFnd;
-
-/**
- * @class Message - definition a communication message.
- * Work in progress.
- * @memberof Tinode
- *
- * @param {string} topic_ - name of the topic the message belongs to.
- * @param {string | Drafty} content_ - message contant.
- */
-const Message = function(topic_, content_) {
-  this.status = Message.STATUS_NONE;
-  this.topic = topic_;
-  this.content = content_;
-}
-
-Message.STATUS_NONE = MESSAGE_STATUS_NONE;
-Message.STATUS_QUEUED = MESSAGE_STATUS_QUEUED;
-Message.STATUS_SENDING = MESSAGE_STATUS_SENDING;
-Message.STATUS_FAILED = MESSAGE_STATUS_FAILED;
-Message.STATUS_SENT = MESSAGE_STATUS_SENT;
-Message.STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED;
-Message.STATUS_READ = MESSAGE_STATUS_READ;
-Message.STATUS_TO_ME = MESSAGE_STATUS_TO_ME;
-
-Message.prototype = {
-  /**
-   * Convert message object to {pub} packet.
-   */
-  toJSON: function() {
-
-  },
-  /**
-   * Parse JSON into message.
-   */
-  fromJSON: function(json) {
-
-  }
-}
-Message.prototype.constructor = Message;
 
 if (typeof module != 'undefined') {
   module.exports = Tinode;
