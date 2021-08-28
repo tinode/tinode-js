@@ -1030,15 +1030,11 @@ Drafty.insertImage = function(content, at, imageDesc) {
  *
  * @param {Drafty} header - Quote header (title, etc.).
  * @param {Drafty} body - Body of the quoted message.
+ * @param {string} authorTitleColor - Color id of the author title of the quoted message.
  *
  * @returns Reply quote Drafty doc with the quote formatting.
  */
-Drafty.createQuote = function(header, body) {
-  // Add an extra space to make sure QB and QH tags actually wrap all the other formatting
-  // in both the header and in the body.
-  header.txt += " ";
-  body.txt += " ";
-
+Drafty.createQuote = function(header, body, authorTitleColor) {
   let headerLen = header.txt.length;
   header.ent = header.ent || [];
   header.fmt = header.fmt || [];
@@ -1046,18 +1042,21 @@ Drafty.createQuote = function(header, body) {
   body.ent = body.ent || [];
   body.fmt = body.fmt || [];
 
-  let quote = Drafty.append(header, body);
+  let quote = Drafty.append(Drafty.appendLineBreak(header), body);
 
   quote.fmt.push({
     at: 0,
     len: headerLen,
-    tp: 'QH'
+    key: quote.ent.length
   });
 
-  quote.fmt.push({
-    at: headerLen,
-    len: bodyLen,
-    tp: 'QB'
+  // Mention the author of the quoted message.
+  quote.ent.push({
+    tp: 'MN',
+    data: {
+      val: '',
+      color: authorTitleColor
+    }
   });
 
   quote.fmt.push({
