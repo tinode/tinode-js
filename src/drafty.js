@@ -316,7 +316,7 @@ const DECORATORS = {
     props: function(data) {
       return data ? {
         href: data.url,
-        target: "_blank"
+        target: '_blank'
       } : null;
     },
   },
@@ -2010,20 +2010,24 @@ Drafty.preview = function(original, length, onCopyEntity) {
   return preview;
 }
 
-// Create a copy of an entity without large data.
+// Create a copy of an entity with (light=false) or without (light=true) large data.
 function copyEnt(ent, light) {
   let result = {
     tp: ent.tp
   };
+
   if (ent.data && Object.entries(ent.data).length != 0) {
     const dc = {};
-    let entries = light ? ["mime", "name", "width", "height", "size"] : Object.keys(ent.data);
-    entries.forEach((key) => {
-      const val = ent.data[key];
-      if (val) {
-        dc[key] = val;
-      }
-    });
+    if (light) {
+      ['mime', 'name', 'width', 'height', 'size'].forEach((key) => {
+        const val = ent.data[key];
+        if (typeof val != 'undefined') {
+          dc[key] = val;
+        }
+      });
+    } else {
+      Object.assign(dc, ent);
+    }
     if (Object.entries(dc).length != 0) {
       result.data = dc;
     }
