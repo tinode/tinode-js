@@ -1035,18 +1035,16 @@ Drafty.insertImage = function(content, at, imageDesc) {
  * @returns Reply quote Drafty doc with the quote formatting.
  */
 Drafty.createQuote = function(header, body, authorTitleColor) {
-  let headerLen = header.txt.length;
   header.ent = header.ent || [];
   header.fmt = header.fmt || [];
-  let bodyLen = body.txt.length;
   body.ent = body.ent || [];
   body.fmt = body.fmt || [];
 
-  let quote = Drafty.append(Drafty.appendLineBreak(header), body);
+  const quote = Drafty.append(Drafty.appendLineBreak(header), body);
 
   quote.fmt.push({
     at: 0,
-    len: headerLen,
+    len: header.txt.length,
     key: quote.ent.length
   });
 
