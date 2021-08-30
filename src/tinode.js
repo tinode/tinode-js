@@ -831,7 +831,7 @@ const Tinode = function(config, onComplete) {
     if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
       this._authToken = {
         token: ctrl.params.token,
-        expires: new Date(ctrl.params.expires)
+        expires: ctrl.params.expires
       };
     } else {
       this._authToken = null;
