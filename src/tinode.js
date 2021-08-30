@@ -1824,12 +1824,15 @@ Tinode.prototype = {
     pub.seq = undefined;
     pub.from = undefined;
     pub.ts = undefined;
-    return this.send({
+    const msg = {
       pub: pub,
-      extra: {
+    };
+    if (attachments) {
+      msg.extra = {
         attachments: attachments.filter(ref => Tinode.isRelativeURL(ref))
-      },
-    }, pub.id);
+      };
+    }
+    return this.send(msg, pub.id);
   },
 
   /**

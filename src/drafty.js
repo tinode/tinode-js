@@ -1037,18 +1037,18 @@ Drafty.insertImage = function(content, at, imageDesc) {
 Drafty.createQuote = function(header, body, authorTitleColor) {
   header.ent = header.ent || [];
   header.fmt = header.fmt || [];
+  const headerLen = header.txt.length;
   body.ent = body.ent || [];
   body.fmt = body.fmt || [];
 
   const quote = Drafty.append(Drafty.appendLineBreak(header), body);
 
+  // Mention the author of the quoted message.
   quote.fmt.push({
     at: 0,
-    len: header.txt.length,
+    len: headerLen,
     key: quote.ent.length
   });
-
-  // Mention the author of the quoted message.
   quote.ent.push({
     tp: 'MN',
     data: {
@@ -1057,6 +1057,7 @@ Drafty.createQuote = function(header, body, authorTitleColor) {
     }
   });
 
+  // Create a quote.
   quote.fmt.push({
     at: 0,
     len: quote.txt.length,
@@ -2024,7 +2025,7 @@ function copyEnt(ent, light) {
         }
       });
     } else {
-      Object.assign(dc, ent);
+      Object.assign(dc, ent.data);
     }
     if (Object.entries(dc).length != 0) {
       result.data = dc;
