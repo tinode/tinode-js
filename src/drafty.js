@@ -1487,7 +1487,7 @@ function prepareSpans(fmt, ent) {
 
 /**
  * Callback for applying custom formatting/transformation to a Drafty document.
- * Called once for each syle span.
+ * Called once for each style span.
  * @memberof Drafty
  * @static
  *
@@ -1797,6 +1797,8 @@ Drafty.getContentType = function() {
   return 'text/x-drafty';
 }
 
+// Removes reply quotes and any text/formatting associated with these.
+// Returns a Drafty document free of reply quotes.
 function stripQuotes(original) {
   if (!original || Drafty.isPlainText(original)) {
     return original;
@@ -1812,6 +1814,7 @@ function stripQuotes(original) {
     txt: ''
   };
 
+  // Prepare quote spans.
   let origSpans = [];
   fmt.forEach(fmt => {
     if (fmt.tp && fmt.tp == 'QQ') {
@@ -1865,7 +1868,7 @@ function stripQuotes(original) {
   // Copy the remainder of the txt.
   newTxt += txt.substring(last.at + last.len);
   // spans is a list of non-overlapping QQ intervals.
-  function nearest(pos) {
+  const nearest = (pos) => {
     let l = -1;
     let r = spans.length;
     while (r > l + 1) {
@@ -1877,7 +1880,9 @@ function stripQuotes(original) {
       }
     }
     return l;
-  }
+  };
+  // Remove any styles overlapping with QQ spans.
+  // Keep and copy other styles into the output.
   let newFmt = [];
   let ent_refs = [];
   let ent_count = 0;
@@ -1936,6 +1941,7 @@ Drafty.preview = function(original, length, onCopyEntity) {
     return null;
   }
 
+  // Remove any reply quotes present in the document.
   original = stripQuotes(original);
 
   const {
@@ -2038,7 +2044,33 @@ if (typeof module != 'undefined') {
   module.exports = Drafty;
 }
 
-Drafty.replyPreview = function(original, length, onCopyStyle) {
+/**
+ * Callback for applying custom modifications/transformation to a reply quote preview
+ * styles and entities. It may keep the style/entity unmodified,
+ * change or remove them (return null).
+ * Called once per every formatting entry.
+ * @memberof Drafty
+ * @static
+ *
+ * @callback StyleTransform
+ * @param {Object} style - style object.
+ * @param {Object} entity - entity data corresponding to style (may be null).
+ *
+ * @return Array - a 2-entry array of Object [transformed style, transformed entity].
+ */
+
+/**
+ * Shorten Drafty document and modify formatting and entity data
+ * to be suitable for reply quote previews.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} original - Drafty object to shorten.
+ * @param {number} length - length in characters to shorten to.
+ * @param {StyleTransform} transform - style transformation callback. 
+ * @returns new shortened Drafty object leaving the original intact.
+ */
+Drafty.replyPreview = function(original, length, transform) {
   if (!original || length <= 0 || typeof original != 'object') {
     return null;
   }
@@ -2069,7 +2101,7 @@ Drafty.replyPreview = function(original, length, onCopyStyle) {
     fmt.forEach((st) => {
       st.at |= 0;
       if (st.at < len) {
-        let [st1, ent1] = onCopyStyle(st, !st.tp ? ent[st.key] : null);
+        let [st1, ent1] = transform(st, !st.tp ? ent[st.key] : null);
         if (st1) {
           let copiedSt = {
             at: st1.at,
