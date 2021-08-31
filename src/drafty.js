@@ -197,14 +197,6 @@ const HTML_TAGS = {
   IC: {
     name: 'i',
     isVoid: false,
-  },
-  QH: {
-    name: 'div',
-    isVoid: false
-  },
-  QB: {
-    name: 'div',
-    isVoid: false
   }
 };
 
@@ -438,32 +430,6 @@ const DECORATORS = {
       if (!data) return null;
       return {};
     }
-  },
-  // Reply quote header.
-  QH: {
-    open: function(data) {
-      return '<div>';
-    },
-    close: function(data) {
-      return '</div>';
-    },
-    props: function(data) {
-      if (!data) return null;
-      return {};
-    },
-  },
-  // Reply quote body.
-  QB: {
-    open: function(data) {
-      return '<div>';
-    },
-    close: function(data) {
-      return '</div>';
-    },
-    props: function(data) {
-      if (!data) return null;
-      return {};
-    },
   }
 };
 
