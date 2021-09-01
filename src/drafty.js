@@ -195,7 +195,7 @@ const HTML_TAGS = {
     isVoid: false
   },
   IC: {
-    name: 'i',
+    name: 'span',
     isVoid: false,
   }
 };
