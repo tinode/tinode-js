@@ -834,47 +834,6 @@ Drafty.init = function(plainText) {
 }
 
 /**
- * Deep copy message content.
- *
- * @param {Drafty} msg - message to be copied.
- *
- * @returns copy of msg without quotes.
- */
-function clone(msg) {
-  if (msg == null) {
-    return null;
-  }
-  if (Drafty.isPlainText(msg)) {
-    return msg;
-  }
-  let res = {
-    txt: msg.txt
-  };
-
-  if (Array.isArray(msg.fmt)) {
-    res.fmt = [];
-    if (Array.isArray(msg.ent)) {
-      res.ent = [];
-    }
-    msg.fmt.forEach(src => {
-      const fmt = {
-        at: src.at,
-        len: src.len
-      };
-      if (src.tp) {
-        fmt.tp = src.tp;
-      } else {
-        fmt.key = res.ent.length;
-        res.ent.push(msg.ent[src.key || 0]);
-      }
-      res.fmt.push(fmt);
-    });
-  }
-
-  return res;
-}
-
-/**
  * Append one Drafty document to another.
  *
  * @param {Drafty} first - Drafty document to append to.
@@ -1047,7 +1006,6 @@ Drafty.attachQuote = function(content, quote) {
   };
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
-  //content.qte = quote;
 
   content = Drafty.append(Drafty.appendLineBreak(quote), content);
 
@@ -1351,7 +1309,7 @@ Drafty.UNSAFE_toHTML = function(content) {
   let {
     txt,
     fmt,
-    ent,
+    ent
   } = content;
 
   const markup = [];
@@ -1397,58 +1355,6 @@ Drafty.UNSAFE_toHTML = function(content) {
   }
 
   return txt;
-}
-
-// Denormalizes formatting and entity data into a simple span array.
-function prepareSpans(fmt, ent) {
-  let spans = [].concat(fmt);
-
-  // Zero values may have been stripped. Restore them.
-  // Also ensure indexes and lengths are sane.
-  spans.map(function(s) {
-    s.at = s.at || 0;
-    s.len = s.len || 0;
-    if (s.len < 0) {
-      s.len = 0;
-    }
-    if (s.at < -1) {
-      s.at = -1;
-    }
-  });
-
-  // Sort spans first by start index (asc) then by length (desc).
-  spans.sort(function(a, b) {
-    if (a.at - b.at == 0) {
-      return b.len - a.len; // longer one comes first (<0)
-    }
-    return a.at - b.at;
-  });
-
-  // Denormalize entities into spans. Create a copy of the objects to leave
-  // original Drafty object unchanged.
-  spans = spans.map((s) => {
-    let data;
-    let tp = s.tp;
-    if (!tp) {
-      s.key = s.key || 0;
-      if (ent[s.key]) {
-        data = ent[s.key].data;
-        tp = ent[s.key].tp;
-      }
-    }
-
-    // Type still not defined? Hide invalid element.
-    tp = tp || 'HD';
-
-    return {
-      tp: tp,
-      data: data,
-      at: s.at,
-      len: s.len
-    };
-  });
-
-  return spans;
 }
 
 /**
@@ -1501,7 +1407,53 @@ Drafty.format = function(content, formatter, context) {
     }
   }
 
-  let spans = prepareSpans(fmt, ent);
+  let spans = [].concat(fmt);
+
+  // Zero values may have been stripped. Restore them.
+  // Also ensure indexes and lengths are sane.
+  spans.map(function(s) {
+    s.at = s.at || 0;
+    s.len = s.len || 0;
+    if (s.len < 0) {
+      s.len = 0;
+    }
+    if (s.at < -1) {
+      s.at = -1;
+    }
+  });
+
+  // Sort spans first by start index (asc) then by length (desc).
+  spans.sort(function(a, b) {
+    if (a.at - b.at == 0) {
+      return b.len - a.len; // longer one comes first (<0)
+    }
+    return a.at - b.at;
+  });
+
+  // Denormalize entities into spans. Create a copy of the objects to leave
+  // original Drafty object unchanged.
+  spans = spans.map((s) => {
+    let data;
+    let tp = s.tp;
+    if (!tp) {
+      s.key = s.key || 0;
+      if (ent[s.key]) {
+        data = ent[s.key].data;
+        tp = ent[s.key].tp;
+      }
+    }
+
+    // Type still not defined? Hide invalid element.
+    tp = tp || 'HD';
+
+    return {
+      tp: tp,
+      data: data,
+      at: s.at,
+      len: s.len
+    };
+  });
+
   return forEach(txt, 0, txt.length, spans, formatter, context);
 }
 
@@ -1902,7 +1854,7 @@ function stripQuotes(original) {
  * @param {number} length - length in characters to shorten to.
  * @returns new shortened Drafty object leaving the original intact.
  */
-Drafty.preview = function(original, length, onCopyEntity) {
+Drafty.preview = function(original, length) {
   if (!original || length <= 0 || typeof original != 'object') {
     return null;
   }
@@ -1968,6 +1920,9 @@ Drafty.preview = function(original, length, onCopyEntity) {
         } else if (Array.isArray(ent) && ent.length > st.key && typeof ent_refs[st.key] == 'number') {
           style.key = ent_refs[st.key];
           const src = ent[st.key];
+          if (!src) {
+            return;
+          }
           let copiedEnt = copyEnt(src, true);
           preview.ent[style.key] = copiedEnt;
         } else {
