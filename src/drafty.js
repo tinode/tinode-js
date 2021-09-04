@@ -601,7 +601,7 @@ function toTree(spans) {
       // Span is completely outside of the previous span.
       tree.push(spans[i]);
       last = spans[i];
-    } else if (spans[i].end < last.end) {
+    } else if (spans[i].end <= last.end) {
       // Span is fully inside of the previous span. Push to subnode.
       last.children.push(spans[i]);
     }
@@ -1729,121 +1729,113 @@ function stripQuotes(original) {
   } = original;
 
   const preview = {
-    txt: ''
+    txt: '',
+    fmt: [],
+    ent: []
   };
 
-  // Prepare quote spans.
-  let origSpans = [];
-  fmt.forEach(fmt => {
-    if (fmt.tp && fmt.tp == 'QQ') {
-      // strip.
-      origSpans.push({
-        at: fmt.at || 0,
-        len: fmt.len
-      });
-    }
-  });
-  if (origSpans.length == 0) {
-    return original;
-  }
-  origSpans.sort((x, y) => {
-    // at asc.
-    if (x.at != y.at) {
-      return y.at - x.at;
-    }
-    // break ties by len desc.
-    return x.len - y.len;
-  });
   let spans = [];
-  let idx = -1;
-  let bound = -1;
-  origSpans.forEach(s => {
-    if (s.at > bound) {
-      spans.push({
-        at: s.at,
-        len: s.len
-      });
-      bound = s.at + s.len;
-      idx = spans.length - 1;
-    } else {
-      bound = s.at + s.len;
-      spans[idx].len = bound - spans[idx].at;
+  fmt.forEach((st) => {
+    st.at |= 0;
+    spans.push({
+      start: st.at,
+      end: st.at + st.len - 1,
+      key: st.key,
+      tp: st.tp,
+      children: []
+    });
+  });
+  spans.sort((x, y) => {
+    // start asc.
+    if (x.start != y.start) {
+      return x.start - y.start;
     }
+    // break ties by end desc.
+    return y.end - x.end;
   });
+  const frst = toTree(spans);
 
-  // Cumulative length of QQ spans.
-  let newTxt = '';
-  let sum = 0;
-  spans.forEach((s, idx, _) => {
-    sum += s.len;
-    s.totalLen = sum;
-
-    const from = idx > 0 ? spans[idx - 1].at + spans[idx - 1].len : 0;
-    const len = s.at - from;
-    newTxt += txt.substr(from, len);
-  });
-  const last = spans[spans.length - 1];
-  // Copy the remainder of the txt.
-  newTxt += txt.substring(last.at + last.len);
-  // spans is a list of non-overlapping QQ intervals.
-  const nearest = (pos) => {
-    let l = -1;
-    let r = spans.length;
-    while (r > l + 1) {
-      const m = Math.floor((l + r) / 2);
-      if (spans[m].at > pos) {
-        r = m;
-      } else {
-        l = m;
+  let last = -1;
+  let offset = 0;
+  const toDrafty = (forest) => {
+    for (let i in forest) {
+      const span = forest[i];
+      if (span.tp && span.tp == 'QQ') {
+        last = span.end;
+        offset += span.end - span.start + 1;
+        continue;
       }
-    }
-    return l;
-  };
-  // Remove any styles overlapping with QQ spans.
-  // Keep and copy other styles into the output.
-  let newFmt = [];
-  let ent_refs = [];
-  let ent_count = 0;
-  let newEnt = [];
-  fmt.forEach(fmt => {
-    if (fmt.tp && fmt.tp == 'QQ') {
-      return;
-    }
-    const before = nearest(fmt.at);
-    const after = before + 1;
-    if ((before >= 0 && spans[before].at + spans[before].len > fmt.at) || (after < spans.length && fmt.at + fmt.len - 1 >= spans[after].at)) {
-      // Overlaps with QQ. Filter out.
-      return;
-    }
-    let fmt1 = {
-      at: fmt.at,
-      len: fmt.len,
-      key: fmt.key,
-      tp: fmt.tp
-    };
-    if (before >= 0) {
-      fmt1.at -= spans[before].totalLen;
-    }
-    if (!fmt.tp) {
-      if (fmt.key in ent_refs) {
-        fmt1.key = ent_refs[fmt.key];
-      } else {
-        fmt1.key = ent_count;
-        ent_refs[fmt.key] = ent_count;
-        // !!!! COPY a ref only.
-        newEnt.push(ent[fmt.key]);
-        ent_count++;
+      if (span.end > last) {
+        preview.txt += txt.substring(last + 1, span.end + 1);
+        last = span.end;
       }
+      const fmt = {
+        at: span.start - offset,
+        len: span.end - span.start + 1
+      };
+      if (span.tp) {
+        fmt.tp = span.tp;
+      } else if (typeof span.key != 'undefined' && (span.key in ent)) {
+        const entity = ent[span.key];
+        if (!entity) {
+          continue;
+        }
+        fmt.key = preview.ent.length;
+        preview.ent.push(ent[span.key]);
+      } else {
+        continue;
+      }
+      preview.fmt.push(fmt);
+      toDrafty(span.children);
     }
-    newFmt.push(fmt1);
-  });
-
-  return {
-    txt: newTxt,
-    fmt: newFmt,
-    ent: newEnt
   };
+  toDrafty(frst);
+  if (last + 1 < txt.length) {
+    preview.txt += txt.substring(last + 1);
+  }
+
+  return preview;
 }
+
+// Create a copy of an entity with (light=false) or without (light=true) large data.
+function copyEnt(ent, light) {
+  let result = {
+    tp: ent.tp
+  };
+
+  if (ent.data && Object.entries(ent.data).length != 0) {
+    const dc = {};
+    if (light) {
+      ['mime', 'name', 'width', 'height', 'size'].forEach((key) => {
+        const val = ent.data[key];
+        if (typeof val != 'undefined') {
+          dc[key] = val;
+        }
+      });
+    } else {
+      Object.assign(dc, ent.data);
+    }
+    if (Object.entries(dc).length != 0) {
+      result.data = dc;
+    }
+  }
+  return result;
+}
+
+/**
+ * Callback for applying custom modifications/transformation to a reply quote preview
+ * styles and entities. It may keep the style/entity unmodified,
+ * change or remove them (return null).
+ * Called once per every formatting entry.
+ * @memberof Drafty
+ * @static
+ *
+ * @callback StyleTransform
+ * @param {Object} style - style object.
+ * @param {Object} entity - entity data corresponding to style (may be null).
+ *
+ * @return Array - a 2-entry array of Object [transformed style, transformed entity].
+ */
 
 /**
  * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
@@ -1852,9 +1844,10 @@ function stripQuotes(original) {
  *
  * @param {Drafty} original - Drafty object to shorten.
  * @param {number} length - length in characters to shorten to.
+ * @param {StyleTransform} transform - style transformation callback. 
  * @returns new shortened Drafty object leaving the original intact.
  */
-Drafty.preview = function(original, length) {
+Drafty.preview = function(original, length, transform) {
   if (!original || length <= 0 || typeof original != 'object') {
     return null;
   }
@@ -1903,27 +1896,27 @@ Drafty.preview = function(original, length) {
 
     // Allocate space for copying styles and entities.
     preview.fmt = [];
-    if (Array.isArray(ent) && ent_refs.length > 0) {
-      preview.ent = [];
-    }
+    preview.ent = [];
 
     // Insertion point for styles.
     let fmt_idx = 0;
     fmt.forEach((st) => {
       if (st.at < len) {
+        const entity = Array.isArray(ent) && ent.length > st.key && (transform || typeof ent_refs[st.key] == 'number') ? ent[st.key] : null;
+        const [st1, ent1] = transform ? transform(st, entity) : [st, entity];
+        if (!st1) {
+          // Remove this formatting entry.
+          return;
+        }
         const style = {
-          at: st.at,
-          len: st.len | 0
+          at: st1.at,
+          len: st1.len | 0
         };
-        if (st.tp) {
-          style.tp = '' + st.tp;
-        } else if (Array.isArray(ent) && ent.length > st.key && typeof ent_refs[st.key] == 'number') {
-          style.key = ent_refs[st.key];
-          const src = ent[st.key];
-          if (!src) {
-            return;
-          }
-          let copiedEnt = copyEnt(src, true);
+        if (st1.tp) {
+          style.tp = '' + st1.tp;
+        } else if (ent1) {
+          style.key = transform ? preview.ent.length : ent_refs[st.key];
+          let copiedEnt = copyEnt(ent1, !transform);
           preview.ent[style.key] = copiedEnt;
         } else {
           return;
@@ -1931,126 +1924,18 @@ Drafty.preview = function(original, length) {
         preview.fmt[fmt_idx++] = style;
       }
     });
+    if (preview.fmt.length == 0) {
+      delete preview.fmt;
+    }
+
+    if (preview.ent.length == 0) {
+      delete preview.ent;
+    }
   }
 
   return preview;
-}
-
-// Create a copy of an entity with (light=false) or without (light=true) large data.
-function copyEnt(ent, light) {
-  let result = {
-    tp: ent.tp
-  };
-
-  if (ent.data && Object.entries(ent.data).length != 0) {
-    const dc = {};
-    if (light) {
-      ['mime', 'name', 'width', 'height', 'size'].forEach((key) => {
-        const val = ent.data[key];
-        if (typeof val != 'undefined') {
-          dc[key] = val;
-        }
-      });
-    } else {
-      Object.assign(dc, ent.data);
-    }
-    if (Object.entries(dc).length != 0) {
-      result.data = dc;
-    }
-  }
-  return result;
 }
 
 if (typeof module != 'undefined') {
   module.exports = Drafty;
-}
-
-/**
- * Callback for applying custom modifications/transformation to a reply quote preview
- * styles and entities. It may keep the style/entity unmodified,
- * change or remove them (return null).
- * Called once per every formatting entry.
- * @memberof Drafty
- * @static
- *
- * @callback StyleTransform
- * @param {Object} style - style object.
- * @param {Object} entity - entity data corresponding to style (may be null).
- *
- * @return Array - a 2-entry array of Object [transformed style, transformed entity].
- */
-
-/**
- * Shorten Drafty document and modify formatting and entity data
- * to be suitable for reply quote previews.
- * @memberof Drafty
- * @static
- *
- * @param {Drafty} original - Drafty object to shorten.
- * @param {number} length - length in characters to shorten to.
- * @param {StyleTransform} transform - style transformation callback. 
- * @returns new shortened Drafty object leaving the original intact.
- */
-Drafty.replyPreview = function(original, length, transform) {
-  if (!original || length <= 0 || typeof original != 'object') {
-    return null;
-  }
-
-  original = stripQuotes(original);
-
-  const {
-    txt,
-    fmt,
-    ent
-  } = original;
-
-  const preview = {
-    txt: ''
-  };
-
-  if (typeof txt == 'string') {
-    preview.txt = txt.substr(0, length);
-  }
-
-  if (Array.isArray(fmt) && fmt.length > 0) {
-    const len = preview.txt.length;
-    // Old key to new key entity mapping.
-    const new_ent = [];
-    //const ent_refs = {};
-    const new_fmt = [];
-    // Count styles which start within the new length of the text and save entity keys as a set.
-    fmt.forEach((st) => {
-      st.at |= 0;
-      if (st.at < len) {
-        let [st1, ent1] = transform(st, !st.tp ? ent[st.key] : null);
-        if (st1) {
-          let copiedSt = {
-            at: st1.at,
-            len: st1.len | 0
-          };
-          if (st1.tp) {
-            copiedSt.tp = st1.tp;
-          }
-          if (ent1) {
-            copiedSt.key = new_ent.length;
-            let copiedEnt = copyEnt(ent1, false);
-            new_ent.push(copiedEnt);
-          }
-          if (copiedSt.at + copiedSt.len > len) {
-            copiedSt.len = len - copiedSt.at;
-          }
-          new_fmt.push(copiedSt);
-        }
-      }
-    });
-
-    if (new_fmt.length > 0) {
-      preview.fmt = new_fmt;
-    }
-
-    if (new_ent.length > 0) {
-      preview.ent = new_ent;
-    }
-  }
-  return preview;
 }
