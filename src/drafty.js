@@ -864,6 +864,11 @@ Drafty.append = function(first, second) {
         at: src.at + len,
         len: src.len
       };
+      // Special case for the outside of the normal rendering flow styles.
+      if (src.at == -1) {
+        fmt.at = -1;
+        fmt.len = 0;
+      }
       if (src.tp) {
         fmt.tp = src.tp;
       } else {
@@ -955,11 +960,11 @@ Drafty.insertImage = function(content, at, imageDesc) {
  *
  * @param {Drafty} header - Quote header (title, etc.).
  * @param {Drafty} body - Body of the quoted message.
- * @param {string} authorTitleColor - Color id of the author title of the quoted message.
+ * @param {string} authorTitleColorId - Color id of the author title of the quoted message.
  *
  * @returns Reply quote Drafty doc with the quote formatting.
  */
-Drafty.createQuote = function(header, body, authorTitleColor) {
+Drafty.createQuote = function(header, body, authorTitleColorId) {
   header.ent = header.ent || [];
   header.fmt = header.fmt || [];
   const headerLen = header.txt.length;
@@ -978,7 +983,7 @@ Drafty.createQuote = function(header, body, authorTitleColor) {
     tp: 'MN',
     data: {
       val: '',
-      color: authorTitleColor
+      colorId: authorTitleColorId
     }
   });
 
@@ -1091,14 +1096,12 @@ Drafty.attachFile = function(content, attachmentDesc) {
     txt: ""
   };
 
-  const insertAt = content.txt.length;
-  content.txt += " ";
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
 
   content.fmt.push({
-    at: insertAt,
-    len: 1,
+    at: -1,
+    len: 0,
     key: content.ent.length
   });
 
@@ -1722,11 +1725,12 @@ function stripQuotes(original) {
     return original;
   }
 
-  const {
+  let {
     txt,
     fmt,
     ent
   } = original;
+  txt = txt || '';
 
   const preview = {
     txt: '',
@@ -1757,6 +1761,8 @@ function stripQuotes(original) {
 
   let last = -1;
   let offset = 0;
+  const ent_refs = [];
+  let ref_cnt = 0;
   const toDrafty = (forest) => {
     for (let i in forest) {
       const span = forest[i];
@@ -1780,8 +1786,11 @@ function stripQuotes(original) {
         if (!entity) {
           continue;
         }
-        fmt.key = preview.ent.length;
-        preview.ent.push(ent[span.key]);
+        if (!(span.key in ent_refs)) {
+          ent_refs[span.key] = preview.ent.length;
+          preview.ent.push(entity);
+        }
+        fmt.key = ent_refs[span.key];
       } else {
         continue;
       }
@@ -1862,7 +1871,7 @@ Drafty.preview = function(original, length, transform) {
   } = original;
 
   const preview = {
-    txt: ''
+    txt: ' '
   };
 
   if (typeof txt == 'string') {
@@ -1916,14 +1925,19 @@ Drafty.preview = function(original, length, transform) {
           style.tp = '' + st1.tp;
         } else if (ent1) {
           style.key = transform ? preview.ent.length : ent_refs[st.key];
-          let copiedEnt = copyEnt(ent1, !transform);
-          preview.ent[style.key] = copiedEnt;
+          preview.ent[style.key] = copyEnt(ent1, !transform);
         } else {
           return;
         }
         preview.fmt[fmt_idx++] = style;
       }
     });
+
+    if (preview.fmt.length > 0 && preview.txt.length == 0) {
+      // If we have formatting, make sure there's text available.
+      preview.txt = ' ';
+    }
+
     if (preview.fmt.length == 0) {
       delete preview.fmt;
     }
