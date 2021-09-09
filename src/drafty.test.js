@@ -94,3 +94,53 @@ test('Drafty.parse', () => {
     expect(Drafty.parse(x.src)).toEqual(x.expect);
   });
 });
+
+// Drafty docs for testing Drafty.preview.
+const preview_this = [
+  "This is a plain text string.",
+  {
+    "txt":"This is a string with a line break.",
+    "fmt":[{"at":9,"tp":"BR"}]
+  },
+  {
+    "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}],
+    "fmt":[{"at":-1, "key":0}]
+  },
+	{
+    "ent":[{"data":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"},"tp":"LN"}],
+    "fmt":[{"len":22}],
+    "txt":"https://api.tinode.co/"
+  },
+  {
+    "ent":[{"data":{"url":"https://api.tinode.co/"},"tp":"LN"}],
+    "fmt":[{"len":22}],
+    "txt":"https://api.tinode.co/"
+  },
+  {
+    "ent":[{"data":{"url":"http://tinode.co"},"tp":"LN"}],
+    "fmt":[{"at":9,"len":3}, {"at":4,"len":3}],
+    "txt":"Url one, two"
+  },
+  {
+    "ent":[{"data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","val":"<38992, bytes: ...>","width":638},"tp":"IM"}],
+    "fmt":[{"len":1}],
+    "txt":" "
+	},
+  {
+    "txt":"This text has staggered formats",
+    "fmt":[{"at":5,"len":8,"tp":"EM"},{"at":10,"len":13,"tp":"ST"}]
+	},
+  {
+    "txt":"This text is formatted and deleted too",
+    "fmt":[{"at":5,"len":4,"tp":"ST"},{"at":13,"len":9,"tp":"EM"},{"at":35,"len":3,"tp":"ST"},{"at":27,"len":11,"tp":"DL"}]
+  },
+  {
+    "txt":"мультибайтовый юникод",
+    "fmt":[{"len":14,"tp":"ST"},{"at":15,"len":6,"tp":"EM"}]
+	},
+  {
+    "txt":"Alice Johnson    This is a test",
+    "fmt":[{"at":13,"len":1,"tp":"BR"},{"at":15,"len":1},{"len":13,"key":1},{"len":16,"tp":"QQ"},{"at":16,"len":1,"tp":"BR"}],
+    "ent":[{"tp":"IM","data":{"mime":"image/jpeg","val":"<1292, bytes: /9j/4AAQSkZJ...rehH5o6D/9k=>","width":25,"height":14,"size":968}},{"tp":"MN","data":{"color":2}}]
+  }
+];
