@@ -117,7 +117,7 @@ const ENTITY_TYPES = [
         val: val.slice(1)
       };
     },
-    re: /\B@(\w\w+)/g
+    re: /\B@([\p{L}\p{N}][._\p{L}\p{N}]*[\p{L}\p{N}])/ug
   },
   // Hashtags #hashtag, like metion 2 or more characters.
   {
@@ -128,7 +128,7 @@ const ENTITY_TYPES = [
         val: val.slice(1)
       };
     },
-    re: /\B#(\w\w+)/g
+    re: /\B#([\p{L}\p{N}][._\p{L}\p{N}]*[\p{L}\p{N}])/ug
   }
 ];
 
@@ -1853,7 +1853,7 @@ function copyEnt(ent, light) {
  *
  * @param {Drafty} original - Drafty object to shorten.
  * @param {number} length - length in characters to shorten to.
- * @param {StyleTransform} transform - style transformation callback. 
+ * @param {StyleTransform} transform - style transformation callback.
  * @returns new shortened Drafty object leaving the original intact.
  */
 Drafty.preview = function(original, length, transform) {
