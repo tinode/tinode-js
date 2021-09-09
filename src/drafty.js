@@ -189,6 +189,14 @@ const HTML_TAGS = {
   HL: {
     name: 'span',
     isVoid: false
+  },
+  QQ: {
+    name: 'div',
+    isVoid: false
+  },
+  IC: {
+    name: 'span',
+    isVoid: false,
   }
 };
 
@@ -396,6 +404,32 @@ const DECORATORS = {
     close: function(data) {
       return '</div>';
     }
+  },
+  // Reply quote.
+  QQ: {
+    open: function(data) {
+      return '<div>';
+    },
+    close: function(data) {
+      return '</div>';
+    },
+    props: function(data) {
+      if (!data) return null;
+      return {};
+    },
+  },
+  // Icon.
+  IC: {
+    open: function(data) {
+      return '<i>';
+    },
+    close: function(data) {
+      return '</i>';
+    },
+    props: function(data) {
+      if (!data) return null;
+      return {};
+    }
   }
 };
 
@@ -567,7 +601,7 @@ function toTree(spans) {
       // Span is completely outside of the previous span.
       tree.push(spans[i]);
       last = spans[i];
-    } else if (spans[i].end < last.end) {
+    } else if (spans[i].end <= last.end) {
       // Span is fully inside of the previous span. Push to subnode.
       last.children.push(spans[i]);
     }
@@ -830,6 +864,11 @@ Drafty.append = function(first, second) {
         at: src.at + len,
         len: src.len
       };
+      // Special case for the outside of the normal rendering flow styles.
+      if (src.at == -1) {
+        fmt.at = -1;
+        fmt.len = 0;
+      }
       if (src.tp) {
         fmt.tp = src.tp;
       } else {
@@ -917,6 +956,102 @@ Drafty.insertImage = function(content, at, imageDesc) {
 }
 
 /**
+ * Create a quote to Drafty document.
+ *
+ * @param {Drafty} header - Quote header (title, etc.).
+ * @param {Drafty} body - Body of the quoted message.
+ * @param {string} authorTitleColorId - Color id of the author title of the quoted message.
+ *
+ * @returns Reply quote Drafty doc with the quote formatting.
+ */
+Drafty.createQuote = function(header, body, authorTitleColorId) {
+  header.ent = header.ent || [];
+  header.fmt = header.fmt || [];
+  const headerLen = header.txt.length;
+  body.ent = body.ent || [];
+  body.fmt = body.fmt || [];
+
+  const quote = Drafty.append(Drafty.appendLineBreak(header), body);
+
+  // Mention the author of the quoted message.
+  quote.fmt.push({
+    at: 0,
+    len: headerLen,
+    key: quote.ent.length
+  });
+  quote.ent.push({
+    tp: 'MN',
+    data: {
+      val: '',
+      colorId: authorTitleColorId
+    }
+  });
+
+  // Create a quote.
+  quote.fmt.push({
+    at: 0,
+    len: quote.txt.length,
+    tp: 'QQ'
+  });
+
+  return quote;
+}
+
+/**
+ * Attach a reply quote to Drafty document.
+ *
+ * @param {Drafty} content - Document to attach quote to.
+ * @param {Drafty} quote - Quote to be attached.
+ *
+ * @returns content with the attached quote.
+ */
+Drafty.attachQuote = function(content, quote) {
+  content = content || {
+    txt: " "
+  };
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content = Drafty.append(Drafty.appendLineBreak(quote), content);
+
+  return content;
+}
+
+/**
+ * Append a link to a Drafty document.
+ *
+ * @param {Drafty} content - Drafty document to append link to.
+ * @param {} linkData - Link info in format { txt, url }.
+ *
+ * @returns {Drafty} the same document as <code>content</code>.
+ */
+Drafty.appendLink = function(content, linkData) {
+  content = content || {
+    txt: ""
+  };
+
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: content.txt.length,
+    len: linkData.txt.length,
+    key: content.ent.length
+  });
+  content.txt += linkData.txt;
+
+  const ex = {
+    tp: 'LN',
+    data: {
+      url: linkData.url
+    }
+  }
+  content.ent.push(ex);
+
+  return content;
+}
+
+/**
  * Append inline image to Drafty document.
  * @memberof Drafty
  * @static
@@ -960,6 +1095,7 @@ Drafty.attachFile = function(content, attachmentDesc) {
   content = content || {
     txt: ""
   };
+
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
 
@@ -1168,7 +1304,7 @@ Drafty.appendLineBreak = function(content) {
  * @memberof Tinode.Drafty
  * @static
  *
- * @param {Drafy} content - document to convert.
+ * @param {Drafty} content - document to convert.
  *
  * @returns {string} HTML-representation of content.
  */
@@ -1226,7 +1362,7 @@ Drafty.UNSAFE_toHTML = function(content) {
 
 /**
  * Callback for applying custom formatting/transformation to a Drafty document.
- * Called once for each syle span.
+ * Called once for each style span.
  * @memberof Drafty
  * @static
  *
@@ -1582,6 +1718,134 @@ Drafty.getContentType = function() {
   return 'text/x-drafty';
 }
 
+// Removes reply quotes and any text/formatting associated with these.
+// Returns a Drafty document free of reply quotes.
+function stripQuotes(original) {
+  if (!original || Drafty.isPlainText(original)) {
+    return original;
+  }
+
+  let {
+    txt,
+    fmt,
+    ent
+  } = original;
+  txt = txt || '';
+
+  const preview = {
+    txt: '',
+    fmt: [],
+    ent: []
+  };
+
+  let spans = [];
+  fmt.forEach((st) => {
+    st.at |= 0;
+    spans.push({
+      start: st.at,
+      end: st.at + st.len - 1,
+      key: st.key,
+      tp: st.tp,
+      children: []
+    });
+  });
+  spans.sort((x, y) => {
+    // start asc.
+    if (x.start != y.start) {
+      return x.start - y.start;
+    }
+    // break ties by end desc.
+    return y.end - x.end;
+  });
+  const frst = toTree(spans);
+
+  let last = -1;
+  let offset = 0;
+  const ent_refs = [];
+  let ref_cnt = 0;
+  const toDrafty = (forest) => {
+    for (let i in forest) {
+      const span = forest[i];
+      if (span.tp && span.tp == 'QQ') {
+        last = span.end;
+        offset += span.end - span.start + 1;
+        continue;
+      }
+      if (span.end > last) {
+        preview.txt += txt.substring(last + 1, span.end + 1);
+        last = span.end;
+      }
+      const fmt = {
+        at: span.start - offset,
+        len: span.end - span.start + 1
+      };
+      if (span.tp) {
+        fmt.tp = span.tp;
+      } else if (typeof span.key != 'undefined' && (span.key in ent)) {
+        const entity = ent[span.key];
+        if (!entity) {
+          continue;
+        }
+        if (!(span.key in ent_refs)) {
+          ent_refs[span.key] = preview.ent.length;
+          preview.ent.push(entity);
+        }
+        fmt.key = ent_refs[span.key];
+      } else {
+        continue;
+      }
+      preview.fmt.push(fmt);
+      toDrafty(span.children);
+    }
+  };
+  toDrafty(frst);
+  if (last + 1 < txt.length) {
+    preview.txt += txt.substring(last + 1);
+  }
+
+  return preview;
+}
+
+// Create a copy of an entity with (light=false) or without (light=true) large data.
+function copyEnt(ent, light) {
+  let result = {
+    tp: ent.tp
+  };
+
+  if (ent.data && Object.entries(ent.data).length != 0) {
+    const dc = {};
+    if (light) {
+      ['mime', 'name', 'width', 'height', 'size'].forEach((key) => {
+        const val = ent.data[key];
+        if (typeof val != 'undefined') {
+          dc[key] = val;
+        }
+      });
+    } else {
+      Object.assign(dc, ent.data);
+    }
+    if (Object.entries(dc).length != 0) {
+      result.data = dc;
+    }
+  }
+  return result;
+}
+
+/**
+ * Callback for applying custom modifications/transformation to a reply quote preview
+ * styles and entities. It may keep the style/entity unmodified,
+ * change or remove them (return null).
+ * Called once per every formatting entry.
+ * @memberof Drafty
+ * @static
+ *
+ * @callback StyleTransform
+ * @param {Object} style - style object.
+ * @param {Object} entity - entity data corresponding to style (may be null).
+ *
+ * @return Array - a 2-entry array of Object [transformed style, transformed entity].
+ */
+
 /**
  * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
  * @memberof Drafty
@@ -1589,12 +1853,16 @@ Drafty.getContentType = function() {
  *
  * @param {Drafty} original - Drafty object to shorten.
  * @param {number} length - length in characters to shorten to.
+ * @param {StyleTransform} transform - style transformation callback. 
  * @returns new shortened Drafty object leaving the original intact.
  */
-Drafty.preview = function(original, length) {
+Drafty.preview = function(original, length, transform) {
   if (!original || length <= 0 || typeof original != 'object') {
     return null;
   }
+
+  // Remove any reply quotes present in the document.
+  original = stripQuotes(original);
 
   const {
     txt,
@@ -1603,7 +1871,7 @@ Drafty.preview = function(original, length) {
   } = original;
 
   const preview = {
-    txt: ''
+    txt: ' '
   };
 
   if (typeof txt == 'string') {
@@ -1637,52 +1905,49 @@ Drafty.preview = function(original, length) {
 
     // Allocate space for copying styles and entities.
     preview.fmt = [];
-    if (Array.isArray(ent) && ent_refs.length > 0) {
-      preview.ent = [];
-    }
+    preview.ent = [];
 
     // Insertion point for styles.
     let fmt_idx = 0;
     fmt.forEach((st) => {
       if (st.at < len) {
+        const entity = Array.isArray(ent) && ent.length > st.key && (transform || typeof ent_refs[st.key] == 'number') ? ent[st.key] : null;
+        const [st1, ent1] = transform ? transform(st, entity) : [st, entity];
+        if (!st1) {
+          // Remove this formatting entry.
+          return;
+        }
         const style = {
-          at: st.at,
-          len: st.len | 0
+          at: st1.at,
+          len: st1.len | 0
         };
-        if (st.tp) {
-          style.tp = '' + st.tp;
-        } else if (Array.isArray(ent) && ent.length > st.key && typeof ent_refs[st.key] == 'number') {
-          style.key = ent_refs[st.key];
-          preview.ent[style.key] = copyLight(ent[st.key]);
+        if (st1.tp) {
+          style.tp = '' + st1.tp;
+        } else if (ent1) {
+          style.key = transform ? preview.ent.length : ent_refs[st.key];
+          preview.ent[style.key] = copyEnt(ent1, !transform);
         } else {
           return;
         }
         preview.fmt[fmt_idx++] = style;
       }
     });
+
+    if (preview.fmt.length > 0 && preview.txt.length == 0) {
+      // If we have formatting, make sure there's text available.
+      preview.txt = ' ';
+    }
+
+    if (preview.fmt.length == 0) {
+      delete preview.fmt;
+    }
+
+    if (preview.ent.length == 0) {
+      delete preview.ent;
+    }
   }
 
   return preview;
-}
-
-// Create a copy of an entity without large data.
-function copyLight(ent) {
-  let result = {
-    tp: ent.tp
-  };
-  if (ent.data && Object.entries(ent.data).length != 0) {
-    const dc = {};
-    ['mime', 'name', 'width', 'height', 'size'].forEach((key) => {
-      const val = ent.data[key];
-      if (val) {
-        dc[key] = val;
-      }
-    });
-    if (Object.entries(dc).length != 0) {
-      result.data = dc;
-    }
-  }
-  return result;
 }
 
 if (typeof module != 'undefined') {
