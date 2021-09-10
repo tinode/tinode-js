@@ -965,12 +965,15 @@ Drafty.insertImage = function(content, at, imageDesc) {
  * @returns Reply quote Drafty doc with the quote formatting.
  */
 Drafty.createQuote = function(header, body, authorTitleColorId) {
+  const headerLen = header.txt.length;
   const quote = Drafty.append(Drafty.appendLineBreak(header), body);
+  quote.fmt = quote.fmt || [];
+  quote.ent = quote.ent || [];
 
   // Mention the author of the quoted message.
   quote.fmt.push({
     at: 0,
-    len: header.txt.length,
+    len: headerLen,
     key: quote.ent.length
   });
   quote.ent.push({
