@@ -620,7 +620,7 @@ function toTree(spans) {
 function extractEntities(line) {
   let match;
   let extracted = [];
-  ENTITY_TYPES.map(function(entity) {
+  ENTITY_TYPES.forEach((entity) => {
     while ((match = entity.re.exec(line)) !== null) {
       extracted.push({
         offset: match['index'],
@@ -637,12 +637,12 @@ function extractEntities(line) {
   }
 
   // Remove entities detected inside other entities, like #hashtag in a URL.
-  extracted.sort(function(a, b) {
+  extracted.sort((a, b) => {
     return a.offset - b.offset;
   });
 
   let idx = -1;
-  extracted = extracted.filter(function(el) {
+  extracted = extracted.filter((el) => {
     const result = (el.offset > idx);
     idx = el.offset + el.len;
     return result;
@@ -707,13 +707,13 @@ Drafty.parse = function(content) {
 
   // Processing lines one by one, hold intermediate result in blx.
   const blx = [];
-  lines.map(function(line) {
+  lines.forEach((line) => {
     let spans = [];
     let entities;
 
     // Find formatted spans in the string.
     // Try to match each style.
-    INLINE_STYLES.map(function(style) {
+    INLINE_STYLES.forEach((style) => {
       // Each style could be matched multiple times.
       spans = spans.concat(spannify(line, style.start, style.end, style.name));
     });
@@ -725,7 +725,7 @@ Drafty.parse = function(content) {
       };
     } else {
       // Sort spans by style occurence early -> late
-      spans.sort(function(a, b) {
+      spans.sort((a, b) => {
         return a.start - b.start;
       });
 
@@ -793,13 +793,13 @@ Drafty.parse = function(content) {
 
       result.txt += " " + block.txt;
       if (block.fmt) {
-        result.fmt = result.fmt.concat(block.fmt.map(function(s) {
+        result.fmt = result.fmt.concat(block.fmt.map((s) => {
           s.at += offset;
           return s;
         }));
       }
       if (block.ent) {
-        result.fmt = result.fmt.concat(block.ent.map(function(s) {
+        result.fmt = result.fmt.concat(block.ent.map((s) => {
           s.at += offset;
           return s;
         }));
@@ -965,18 +965,12 @@ Drafty.insertImage = function(content, at, imageDesc) {
  * @returns Reply quote Drafty doc with the quote formatting.
  */
 Drafty.createQuote = function(header, body, authorTitleColorId) {
-  header.ent = header.ent || [];
-  header.fmt = header.fmt || [];
-  const headerLen = header.txt.length;
-  body.ent = body.ent || [];
-  body.fmt = body.fmt || [];
-
   const quote = Drafty.append(Drafty.appendLineBreak(header), body);
 
   // Mention the author of the quoted message.
   quote.fmt.push({
     at: 0,
-    len: headerLen,
+    len: header.txt.length,
     key: quote.ent.length
   });
   quote.ent.push({
@@ -987,7 +981,7 @@ Drafty.createQuote = function(header, body, authorTitleColorId) {
     }
   });
 
-  // Create a quote.
+  // Wrap into a quote.
   quote.fmt.push({
     at: 0,
     len: quote.txt.length,
@@ -1006,22 +1000,14 @@ Drafty.createQuote = function(header, body, authorTitleColorId) {
  * @returns content with the attached quote.
  */
 Drafty.attachQuote = function(content, quote) {
-  content = content || {
-    txt: " "
-  };
-  content.ent = content.ent || [];
-  content.fmt = content.fmt || [];
-
-  content = Drafty.append(Drafty.appendLineBreak(quote), content);
-
-  return content;
+  return Drafty.append(quote, content || {});
 }
 
 /**
  * Append a link to a Drafty document.
  *
  * @param {Drafty} content - Drafty document to append link to.
- * @param {} linkData - Link info in format { txt, url }.
+ * @param {Object} linkData - Link info in format <code>{txt: 'ankor text', url: 'http://...'}</code>.
  *
  * @returns {Drafty} the same document as <code>content</code>.
  */
@@ -1299,7 +1285,7 @@ Drafty.appendLineBreak = function(content) {
 /**
  * Given Drafty document, convert it to HTML.
  * No attempt is made to strip pre-existing html markup.
- * This is potentially unsafe because <code>content.txt</code> may contain malicious
+ * This is potentially unsafe because <code>content.txt</code> may contain malicious HTML
  * markup.
  * @memberof Tinode.Drafty
  * @static
@@ -1309,7 +1295,7 @@ Drafty.appendLineBreak = function(content) {
  * @returns {string} HTML-representation of content.
  */
 Drafty.UNSAFE_toHTML = function(content) {
-  let {
+  const {
     txt,
     fmt,
     ent
@@ -1347,7 +1333,7 @@ Drafty.UNSAFE_toHTML = function(content) {
     }
   }
 
-  markup.sort(function(a, b) {
+  markup.sort((a, b) => {
     return b.idx == a.idx ? b.len - a.len : b.idx - a.idx; // in descending order
   });
 
@@ -1414,7 +1400,7 @@ Drafty.format = function(content, formatter, context) {
 
   // Zero values may have been stripped. Restore them.
   // Also ensure indexes and lengths are sane.
-  spans.map(function(s) {
+  spans.forEach((s) => {
     s.at = s.at || 0;
     s.len = s.len || 0;
     if (s.len < 0) {
@@ -1426,7 +1412,7 @@ Drafty.format = function(content, formatter, context) {
   });
 
   // Sort spans first by start index (asc) then by length (desc).
-  spans.sort(function(a, b) {
+  spans.sort((a, b) => {
     if (a.at - b.at == 0) {
       return b.len - a.len; // longer one comes first (<0)
     }
@@ -1808,14 +1794,14 @@ function stripQuotes(original) {
 
 // Create a copy of an entity with (light=false) or without (light=true) large data.
 function copyEnt(ent, light) {
-  let result = {
+  const result = {
     tp: ent.tp
   };
 
   if (ent.data && Object.entries(ent.data).length != 0) {
     const dc = {};
     if (light) {
-      ['mime', 'name', 'width', 'height', 'size'].forEach((key) => {
+      ['mime', 'name', 'width', 'height', 'size', 'url', 'ref'].forEach((key) => {
         const val = ent.data[key];
         if (typeof val != 'undefined') {
           dc[key] = val;
