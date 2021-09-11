@@ -61,6 +61,7 @@
 
 const MAX_FORM_ELEMENTS = 8;
 const JSON_MIME_TYPE = 'application/json';
+const DRAFTY_MIME_TYPE = 'text/x-drafty';
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
@@ -438,7 +439,11 @@ const DECORATORS = {
  * @class Drafty
  * @constructor
  */
-const Drafty = function() {}
+const Drafty = function() {
+  this.txt = '';
+  this.fmt = [];
+  this.ent = [];
+}
 
 // Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
 // a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
@@ -586,7 +591,7 @@ function spannify(original, re_start, re_end, type) {
 
 // Convert linear array or spans into a tree representation.
 // Keep standalone and nested spans, throw away partially overlapping spans.
-function toTree(spans) {
+function toSpanTree(spans) {
   if (spans.length == 0) {
     return [];
   }
@@ -596,7 +601,6 @@ function toTree(spans) {
   for (let i = 1; i < spans.length; i++) {
     // Keep spans which start after the end of the previous span or those which
     // are complete within the previous span.
-
     if (spans[i].start > last.end) {
       // Span is completely outside of the previous span.
       tree.push(spans[i]);
@@ -610,7 +614,7 @@ function toTree(spans) {
 
   // Recursively rearrange the subnodes.
   for (let i in tree) {
-    tree[i].children = toTree(tree[i].children);
+    tree[i].children = toSpanTree(tree[i].children);
   }
 
   return tree;
@@ -730,7 +734,7 @@ Drafty.parse = function(content) {
       });
 
       // Convert an array of possibly overlapping spans into a tree
-      spans = toTree(spans);
+      spans = toSpanTree(spans);
 
       // Build a tree representation of the entire string, not
       // just the formatted parts.
@@ -822,12 +826,15 @@ Drafty.parse = function(content) {
  *
  * @param {String} plainText - string to use as Drafty content.
  *
- * @returns new Drafty document or null is plainText is not a string.
+ * @returns new Drafty document or null is plainText is not a string or undefined.
  */
 Drafty.init = function(plainText) {
-  if (typeof plainText != 'string') {
+  if (typeof plainText == 'undefined') {
+    plainText = '';
+  } else if (typeof plainText != 'string') {
     return null;
   }
+
   return {
     txt: plainText
   };
@@ -1356,7 +1363,7 @@ Drafty.UNSAFE_toHTML = function(content) {
  * @param {string} style - style code such as "ST" or "IM".
  * @param {Object} data - entity's data
  * @param {Object} values - possibly styled subspans contained in this style span.
- * @param {number} index - of the current element among its siblings.
+ * @param {number} index - index of the current element among its siblings.
  */
 
 /**
@@ -1384,15 +1391,15 @@ Drafty.format = function(content, formatter, context) {
   }
 
   if (!Array.isArray(fmt)) {
-    // Handle special case when all values in fmt are 0 and fmt is skipped.
     if (ent.length == 1) {
+      // Handle special case when all values in fmt are 0 and fmt is skipped.
       fmt = [{
         at: 0,
         len: 0,
         key: 0
       }];
     } else {
-      return [txt];
+      return formatter.call(context, null, null, [txt]);
     }
   }
 
@@ -1698,10 +1705,179 @@ Drafty.attrValue = function(style, data) {
  * @memberof Drafty
  * @static
  *
- * @returns {string} HTTP Content-Type "text/x-drafty".
+ * @returns {string} content-Type "text/x-drafty".
  */
 Drafty.getContentType = function() {
-  return 'text/x-drafty';
+  return DRAFTY_MIME_TYPE;
+}
+
+// toTree converts a drafty document into a tree of formatted spans.
+// Each node of the tree is uniformly formatted.
+function toTree(doc) {
+  if (!doc.fmt || doc.fmt.length == 0) {
+    console.log("tree-2:", doc);
+    return {txt: doc.txt}
+  }
+
+  const textLen = doc.txt.length;
+
+  let spans = [];
+  doc.fmt.forEach((fmt) => {
+    // Create span.
+    const s = {
+      tp: fmt.tp,
+      at: fmt.at | 0,
+      end: fmt.at + Max.mx(fmt.len | 0, 0),
+      key: Math.max(fmt.key | 0, 0),
+    };
+
+    if (s.at < -1 || s.end > textLen) {
+      return null;
+    }
+
+    // Denormalize entities into spans.
+    if (!s.tp && (doc.ent || []).length > 0) {
+      if (s.key < 0 || s.key >= (doc.ent || []).length) {
+        return null;
+      }
+
+      s.data = doc.ent[s.key].data;
+      s.tp = doc.ent[s.key].tp;
+    }
+
+    if (!s.tp && !s.at && !s.end && !s.key == 0) {
+      return null;
+    }
+    spans.push(s);
+  });
+
+  // Sort spans first by start index (asc) then by length (desc).
+  spans.sort((a, b) => {
+    if (a.at - b.at == 0) {
+      return b.len - a.len; // longer one comes first (<0)
+    }
+    return a.at - b.at;
+  });
+
+	// Drop the second and subsequent formats when spans overlap like '_first *second_ third*'.
+  let end = -2;
+  spans = spans.filter((span) => {
+    if (span.at < end && span.end > end) {
+      return false;
+    }
+    end = Math.max(span.end, end);
+    return true;
+  });
+
+  // Iterate over an array of spans.
+  spans = forEach2(doc.txt, 0, textLen, spans);
+  return (spans && spans.length > 0) ? {children: spans} : null;
+}
+
+// forEach2 recursively iterates nested spans to form a tree.
+function forEach2(txt, start, end, spans) {
+  const result = [];
+
+  // Process ranges calling iterator for each range.
+  for (let i=0; i<spans.length; i++) {
+    const sp = spans[i];
+
+    if (sp.at < 0) {
+      // Attachment
+      result.push({sp: sp});
+      return;
+    }
+
+    // Add un-styled range before the styled span starts.
+    if (start < sp.at) {
+      result.push({txt: txt.substring(start, sp.at)});
+      start = sp.at
+    }
+
+    // Get all spans which are within current span.
+    const subspans = [];
+    for (let si = i + 1; si < spans.length && spans[si].at < sp.end; si++) {
+      subspans.push(spans[si]);
+      i = si;
+    }
+
+    if (HTML_TAGS[sp.tp].isVoid) {
+      result.push({sp: sp});
+    } else {
+      const children = forEach2(txt, start, sp.end, subspans)
+      if (!children) {
+        return null;
+      }
+      result.push({children: children, sp: sp});
+    }
+    start = sp.end;
+  }
+
+  // Add the remaining unformatted range.
+  if (start < end) {
+    result.push({txt: txt.substring(start, end)});
+  }
+
+  return result;
+}
+
+// Shorten Drafty document, remove QQ spans & the leading BR.
+// 'this' is expected to be
+// {doc: <shortened Drafty document>, maxLength: <maximum length of the new Drafty doc>}
+function previewFormatter0(style, data, values) {
+  console.log("formatter", style, data, values);
+
+  if (style == 'QQ') {
+    // Skip quoted text
+    return null;
+  }
+
+  let at = this.doc.txt.length;
+  if (at >= this.maxLength) {
+    // Maximum doc length reached.
+    return null;
+  }
+
+  if (style == 'BR' && at == 0) {
+    // Skip leading new lines.
+    return null;
+  }
+
+  values.forEach((val) => {
+    if (typeof val == 'string') {
+      if (val.length + at > this.maxLength) {
+        val = val.substring(0, this.maxLength - at);
+      }
+      this.doc.txt += val;
+    } else {
+      at = Math.min(at, val.at);
+    }
+  });
+
+  const end = this.doc.txt.length;
+
+  if (style) {
+    const fmt = {};
+    if (style == 'EX') {
+      fmt.at = -1;
+    } else if (at < end || HTML_TAGS[style].isVoid) {
+      fmt.at = at;
+      fmt.len = end - at;
+    } else {
+      console.log("Invalid format length:", style, end - at);
+      return null;
+    }
+
+    if (data) {
+      fmt.key = this.doc.ent.length;
+      this.doc.ent.push({tp: style, data: copyEnt(data, true)});
+    } else {
+      fmt.tp = style;
+    }
+
+    this.doc.fmt.push(fmt);
+  }
+  return {at: at};
 }
 
 // Removes reply quotes and any text/formatting associated with these.
@@ -1743,7 +1919,7 @@ function stripQuotes(original) {
     // break ties by end desc.
     return y.end - x.end;
   });
-  const frst = toTree(spans);
+  const frst = toSpanTree(spans);
 
   let last = -1;
   let offset = 0;
@@ -1843,6 +2019,24 @@ function copyEnt(ent, light) {
  * @returns new shortened Drafty object leaving the original intact.
  */
 Drafty.preview = function(original, length, transform) {
+  const tree = toTree(original);
+  if (!tree) {
+    return null;
+  }
+
+  console.log("tree:", tree);
+
+  const state = {
+    drafty: new Drafty(),
+    maxLength: length,
+    keymap: [],
+  };
+
+  previewFormatter.call(state, tree);
+
+	return state.drafty;
+
+
   if (!original || length <= 0 || typeof original != 'object') {
     return null;
   }
@@ -1935,6 +2129,71 @@ Drafty.preview = function(original, length, transform) {
 
   return preview;
 }
+
+// previewFormatter converts a tree of formatted spans into a shortened drafty document.
+function previewFormatter(tree) {
+  const at = this.drafty.txt.length;
+  if (at >= this.maxLength) {
+    // Maximum doc length reached.
+    return null;
+  }
+
+  if (tree.sp != null) {
+    if (tree.sp.tp == 'QQ') {
+      // Skip quoted text
+      return null;
+    }
+    if (tree.sp.tp == 'BR' && at == 0) {
+      // Skip leading new lines.
+      return null;
+    }
+  }
+
+  if (tree.children) {
+    tree.children.forEach((c) => {
+      previewFormatter.call(this, c);
+    });
+  } else if (tree.txt) {
+    let txt = tree.txt;
+    if (at + txt.length > this.maxLength) {
+      txt = txt.substring(0, this.maxLength - at);
+    }
+    this.drafty.txt += txt;
+  }
+
+  const end = this.drafty.txt.length;
+
+  if (tree.sp) {
+    const fmt = {};
+    if (tree.sp.at < 0) {
+      fmt.at = -1;
+    } else if (at < end || HTML_TAGS[tree.sp.tp].isVoid) {
+      fmt.at = at;
+      fmt.len = end - at;
+    } else {
+      return null;
+    }
+
+    if (tree.sp.data) {
+      // Check if we have already seen this payload.
+      let key = state.keymap[tree.sp.key];
+      if (typeof key == 'undefined') {
+        // Seeing payload for the first time, add it.
+        const ent = {tp: tree.sp.tp, data: copyEnt(tree.sp.data, true)};
+        key = this.drafty.ent.length;
+        this.keymap[tree.sp.key] = key;
+        this.drafty.ent.push(ent);
+      }
+      fmt.key = key;
+    } else {
+      fmt.tp = tree.sp.tp;
+    }
+
+    this.drafty.fmt.push(fmt);
+  }
+  return null;
+}
+
 
 if (typeof module != 'undefined') {
   module.exports = Drafty;

@@ -90,57 +90,95 @@ const parse_this = [
 ];
 
 test('Drafty.parse', () => {
-  parse_this.map((x) => {
+  parse_this.forEach((x) => {
     expect(Drafty.parse(x.src)).toEqual(x.expect);
   });
 });
 
 // Drafty docs for testing Drafty.preview.
 const preview_this = [
-  "This is a plain text string.",
   {
+    src: "This is a plain text string.",
+    expect: {"txt":"This is a plain"},
+  },
+  {
+    src: {
     "txt":"This is a string with a line break.",
-    "fmt":[{"at":9,"tp":"BR"}]
+    "fmt":[{"at":9,"tp":"BR"}]},
+    expect: {"txt":"This is a strin","fmt":[{"tp":"BR","at":9}]},
   },
   {
-    "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}],
-    "fmt":[{"at":-1, "key":0}]
-  },
-	{
-    "ent":[{"data":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"},"tp":"LN"}],
-    "fmt":[{"len":22}],
-    "txt":"https://api.tinode.co/"
+    src: {
+      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}],
+      "fmt":[{"at":-1, "key":0}]
+    },
+    expect: {"fmt":[{"at":-1}],"ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","width":100}}]},
   },
   {
-    "ent":[{"data":{"url":"https://api.tinode.co/"},"tp":"LN"}],
-    "fmt":[{"len":22}],
-    "txt":"https://api.tinode.co/"
+    src: {
+      "ent":[{"data":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"},"tp":"LN"}],
+      "fmt":[{"len":22}],
+      "txt":"https://api.tinode.co/"
+    },
+    expect: {"txt":"https://api.tin","fmt":[{"len":15}],"ent":[{"tp":"LN","data":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"}}]},
   },
   {
-    "ent":[{"data":{"url":"http://tinode.co"},"tp":"LN"}],
-    "fmt":[{"at":9,"len":3}, {"at":4,"len":3}],
-    "txt":"Url one, two"
+    src: {
+      "ent":[{"data":{"url":"https://api.tinode.co/"},"tp":"LN"}],
+      "fmt":[{"len":22}],
+      "txt":"https://api.tinode.co/"
+    },
+    expect: {"txt":"https://api.tin","fmt":[{"len":15}],"ent":[{"tp":"LN","data":{"url":"https://api.tinode.co/"}}]},
   },
   {
-    "ent":[{"data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","val":"<38992, bytes: ...>","width":638},"tp":"IM"}],
-    "fmt":[{"len":1}],
-    "txt":" "
-	},
-  {
-    "txt":"This text has staggered formats",
-    "fmt":[{"at":5,"len":8,"tp":"EM"},{"at":10,"len":13,"tp":"ST"}]
-	},
-  {
-    "txt":"This text is formatted and deleted too",
-    "fmt":[{"at":5,"len":4,"tp":"ST"},{"at":13,"len":9,"tp":"EM"},{"at":35,"len":3,"tp":"ST"},{"at":27,"len":11,"tp":"DL"}]
+    src: {
+      "ent":[{"data":{"url":"http://tinode.co"},"tp":"LN"}],
+      "fmt":[{"at":9,"len":3}, {"at":4,"len":3}],
+      "txt":"Url one, two"
+    },
+    expect: {"txt":"Url one, two","fmt":[{"at":4,"len":3},{"at":9,"len":3}],"ent":[{"tp":"LN","data":{"url":"http://tinode.co"}}]},
   },
   {
-    "txt":"мультибайтовый юникод",
-    "fmt":[{"len":14,"tp":"ST"},{"at":15,"len":6,"tp":"EM"}]
-	},
+    src: {
+      "ent":[{"data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","val":"<38992, bytes: ...>","width":638},"tp":"IM"}],
+      "fmt":[{"len":1}],
+      "txt":" "
+    },
+    expect: {"txt":" ","fmt":[{"len":1}],"ent":[{"tp":"IM","data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","width":638}}]},
+  },
   {
-    "txt":"Alice Johnson    This is a test",
-    "fmt":[{"at":13,"len":1,"tp":"BR"},{"at":15,"len":1},{"len":13,"key":1},{"len":16,"tp":"QQ"},{"at":16,"len":1,"tp":"BR"}],
-    "ent":[{"tp":"IM","data":{"mime":"image/jpeg","val":"<1292, bytes: /9j/4AAQSkZJ...rehH5o6D/9k=>","width":25,"height":14,"size":968}},{"tp":"MN","data":{"color":2}}]
+    src: {
+      "txt":"This text has staggered formats",
+      "fmt":[{"at":5,"len":8,"tp":"EM"},{"at":10,"len":13,"tp":"ST"}]
+    },
+    expect: {"txt":"This text has s","fmt":[{"tp":"EM","at":5,"len":8}]},
+  },
+  {
+    src: {
+      "txt":"This text is formatted and deleted too",
+      "fmt":[{"at":5,"len":4,"tp":"ST"},{"at":13,"len":9,"tp":"EM"},{"at":35,"len":3,"tp":"ST"},{"at":27,"len":11,"tp":"DL"}]
+    },
+    expect: {"txt":"This text is fo","fmt":[{"tp":"ST","at":5,"len":4},{"tp":"EM","at":13,"len":2}]},
+  },
+  {
+    src: {
+      "txt":"мультибайтовый юникод",
+      "fmt":[{"len":14,"tp":"ST"},{"at":15,"len":6,"tp":"EM"}]
+    },
+    expect: {"txt":"мультибайтовый ","fmt":[{"tp":"ST","len":14}]},
+  },
+  {
+    src: {
+      "txt":"Alice Johnson    This is a test",
+      "fmt":[{"at":13,"len":1,"tp":"BR"},{"at":15,"len":1},{"len":13,"key":1},{"len":16,"tp":"QQ"},{"at":16,"len":1,"tp":"BR"}],
+      "ent":[{"tp":"IM","data":{"mime":"image/jpeg","val":"<1292, bytes: /9j/4AAQSkZJ...rehH5o6D/9k=>","width":25,"height":14,"size":968}},{"tp":"MN","data":{"color":2}}]
+    },
+    expect: {"txt":"Tino the Chatbo","fmt":[{"len":15}],"ent":[{"tp":"MN"}]},
   }
 ];
+
+test('Drafty.preview', () => {
+  preview_this.forEach((x) => {
+    expect(Drafty.preview(x.src, 15)).toEqual(x.expect);
+  });
+});
