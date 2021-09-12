@@ -135,52 +135,32 @@ const ENTITY_TYPES = [
 
 // HTML tag name suggestions
 const HTML_TAGS = {
-  ST: {
-    name: 'b',
-    isVoid: false
-  },
-  EM: {
-    name: 'i',
-    isVoid: false
-  },
-  DL: {
-    name: 'del',
-    isVoid: false
-  },
-  CO: {
-    name: 'tt',
+  BN: {
+    name: 'button',
     isVoid: false
   },
   BR: {
     name: 'br',
     isVoid: true
   },
-  LN: {
-    name: 'a',
+  CO: {
+    name: 'tt',
     isVoid: false
   },
-  MN: {
-    name: 'a',
+  DL: {
+    name: 'del',
     isVoid: false
   },
-  HT: {
-    name: 'a',
+  EM: {
+    name: 'i',
     isVoid: false
   },
-  IM: {
-    name: 'img',
+  EX: {
+    name: '',
     isVoid: true
   },
   FM: {
     name: 'div',
-    isVoid: false
-  },
-  RW: {
-    name: 'div',
-    isVoid: false,
-  },
-  BN: {
-    name: 'button',
     isVoid: false
   },
   HD: {
@@ -191,14 +171,38 @@ const HTML_TAGS = {
     name: 'span',
     isVoid: false
   },
-  QQ: {
-    name: 'div',
+  HT: {
+    name: 'a',
     isVoid: false
   },
   IC: {
     name: 'span',
     isVoid: false,
-  }
+  },
+  IM: {
+    name: 'img',
+    isVoid: false
+  },
+  LN: {
+    name: 'a',
+    isVoid: false
+  },
+  MN: {
+    name: 'a',
+    isVoid: false
+  },
+  RW: {
+    name: 'div',
+    isVoid: false,
+  },
+  QQ: {
+    name: 'div',
+    isVoid: false
+  },
+  ST: {
+    name: 'b',
+    isVoid: false
+  },
 };
 
 // Convert base64-encoded string into Blob.
@@ -463,9 +467,9 @@ function chunkify(line, start, end, spans) {
     const span = spans[i];
 
     // Grab the initial unstyled chunk
-    if (span.start > start) {
+    if (span.at > start) {
       chunks.push({
-        text: line.slice(start, span.start)
+        text: line.slice(start, span.at)
       });
     }
 
@@ -473,7 +477,7 @@ function chunkify(line, start, end, spans) {
     const chunk = {
       type: span.type
     };
-    const chld = chunkify(line, span.start + 1, span.end, span.children);
+    const chld = chunkify(line, span.at + 1, span.end, span.children);
     if (chld.length > 0) {
       chunk.children = chld;
     } else {
@@ -493,7 +497,8 @@ function chunkify(line, start, end, spans) {
   return chunks;
 }
 
-// Inverse of chunkify. Returns a tree of formatted spans.
+/*
+// Inverse of chunkify: iterates spans bottom-up. Returns a tree of formatted spans.
 function forEach(line, start, end, spans, formatter, context) {
   const result = [];
 
@@ -535,6 +540,7 @@ function forEach(line, start, end, spans, formatter, context) {
 
   return result;
 }
+*/
 
 // Detect starts and ends of formatting spans. Unformatted spans are
 // ignored at this stage.
@@ -574,13 +580,13 @@ function spannify(original, re_start, re_end, type) {
     line = line.slice(end_offset + 1);
     // Update offsets
     end_offset += index;
-    // Index now point to the beginning of 'line' within the 'original' string.
+    // Index now points to the beginning of 'line' within the 'original' string.
     index = end_offset + 1;
 
     result.push({
       text: original.slice(start_offset + 1, end_offset),
       children: [],
-      start: start_offset,
+      at: start_offset,
       end: end_offset,
       type: type
     });
@@ -601,7 +607,7 @@ function toSpanTree(spans) {
   for (let i = 1; i < spans.length; i++) {
     // Keep spans which start after the end of the previous span or those which
     // are complete within the previous span.
-    if (spans[i].start > last.end) {
+    if (spans[i].at > last.end) {
       // Span is completely outside of the previous span.
       tree.push(spans[i]);
       last = spans[i];
@@ -618,6 +624,66 @@ function toSpanTree(spans) {
   }
 
   return tree;
+}
+
+// toTree converts a drafty document into a tree of formatted spans.
+// Each node of the tree is uniformly formatted.
+function toTree(doc) {
+  if (!doc.fmt || doc.fmt.length == 0) {
+    return {txt: doc.txt}
+  }
+
+  const textLen = doc.txt ? doc.txt.length : 0;
+
+  let spans = [];
+  doc.fmt.forEach((fmt) => {
+    // Create span.
+    const s = {
+      tp: fmt.tp,
+      at: fmt.at | 0,
+      end: (fmt.at | 0) + Math.max(fmt.len | 0, 0),
+      key: Math.max(fmt.key | 0, 0),
+    };
+
+    if (s.at < -1 || s.end > textLen) {
+      return null;
+    }
+
+    // Denormalize entities into spans.
+    if (!s.tp && (doc.ent || []).length > 0) {
+      if (s.key < 0 || s.key >= (doc.ent || []).length) {
+        return null;
+      }
+
+      s.data = doc.ent[s.key].data;
+      s.tp = doc.ent[s.key].tp;
+    }
+
+    if (!s.tp && !s.at && !s.end && !s.key == 0) {
+      return null;
+    }
+    spans.push(s);
+  });
+
+  // Sort spans first by start index (asc) then by length (desc).
+  spans.sort((a, b) => {
+    const diff = a.at - b.at;
+    return diff != 0 ? diff : b.end - a.end;
+  });
+
+  // Drop the second and subsequent formats when spans overlap like '_first *second_ third*'.
+  let end = -2;
+  spans = spans.filter((span) => {
+    if (span.at < end && span.end > end) {
+      return false;
+    }
+    end = Math.max(span.end, end);
+    return true;
+  });
+
+  // Iterate over an array of spans.
+  spans = forEach(doc.txt, 0, textLen, spans);
+  return (spans && spans.length > 0) ? {children: spans} : null;
 }
 
 // Get a list of entities from a text.
@@ -717,9 +783,9 @@ Drafty.parse = function(content) {
 
     // Find formatted spans in the string.
     // Try to match each style.
-    INLINE_STYLES.forEach((style) => {
+    INLINE_STYLES.forEach((tag) => {
       // Each style could be matched multiple times.
-      spans = spans.concat(spannify(line, style.start, style.end, style.name));
+      spans = spans.concat(spannify(line, tag.start, tag.end, tag.name));
     });
 
     let block;
@@ -728,9 +794,10 @@ Drafty.parse = function(content) {
         txt: line
       };
     } else {
-      // Sort spans by style occurence early -> late
+      // Sort spans by style occurence early -> late, then by length: first long then short.
       spans.sort((a, b) => {
-        return a.start - b.start;
+        const diff = a.at - b.at;
+        return diff != 0 ? diff : b.end - a.end;
       });
 
       // Convert an array of possibly overlapping spans into a tree
@@ -967,11 +1034,11 @@ Drafty.insertImage = function(content, at, imageDesc) {
  *
  * @param {Drafty} header - Quote header (title, etc.).
  * @param {Drafty} body - Body of the quoted message.
- * @param {string} authorTitleColorId - Color id of the author title of the quoted message.
+ * @param {string} author - UID of the author.
  *
  * @returns Reply quote Drafty doc with the quote formatting.
  */
-Drafty.createQuote = function(header, body, authorTitleColorId) {
+Drafty.createQuote = function(header, body, author) {
   const quote = Drafty.append(Drafty.appendLineBreak(header), body);
 
   // Mention the author of the quoted message.
@@ -983,8 +1050,7 @@ Drafty.createQuote = function(header, body, authorTitleColorId) {
   quote.ent.push({
     tp: 'MN',
     data: {
-      val: '',
-      colorId: authorTitleColorId
+      val: author
     }
   });
 
@@ -1454,6 +1520,35 @@ Drafty.format = function(content, formatter, context) {
 }
 
 /**
+ * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} original - Drafty object to shorten.
+ * @param {number} length - length in characters to shorten to.
+ * @returns new shortened Drafty object leaving the original intact.
+ */
+Drafty.preview = function(original, length) {
+  if (typeof original == 'string') {
+    original = {txt: original};
+  }
+  const tree = toTree(original);
+  if (!tree) {
+    return null;
+  }
+
+  const state = {
+    drafty: Drafty.init(),
+    maxLength: length,
+    keymap: [],
+  };
+
+  previewFormatter.call(state, tree);
+
+  return state.drafty;
+}
+
+/**
  * Given Drafty document, convert it to plain text.
  * @memberof Drafty
  * @static
@@ -1711,71 +1806,8 @@ Drafty.getContentType = function() {
   return DRAFTY_MIME_TYPE;
 }
 
-// toTree converts a drafty document into a tree of formatted spans.
-// Each node of the tree is uniformly formatted.
-function toTree(doc) {
-  if (!doc.fmt || doc.fmt.length == 0) {
-    console.log("tree-2:", doc);
-    return {txt: doc.txt}
-  }
-
-  const textLen = doc.txt.length;
-
-  let spans = [];
-  doc.fmt.forEach((fmt) => {
-    // Create span.
-    const s = {
-      tp: fmt.tp,
-      at: fmt.at | 0,
-      end: fmt.at + Max.mx(fmt.len | 0, 0),
-      key: Math.max(fmt.key | 0, 0),
-    };
-
-    if (s.at < -1 || s.end > textLen) {
-      return null;
-    }
-
-    // Denormalize entities into spans.
-    if (!s.tp && (doc.ent || []).length > 0) {
-      if (s.key < 0 || s.key >= (doc.ent || []).length) {
-        return null;
-      }
-
-      s.data = doc.ent[s.key].data;
-      s.tp = doc.ent[s.key].tp;
-    }
-
-    if (!s.tp && !s.at && !s.end && !s.key == 0) {
-      return null;
-    }
-    spans.push(s);
-  });
-
-  // Sort spans first by start index (asc) then by length (desc).
-  spans.sort((a, b) => {
-    if (a.at - b.at == 0) {
-      return b.len - a.len; // longer one comes first (<0)
-    }
-    return a.at - b.at;
-  });
-
-	// Drop the second and subsequent formats when spans overlap like '_first *second_ third*'.
-  let end = -2;
-  spans = spans.filter((span) => {
-    if (span.at < end && span.end > end) {
-      return false;
-    }
-    end = Math.max(span.end, end);
-    return true;
-  });
-
-  // Iterate over an array of spans.
-  spans = forEach2(doc.txt, 0, textLen, spans);
-  return (spans && spans.length > 0) ? {children: spans} : null;
-}
-
-// forEach2 recursively iterates nested spans to form a tree.
-function forEach2(txt, start, end, spans) {
+// forEach recursively iterates nested spans to form a tree.
+function forEach(txt, start, end, spans) {
   const result = [];
 
   // Process ranges calling iterator for each range.
@@ -1785,7 +1817,7 @@ function forEach2(txt, start, end, spans) {
     if (sp.at < 0) {
       // Attachment
       result.push({sp: sp});
-      return;
+      return result;
     }
 
     // Add un-styled range before the styled span starts.
@@ -1804,7 +1836,7 @@ function forEach2(txt, start, end, spans) {
     if (HTML_TAGS[sp.tp].isVoid) {
       result.push({sp: sp});
     } else {
-      const children = forEach2(txt, start, sp.end, subspans)
+      const children = forEach(txt, start, sp.end, subspans)
       if (!children) {
         return null;
       }
@@ -1821,340 +1853,51 @@ function forEach2(txt, start, end, spans) {
   return result;
 }
 
-// Shorten Drafty document, remove QQ spans & the leading BR.
-// 'this' is expected to be
-// {doc: <shortened Drafty document>, maxLength: <maximum length of the new Drafty doc>}
-function previewFormatter0(style, data, values) {
-  console.log("formatter", style, data, values);
-
-  if (style == 'QQ') {
-    // Skip quoted text
-    return null;
-  }
-
-  let at = this.doc.txt.length;
-  if (at >= this.maxLength) {
-    // Maximum doc length reached.
-    return null;
-  }
-
-  if (style == 'BR' && at == 0) {
-    // Skip leading new lines.
-    return null;
-  }
-
-  values.forEach((val) => {
-    if (typeof val == 'string') {
-      if (val.length + at > this.maxLength) {
-        val = val.substring(0, this.maxLength - at);
-      }
-      this.doc.txt += val;
-    } else {
-      at = Math.min(at, val.at);
-    }
-  });
-
-  const end = this.doc.txt.length;
-
-  if (style) {
-    const fmt = {};
-    if (style == 'EX') {
-      fmt.at = -1;
-    } else if (at < end || HTML_TAGS[style].isVoid) {
-      fmt.at = at;
-      fmt.len = end - at;
-    } else {
-      console.log("Invalid format length:", style, end - at);
-      return null;
-    }
-
-    if (data) {
-      fmt.key = this.doc.ent.length;
-      this.doc.ent.push({tp: style, data: copyEnt(data, true)});
-    } else {
-      fmt.tp = style;
-    }
-
-    this.doc.fmt.push(fmt);
-  }
-  return {at: at};
-}
-
-// Removes reply quotes and any text/formatting associated with these.
-// Returns a Drafty document free of reply quotes.
-function stripQuotes(original) {
-  if (!original || Drafty.isPlainText(original)) {
-    return original;
-  }
-
-  let {
-    txt,
-    fmt,
-    ent
-  } = original;
-  txt = txt || '';
-
-  const preview = {
-    txt: '',
-    fmt: [],
-    ent: []
-  };
-
-  let spans = [];
-  fmt.forEach((st) => {
-    st.at |= 0;
-    spans.push({
-      start: st.at,
-      end: st.at + st.len - 1,
-      key: st.key,
-      tp: st.tp,
-      children: []
-    });
-  });
-  spans.sort((x, y) => {
-    // start asc.
-    if (x.start != y.start) {
-      return x.start - y.start;
-    }
-    // break ties by end desc.
-    return y.end - x.end;
-  });
-  const frst = toSpanTree(spans);
-
-  let last = -1;
-  let offset = 0;
-  const ent_refs = [];
-  let ref_cnt = 0;
-  const toDrafty = (forest) => {
-    for (let i in forest) {
-      const span = forest[i];
-      if (span.tp && span.tp == 'QQ') {
-        last = span.end;
-        offset += span.end - span.start + 1;
-        continue;
-      }
-      if (span.end > last) {
-        preview.txt += txt.substring(last + 1, span.end + 1);
-        last = span.end;
-      }
-      const fmt = {
-        at: span.start - offset,
-        len: span.end - span.start + 1
-      };
-      if (span.tp) {
-        fmt.tp = span.tp;
-      } else if (typeof span.key != 'undefined' && (span.key in ent)) {
-        const entity = ent[span.key];
-        if (!entity) {
-          continue;
-        }
-        if (!(span.key in ent_refs)) {
-          ent_refs[span.key] = preview.ent.length;
-          preview.ent.push(entity);
-        }
-        fmt.key = ent_refs[span.key];
-      } else {
-        continue;
-      }
-      preview.fmt.push(fmt);
-      toDrafty(span.children);
-    }
-  };
-  toDrafty(frst);
-  if (last + 1 < txt.length) {
-    preview.txt += txt.substring(last + 1);
-  }
-
-  return preview;
-}
-
-// Create a copy of an entity with (light=false) or without (light=true) large data.
-function copyEnt(ent, light) {
-  const result = {
-    tp: ent.tp
-  };
-
-  if (ent.data && Object.entries(ent.data).length != 0) {
+// Create a copy of entity data with (light=false) or without (light=true) the large payload.
+function copyEntData(data, light) {
+  if (data && Object.entries(data).length > 0) {
     const dc = {};
     if (light) {
       ['mime', 'name', 'width', 'height', 'size', 'url', 'ref'].forEach((key) => {
-        const val = ent.data[key];
-        if (typeof val != 'undefined') {
-          dc[key] = val;
+        if (data.hasOwnProperty(key)) {
+          dc[key] = data[key];
         }
       });
     } else {
-      Object.assign(dc, ent.data);
+      Object.assign(dc, data);
     }
     if (Object.entries(dc).length != 0) {
-      result.data = dc;
+      return dc;
     }
   }
-  return result;
-}
-
-/**
- * Callback for applying custom modifications/transformation to a reply quote preview
- * styles and entities. It may keep the style/entity unmodified,
- * change or remove them (return null).
- * Called once per every formatting entry.
- * @memberof Drafty
- * @static
- *
- * @callback StyleTransform
- * @param {Object} style - style object.
- * @param {Object} entity - entity data corresponding to style (may be null).
- *
- * @return Array - a 2-entry array of Object [transformed style, transformed entity].
- */
-
-/**
- * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
- * @memberof Drafty
- * @static
- *
- * @param {Drafty} original - Drafty object to shorten.
- * @param {number} length - length in characters to shorten to.
- * @param {StyleTransform} transform - style transformation callback.
- * @returns new shortened Drafty object leaving the original intact.
- */
-Drafty.preview = function(original, length, transform) {
-  const tree = toTree(original);
-  if (!tree) {
-    return null;
-  }
-
-  console.log("tree:", tree);
-
-  const state = {
-    drafty: new Drafty(),
-    maxLength: length,
-    keymap: [],
-  };
-
-  previewFormatter.call(state, tree);
-
-	return state.drafty;
-
-
-  if (!original || length <= 0 || typeof original != 'object') {
-    return null;
-  }
-
-  // Remove any reply quotes present in the document.
-  original = stripQuotes(original);
-
-  const {
-    txt,
-    fmt,
-    ent
-  } = original;
-
-  const preview = {
-    txt: ' '
-  };
-
-  if (typeof txt == 'string') {
-    preview.txt = txt.substr(0, length);
-  }
-  let len = preview.txt.length;
-
-  if (Array.isArray(fmt) && fmt.length > 0) {
-    // Old key to new key entity mapping.
-    const ent_refs = [];
-    // Count styles which start within the new length of the text and save entity keys as a set.
-    let fmt_count = 0;
-    let ent_count = 0;
-    fmt.forEach((st) => {
-      st.at |= 0;
-      if (st.at < len) {
-        fmt_count++;
-        if (!st.tp) {
-          st.key |= 0;
-          if (!ent_refs[st.key]) {
-            ent_refs[st.key] = ent_count;
-            ent_count++;
-          }
-        }
-      }
-    });
-
-    if (fmt_count == 0) {
-      return preview;
-    }
-
-    // Allocate space for copying styles and entities.
-    preview.fmt = [];
-    preview.ent = [];
-
-    // Insertion point for styles.
-    let fmt_idx = 0;
-    fmt.forEach((st) => {
-      if (st.at < len) {
-        const entity = Array.isArray(ent) && ent.length > st.key && (transform || typeof ent_refs[st.key] == 'number') ? ent[st.key] : null;
-        const [st1, ent1] = transform ? transform(st, entity) : [st, entity];
-        if (!st1) {
-          // Remove this formatting entry.
-          return;
-        }
-        const style = {
-          at: st1.at,
-          len: st1.len | 0
-        };
-        if (st1.tp) {
-          style.tp = '' + st1.tp;
-        } else if (ent1) {
-          style.key = transform ? preview.ent.length : ent_refs[st.key];
-          preview.ent[style.key] = copyEnt(ent1, !transform);
-        } else {
-          return;
-        }
-        preview.fmt[fmt_idx++] = style;
-      }
-    });
-
-    if (preview.fmt.length > 0 && preview.txt.length == 0) {
-      // If we have formatting, make sure there's text available.
-      preview.txt = ' ';
-    }
-
-    if (preview.fmt.length == 0) {
-      delete preview.fmt;
-    }
-
-    if (preview.ent.length == 0) {
-      delete preview.ent;
-    }
-  }
-
-  return preview;
+  return null;
 }
 
 // previewFormatter converts a tree of formatted spans into a shortened drafty document.
-function previewFormatter(tree) {
+function previewFormatter(node) {
   const at = this.drafty.txt.length;
   if (at >= this.maxLength) {
     // Maximum doc length reached.
     return null;
   }
 
-  if (tree.sp != null) {
-    if (tree.sp.tp == 'QQ') {
+  if (node.sp != null) {
+    if (node.sp.tp == 'QQ') {
       // Skip quoted text
       return null;
     }
-    if (tree.sp.tp == 'BR' && at == 0) {
+    if (node.sp.tp == 'BR' && at == 0) {
       // Skip leading new lines.
       return null;
     }
   }
 
-  if (tree.children) {
-    tree.children.forEach((c) => {
+  if (node.children) {
+    node.children.forEach((c) => {
       previewFormatter.call(this, c);
     });
-  } else if (tree.txt) {
-    let txt = tree.txt;
+  } else if (node.txt) {
+    let txt = node.txt;
     if (at + txt.length > this.maxLength) {
       txt = txt.substring(0, this.maxLength - at);
     }
@@ -2163,32 +1906,38 @@ function previewFormatter(tree) {
 
   const end = this.drafty.txt.length;
 
-  if (tree.sp) {
+  if (node.sp) {
     const fmt = {};
-    if (tree.sp.at < 0) {
+    if (node.sp.at < 0) {
       fmt.at = -1;
-    } else if (at < end || HTML_TAGS[tree.sp.tp].isVoid) {
+    } else if (at < end || HTML_TAGS[node.sp.tp].isVoid) {
       fmt.at = at;
       fmt.len = end - at;
     } else {
       return null;
     }
 
-    if (tree.sp.data) {
+    if (node.sp.data) {
+      this.drafty.ent = this.drafty.ent || [];
       // Check if we have already seen this payload.
-      let key = state.keymap[tree.sp.key];
+      let key = this.keymap[node.sp.key];
       if (typeof key == 'undefined') {
         // Seeing payload for the first time, add it.
-        const ent = {tp: tree.sp.tp, data: copyEnt(tree.sp.data, true)};
+        const ent = {tp: node.sp.tp};
+        const data = copyEntData(node.sp.data, true);
+        if (data) {
+          ent.data = data;
+        }
         key = this.drafty.ent.length;
-        this.keymap[tree.sp.key] = key;
+        this.keymap[node.sp.key] = key;
         this.drafty.ent.push(ent);
       }
       fmt.key = key;
     } else {
-      fmt.tp = tree.sp.tp;
+      fmt.tp = node.sp.tp;
     }
 
+    this.drafty.fmt = this.drafty.fmt || [];
     this.drafty.fmt.push(fmt);
   }
   return null;
