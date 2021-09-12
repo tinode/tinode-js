@@ -111,20 +111,32 @@ const preview_this = [
   ],
   [
     {
-      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}],
-      "fmt":[{"at":-1}]
+      "fmt":[{"at":-1}],
+      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}]
     },
     {
       "txt": "",
-      "fmt":[{"at":-1,"key":0}],
+      "fmt":[{"at":-1,"key":0,"len":0}],
       "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","width":100}}]
     },
   ],
   [
     {
-      "ent":[{"data":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"},"tp":"LN"}],
+      "txt": "Message with attachment",
+      "fmt":[{"at":-1,"len":0,"key":0},{"at":8,"len":4,"tp":"ST"}],
+      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}]
+    },
+    {
+      "txt": "Message with at",
+      "fmt":[{"at":-1,"len":0,"key":0},{"at":8,"len":4,"tp":"ST"}],
+      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","width":100}}]
+    },
+  ],
+  [
+    {
+      "txt":"https://api.tinode.co/",
       "fmt":[{"len":22}],
-      "txt":"https://api.tinode.co/"
+      "ent":[{"data":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"},"tp":"LN"}]
     },
     {
       "txt":"https://api.tin",
@@ -134,9 +146,9 @@ const preview_this = [
   ],
   [
     {
-      "ent":[{"data":{"url":"https://api.tinode.co/"},"tp":"LN"}],
+      "txt":"https://api.tinode.co/",
       "fmt":[{"len":22}],
-      "txt":"https://api.tinode.co/"
+      "ent":[{"data":{"url":"https://api.tinode.co/"},"tp":"LN"}]
     },
     {
       "txt":"https://api.tin",
@@ -146,9 +158,9 @@ const preview_this = [
   ],
   [
     {
-      "ent":[{"data":{"url":"http://tinode.co"},"tp":"LN"}],
+      "txt":"Url one, two",
       "fmt":[{"at":9,"len":3}, {"at":4,"len":3}],
-      "txt":"Url one, two"
+      "ent":[{"data":{"url":"http://tinode.co"},"tp":"LN"}]
     },
     {
       "txt":"Url one, two",
@@ -158,9 +170,21 @@ const preview_this = [
   ],
   [
     {
-      "ent":[{"data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","val":"<38992, bytes: ...>","width":638},"tp":"IM"}],
+      "txt":"Url one, two",
+      "fmt":[{"at":9,"len":3,"key":0}, {"at":4,"len":3,"key":1}],
+      "ent":[{"data":{"url":"http://tinode.co"},"tp":"LN"}, {"data":{"url":"http://example.com"},"tp":"LN"}]
+    },
+    {
+      "txt":"Url one, two",
+      "fmt":[{"at":4,"len":3,"key":1}, {"at":9,"len":3,"key":0}],
+      "ent":[{"data":{"url":"http://tinode.co"},"tp":"LN"}, {"data":{"url":"http://example.com"},"tp":"LN"}]
+    },
+  ],
+  [
+    {
+      "txt":" ",
       "fmt":[{"len":1}],
-      "txt":" "
+      "ent":[{"data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","val":"<38992, bytes: ...>","width":638},"tp":"IM"}]
     },
     {
       "txt":" ",
@@ -208,12 +232,11 @@ const preview_this = [
       "txt":"This is a test"
     },
   ],
-  /*
   [
     {
       "txt":"Tino the Chatbot Post responseYesДа reply to a form",
-      "ent":[{"tp":"IC","data":{"orig":"BN","name":"button"}},{"tp":"IC","data":{"orig":"BN","name":"button"}},{"tp":"MN","data":{"colorId":6}}],
-      "fmt":[{"at":30,"len":3},{"at":33,"len":2,"key":1},{"len":16,"key":2}]
+      "fmt":[{"at":30,"len":3},{"at":33,"len":2,"key":1},{"len":16,"key":2}],
+      "ent":[{"tp":"IC","data":{"orig":"BN","name":"button"}},{"tp":"IC","data":{"orig":"BN","name":"button"}},{"tp":"MN","data":{"colorId":6}}]
     },
     {
       "txt":"Tino the Chatbo",
@@ -221,7 +244,6 @@ const preview_this = [
       "ent":[{"tp":"MN"}]
     },
   ]
-  */
 ];
 
 test.each(preview_this)('Drafty.preview %j', (src,exp) => {

@@ -1139,7 +1139,7 @@ Drafty.UNSAFE_toHTML = function(content) {
  * @return {Object} transformed object
  */
 Drafty.format = function(content, formatter, context) {
-  return iterBottomUp(content.txt, 0,
+  return iterateSpans(content.txt, 0,
     (content.txt || '').length,
     draftyToSpans(content),
     formatter,
@@ -1157,11 +1157,16 @@ Drafty.format = function(content, formatter, context) {
  */
 Drafty.preview = function(original, length) {
   if (typeof original == 'string') {
-    original = {txt: original};
+    original = {
+      txt: original
+    };
   }
 
-  const spans = iterTopDown(original.txt, 0, (original.txt || '').length, draftyToSpans(original));
-  const tree = (spans && spans.length > 0) ? {children: spans} : null;
+  const spans = iterateSpans(original.txt, 0, (original.txt || '').length,
+    draftyToSpans(original), nodeFormatter);
+  const tree = (spans && spans.length > 0) ? {
+    children: spans
+  } : null;
 
   const state = {
     drafty: Drafty.init(),
@@ -1481,7 +1486,7 @@ function chunkify(line, start, end, spans) {
 }
 
 // Inverse of chunkify: iterates spans bottom-up. Returns a tree of formatted spans.
-function iterBottomUp(line, start, end, spans, formatter, context) {
+function iterateSpans(line, start, end, spans, formatter, context) {
   const result = [];
 
   // Process ranges calling formatter for each range.
@@ -1495,11 +1500,13 @@ function iterBottomUp(line, start, end, spans, formatter, context) {
       }
       continue;
     }
+
     // Add un-styled range before the styled span starts.
     if (start < span.at) {
       result.push(formatter.call(context, null, undefined, line.slice(start, span.at), result.length));
       start = span.at;
     }
+
     // Get all spans which are within current span.
     const subspans = [];
     for (let si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
@@ -1509,7 +1516,7 @@ function iterBottomUp(line, start, end, spans, formatter, context) {
 
     const tag = HTML_TAGS[span.tp] || {}
     result.push(formatter.call(context, span.tp, span.data,
-      tag.isVoid ? null : iterBottomUp(line, start, span.at + span.len, subspans, formatter, context),
+      tag.isVoid ? null : iterateSpans(line, start, span.at + span.len, subspans, formatter, context),
       result.length));
 
     start = span.at + span.len;
@@ -1630,7 +1637,7 @@ function draftyToSpans(doc) {
         key: 0
       }];
     } else {
-      return [txt];
+      return [];
     }
   }
 
@@ -1672,7 +1679,7 @@ function draftyToSpans(doc) {
     tp = tp || 'HD';
 
     return {
-      tp: s.tp,
+      tp: tp,
       at: s.at,
       len: s.len,
       data: data,
@@ -1770,54 +1777,23 @@ function splice(src, at, insert) {
   return src.slice(0, at) + insert + src.slice(at);
 }
 
-// forEach recursively iterates nested spans top down to form a tree.
-function iterTopDown(txt, start, end, spans) {
-  const result = [];
-
-  // Process ranges calling iterator for each range.
-  for (let i=0; i<spans.length; i++) {
-    const sp = spans[i];
-
-    if (sp.at < 0) {
-      // Attachment
-      result.push({sp: sp});
-      return result;
+// A formatter which packs values into a tree node.
+function nodeFormatter(tp, data, content, unused) {
+  const node = {};
+  if (tp) {
+    node.sp = {
+      tp: tp
+    };
+    if (data) {
+      node.sp.data = data;
     }
-
-    // Add un-styled range before the styled span starts.
-    if (start < sp.at) {
-      result.push({txt: txt.substring(start, sp.at)});
-      start = sp.at
-    }
-
-    // Get all spans which are within current span.
-    const subspans = [];
-    for (let si = i + 1; si < spans.length && spans[si].at < sp.at + sp.len; si++) {
-      subspans.push(spans[si]);
-      i = si;
-    }
-
-    if (!HTML_TAGS[sp.tp]) {
-      console.log(sp);
-    }
-    if (HTML_TAGS[sp.tp].isVoid) {
-      result.push({sp: sp});
-    } else {
-      const children = iterTopDown(txt, start, sp.at + sp.len, subspans);
-      if (!children) {
-        return null;
-      }
-      result.push({children: children, sp: sp});
-    }
-    start = sp.at + sp.len;
   }
-
-  // Add the remaining unformatted range.
-  if (start < end) {
-    result.push({txt: txt.substring(start, end)});
+  if (typeof content == 'string') {
+    node.txt = content;
+  } else if (Array.isArray(content)) {
+    node.children = content;
   }
-
-  return result;
+  return node;
 }
 
 // Create a copy of entity data with (light=false) or without (light=true) the large payload.
@@ -1848,7 +1824,7 @@ function previewFormatter(node) {
     return null;
   }
 
-  if (node.sp != null) {
+  if (node.sp) {
     if (node.sp.tp == 'QQ') {
       // Skip quoted text
       return null;
@@ -1875,8 +1851,9 @@ function previewFormatter(node) {
 
   if (node.sp) {
     const fmt = {};
-    if (node.sp.at < 0) {
+    if (node.sp.tp == 'EX') {
       fmt.at = -1;
+      fmt.len = 0;
     } else if (at < end || HTML_TAGS[node.sp.tp].isVoid) {
       fmt.at = at;
       fmt.len = end - at;
@@ -1890,7 +1867,9 @@ function previewFormatter(node) {
       let key = this.keymap[node.sp.key];
       if (typeof key == 'undefined') {
         // Seeing payload for the first time, add it.
-        const ent = {tp: node.sp.tp};
+        const ent = {
+          tp: node.sp.tp
+        };
         const data = copyEntData(node.sp.data, true);
         if (data) {
           ent.data = data;
