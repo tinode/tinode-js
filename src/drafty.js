@@ -449,309 +449,23 @@ const Drafty = function() {
   this.ent = [];
 }
 
-// Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
-// a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
-// ('hello ', (b: 'bold ', (i: 'italic')), ' and ', (s: 'more'), ' world');
-//
-// This is needed in order to clear markup, i.e. 'hello *world*' -> 'hello world' and convert
-// ranges from markup-ed offsets to plain text offsets.
-function chunkify(line, start, end, spans) {
-  const chunks = [];
-
-  if (spans.length == 0) {
-    return [];
+/**
+ * Initialize Drafty document to a plain text string.
+ *
+ * @param {String} plainText - string to use as Drafty content.
+ *
+ * @returns new Drafty document or null is plainText is not a string or undefined.
+ */
+Drafty.init = function(plainText) {
+  if (typeof plainText == 'undefined') {
+    plainText = '';
+  } else if (typeof plainText != 'string') {
+    return null;
   }
 
-  for (let i in spans) {
-    // Get the next chunk from the queue
-    const span = spans[i];
-
-    // Grab the initial unstyled chunk
-    if (span.at > start) {
-      chunks.push({
-        text: line.slice(start, span.at)
-      });
-    }
-
-    // Grab the styled chunk. It may include subchunks.
-    const chunk = {
-      type: span.type
-    };
-    const chld = chunkify(line, span.at + 1, span.end, span.children);
-    if (chld.length > 0) {
-      chunk.children = chld;
-    } else {
-      chunk.text = span.text;
-    }
-    chunks.push(chunk);
-    start = span.end + 1; // '+1' is to skip the formatting character
-  }
-
-  // Grab the remaining unstyled chunk, after the last span
-  if (start < end) {
-    chunks.push({
-      text: line.slice(start, end)
-    });
-  }
-
-  return chunks;
-}
-
-/*
-// Inverse of chunkify: iterates spans bottom-up. Returns a tree of formatted spans.
-function forEach(line, start, end, spans, formatter, context) {
-  const result = [];
-
-  // Process ranges calling formatter for each range.
-  for (let i = 0; i < spans.length; i++) {
-    const span = spans[i];
-    if (span.at < 0) {
-      // Ask formatter if it wants to do anything with the non-visual span.
-      const s = formatter.call(context, span.tp, span.data, undefined, result.length);
-      if (s) {
-        result.push(s);
-      }
-      continue;
-    }
-    // Add un-styled range before the styled span starts.
-    if (start < span.at) {
-      result.push(formatter.call(context, null, undefined, line.slice(start, span.at), result.length));
-      start = span.at;
-    }
-    // Get all spans which are within current span.
-    const subspans = [];
-    for (let si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
-      subspans.push(spans[si]);
-      i = si;
-    }
-
-    const tag = HTML_TAGS[span.tp] || {}
-    result.push(formatter.call(context, span.tp, span.data,
-      tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context),
-      result.length));
-
-    start = span.at + span.len;
-  }
-
-  // Add the last unformatted range.
-  if (start < end) {
-    result.push(formatter.call(context, null, undefined, line.slice(start, end), result.length));
-  }
-
-  return result;
-}
-*/
-
-// Detect starts and ends of formatting spans. Unformatted spans are
-// ignored at this stage.
-function spannify(original, re_start, re_end, type) {
-  const result = [];
-  let index = 0;
-  let line = original.slice(0); // make a copy;
-
-  while (line.length > 0) {
-    // match[0]; // match, like '*abc*'
-    // match[1]; // match captured in parenthesis, like 'abc'
-    // match['index']; // offset where the match started.
-
-    // Find the opening token.
-    const start = re_start.exec(line);
-    if (start == null) {
-      break;
-    }
-
-    // Because javascript RegExp does not support lookbehind, the actual offset may not point
-    // at the markup character. Find it in the matched string.
-    let start_offset = start['index'] + start[0].lastIndexOf(start[1]);
-    // Clip the processed part of the string.
-    line = line.slice(start_offset + 1);
-    // start_offset is an offset within the clipped string. Convert to original index.
-    start_offset += index;
-    // Index now point to the beginning of 'line' within the 'original' string.
-    index = start_offset + 1;
-
-    // Find the matching closing token.
-    const end = re_end ? re_end.exec(line) : null;
-    if (end == null) {
-      break;
-    }
-    let end_offset = end['index'] + end[0].indexOf(end[1]);
-    // Clip the processed part of the string.
-    line = line.slice(end_offset + 1);
-    // Update offsets
-    end_offset += index;
-    // Index now points to the beginning of 'line' within the 'original' string.
-    index = end_offset + 1;
-
-    result.push({
-      text: original.slice(start_offset + 1, end_offset),
-      children: [],
-      at: start_offset,
-      end: end_offset,
-      type: type
-    });
-  }
-
-  return result;
-}
-
-// Convert linear array or spans into a tree representation.
-// Keep standalone and nested spans, throw away partially overlapping spans.
-function toSpanTree(spans) {
-  if (spans.length == 0) {
-    return [];
-  }
-
-  const tree = [spans[0]];
-  let last = spans[0];
-  for (let i = 1; i < spans.length; i++) {
-    // Keep spans which start after the end of the previous span or those which
-    // are complete within the previous span.
-    if (spans[i].at > last.end) {
-      // Span is completely outside of the previous span.
-      tree.push(spans[i]);
-      last = spans[i];
-    } else if (spans[i].end <= last.end) {
-      // Span is fully inside of the previous span. Push to subnode.
-      last.children.push(spans[i]);
-    }
-    // Span could partially overlap, ignoring it as invalid.
-  }
-
-  // Recursively rearrange the subnodes.
-  for (let i in tree) {
-    tree[i].children = toSpanTree(tree[i].children);
-  }
-
-  return tree;
-}
-
-// toTree converts a drafty document into a tree of formatted spans.
-// Each node of the tree is uniformly formatted.
-function toTree(doc) {
-  if (!doc.fmt || doc.fmt.length == 0) {
-    return {txt: doc.txt}
-  }
-
-  const textLen = doc.txt ? doc.txt.length : 0;
-
-  let spans = [];
-  doc.fmt.forEach((fmt) => {
-    // Create span.
-    const s = {
-      tp: fmt.tp,
-      at: fmt.at | 0,
-      end: (fmt.at | 0) + Math.max(fmt.len | 0, 0),
-      key: Math.max(fmt.key | 0, 0),
-    };
-
-    if (s.at < -1 || s.end > textLen) {
-      return null;
-    }
-
-    // Denormalize entities into spans.
-    if (!s.tp && (doc.ent || []).length > 0) {
-      if (s.key < 0 || s.key >= (doc.ent || []).length) {
-        return null;
-      }
-
-      s.data = doc.ent[s.key].data;
-      s.tp = doc.ent[s.key].tp;
-    }
-
-    if (!s.tp && !s.at && !s.end && !s.key == 0) {
-      return null;
-    }
-    spans.push(s);
-  });
-
-  // Sort spans first by start index (asc) then by length (desc).
-  spans.sort((a, b) => {
-    const diff = a.at - b.at;
-    return diff != 0 ? diff : b.end - a.end;
-  });
-
-  // Drop the second and subsequent formats when spans overlap like '_first *second_ third*'.
-  let end = -2;
-  spans = spans.filter((span) => {
-    if (span.at < end && span.end > end) {
-      return false;
-    }
-    end = Math.max(span.end, end);
-    return true;
-  });
-
-  // Iterate over an array of spans.
-  spans = forEach(doc.txt, 0, textLen, spans);
-  return (spans && spans.length > 0) ? {children: spans} : null;
-}
-
-// Get a list of entities from a text.
-function extractEntities(line) {
-  let match;
-  let extracted = [];
-  ENTITY_TYPES.forEach((entity) => {
-    while ((match = entity.re.exec(line)) !== null) {
-      extracted.push({
-        offset: match['index'],
-        len: match[0].length,
-        unique: match[0],
-        data: entity.pack(match[0]),
-        type: entity.name
-      });
-    }
-  });
-
-  if (extracted.length == 0) {
-    return extracted;
-  }
-
-  // Remove entities detected inside other entities, like #hashtag in a URL.
-  extracted.sort((a, b) => {
-    return a.offset - b.offset;
-  });
-
-  let idx = -1;
-  extracted = extracted.filter((el) => {
-    const result = (el.offset > idx);
-    idx = el.offset + el.len;
-    return result;
-  });
-
-  return extracted;
-}
-
-// Convert the chunks into format suitable for serialization.
-function draftify(chunks, startAt) {
-  let plain = "";
-  let ranges = [];
-  for (let i in chunks) {
-    const chunk = chunks[i];
-    if (!chunk.text) {
-      const drafty = draftify(chunk.children, plain.length + startAt);
-      chunk.text = drafty.txt;
-      ranges = ranges.concat(drafty.fmt);
-    }
-
-    if (chunk.type) {
-      ranges.push({
-        at: plain.length + startAt,
-        len: chunk.text.length,
-        tp: chunk.type
-      });
-    }
-
-    plain += chunk.text;
-  }
   return {
-    txt: plain,
-    fmt: ranges
+    txt: plainText
   };
-}
-
-// Splice two strings: insert second string into the first one at the given index
-function splice(src, at, insert) {
-  return src.slice(0, at) + insert + src.slice(at);
 }
 
 /**
@@ -800,7 +514,7 @@ Drafty.parse = function(content) {
         return diff != 0 ? diff : b.end - a.end;
       });
 
-      // Convert an array of possibly overlapping spans into a tree
+      // Convert an array of possibly overlapping spans into a tree.
       spans = toSpanTree(spans);
 
       // Build a tree representation of the entire string, not
@@ -886,25 +600,6 @@ Drafty.parse = function(content) {
     }
   }
   return result;
-}
-
-/**
- * Initialize Drafty document to a plain text string.
- *
- * @param {String} plainText - string to use as Drafty content.
- *
- * @returns new Drafty document or null is plainText is not a string or undefined.
- */
-Drafty.init = function(plainText) {
-  if (typeof plainText == 'undefined') {
-    plainText = '';
-  } else if (typeof plainText != 'string') {
-    return null;
-  }
-
-  return {
-    txt: plainText
-  };
 }
 
 /**
@@ -1444,79 +1139,11 @@ Drafty.UNSAFE_toHTML = function(content) {
  * @return {Object} transformed object
  */
 Drafty.format = function(content, formatter, context) {
-  let {
-    txt,
-    fmt,
-    ent
-  } = content;
-
-  // Assign default values.
-  txt = txt || "";
-  if (!Array.isArray(ent)) {
-    ent = [];
-  }
-
-  if (!Array.isArray(fmt)) {
-    if (ent.length == 1) {
-      // Handle special case when all values in fmt are 0 and fmt is skipped.
-      fmt = [{
-        at: 0,
-        len: 0,
-        key: 0
-      }];
-    } else {
-      return formatter.call(context, null, null, [txt]);
-    }
-  }
-
-  let spans = [].concat(fmt);
-
-  // Zero values may have been stripped. Restore them.
-  // Also ensure indexes and lengths are sane.
-  spans.forEach((s) => {
-    s.at = s.at || 0;
-    s.len = s.len || 0;
-    if (s.len < 0) {
-      s.len = 0;
-    }
-    if (s.at < -1) {
-      s.at = -1;
-    }
-  });
-
-  // Sort spans first by start index (asc) then by length (desc).
-  spans.sort((a, b) => {
-    if (a.at - b.at == 0) {
-      return b.len - a.len; // longer one comes first (<0)
-    }
-    return a.at - b.at;
-  });
-
-  // Denormalize entities into spans. Create a copy of the objects to leave
-  // original Drafty object unchanged.
-  spans = spans.map((s) => {
-    let data;
-    let tp = s.tp;
-    if (!tp) {
-      s.key = s.key || 0;
-      if (ent[s.key]) {
-        data = ent[s.key].data;
-        tp = ent[s.key].tp;
-      }
-    }
-
-    // Type still not defined? Hide invalid element.
-    tp = tp || 'HD';
-
-    return {
-      tp: tp,
-      data: data,
-      at: s.at,
-      len: s.len
-    };
-  });
-
-  return forEach(txt, 0, txt.length, spans, formatter, context);
+  return iterBottomUp(content.txt, 0,
+    (content.txt || '').length,
+    draftyToSpans(content),
+    formatter,
+    context);
 }
 
 /**
@@ -1524,7 +1151,7 @@ Drafty.format = function(content, formatter, context) {
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} original - Drafty object to shorten.
+ * @param {Drafty|string} original - Drafty object to shorten.
  * @param {number} length - length in characters to shorten to.
  * @returns new shortened Drafty object leaving the original intact.
  */
@@ -1532,10 +1159,9 @@ Drafty.preview = function(original, length) {
   if (typeof original == 'string') {
     original = {txt: original};
   }
-  const tree = toTree(original);
-  if (!tree) {
-    return null;
-  }
+
+  const spans = iterTopDown(original.txt, 0, (original.txt || '').length, draftyToSpans(original));
+  const tree = (spans && spans.length > 0) ? {children: spans} : null;
 
   const state = {
     drafty: Drafty.init(),
@@ -1806,8 +1432,346 @@ Drafty.getContentType = function() {
   return DRAFTY_MIME_TYPE;
 }
 
-// forEach recursively iterates nested spans to form a tree.
-function forEach(txt, start, end, spans) {
+// Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
+// a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
+// ('hello ', (b: 'bold ', (i: 'italic')), ' and ', (s: 'more'), ' world');
+//
+// This is needed in order to clear markup, i.e. 'hello *world*' -> 'hello world' and convert
+// ranges from markup-ed offsets to plain text offsets.
+function chunkify(line, start, end, spans) {
+  const chunks = [];
+
+  if (spans.length == 0) {
+    return [];
+  }
+
+  for (let i in spans) {
+    // Get the next chunk from the queue
+    const span = spans[i];
+
+    // Grab the initial unstyled chunk
+    if (span.at > start) {
+      chunks.push({
+        txt: line.slice(start, span.at)
+      });
+    }
+
+    // Grab the styled chunk. It may include subchunks.
+    const chunk = {
+      tp: span.tp
+    };
+    const chld = chunkify(line, span.at + 1, span.end, span.children);
+    if (chld.length > 0) {
+      chunk.children = chld;
+    } else {
+      chunk.txt = span.txt;
+    }
+    chunks.push(chunk);
+    start = span.end + 1; // '+1' is to skip the formatting character
+  }
+
+  // Grab the remaining unstyled chunk, after the last span
+  if (start < end) {
+    chunks.push({
+      txt: line.slice(start, end)
+    });
+  }
+
+  return chunks;
+}
+
+// Inverse of chunkify: iterates spans bottom-up. Returns a tree of formatted spans.
+function iterBottomUp(line, start, end, spans, formatter, context) {
+  const result = [];
+
+  // Process ranges calling formatter for each range.
+  for (let i = 0; i < spans.length; i++) {
+    const span = spans[i];
+    if (span.at < 0) {
+      // Ask formatter if it wants to do anything with the non-visual span.
+      const s = formatter.call(context, span.tp, span.data, undefined, result.length);
+      if (s) {
+        result.push(s);
+      }
+      continue;
+    }
+    // Add un-styled range before the styled span starts.
+    if (start < span.at) {
+      result.push(formatter.call(context, null, undefined, line.slice(start, span.at), result.length));
+      start = span.at;
+    }
+    // Get all spans which are within current span.
+    const subspans = [];
+    for (let si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
+      subspans.push(spans[si]);
+      i = si;
+    }
+
+    const tag = HTML_TAGS[span.tp] || {}
+    result.push(formatter.call(context, span.tp, span.data,
+      tag.isVoid ? null : iterBottomUp(line, start, span.at + span.len, subspans, formatter, context),
+      result.length));
+
+    start = span.at + span.len;
+  }
+
+  // Add the last unformatted range.
+  if (start < end) {
+    result.push(formatter.call(context, null, undefined, line.slice(start, end), result.length));
+  }
+
+  return result;
+}
+
+// Detect starts and ends of formatting spans. Unformatted spans are
+// ignored at this stage.
+function spannify(original, re_start, re_end, type) {
+  const result = [];
+  let index = 0;
+  let line = original.slice(0); // make a copy;
+
+  while (line.length > 0) {
+    // match[0]; // match, like '*abc*'
+    // match[1]; // match captured in parenthesis, like 'abc'
+    // match['index']; // offset where the match started.
+
+    // Find the opening token.
+    const start = re_start.exec(line);
+    if (start == null) {
+      break;
+    }
+
+    // Because javascript RegExp does not support lookbehind, the actual offset may not point
+    // at the markup character. Find it in the matched string.
+    let start_offset = start['index'] + start[0].lastIndexOf(start[1]);
+    // Clip the processed part of the string.
+    line = line.slice(start_offset + 1);
+    // start_offset is an offset within the clipped string. Convert to original index.
+    start_offset += index;
+    // Index now point to the beginning of 'line' within the 'original' string.
+    index = start_offset + 1;
+
+    // Find the matching closing token.
+    const end = re_end ? re_end.exec(line) : null;
+    if (end == null) {
+      break;
+    }
+    let end_offset = end['index'] + end[0].indexOf(end[1]);
+    // Clip the processed part of the string.
+    line = line.slice(end_offset + 1);
+    // Update offsets
+    end_offset += index;
+    // Index now points to the beginning of 'line' within the 'original' string.
+    index = end_offset + 1;
+
+    result.push({
+      txt: original.slice(start_offset + 1, end_offset),
+      children: [],
+      at: start_offset,
+      end: end_offset,
+      tp: type
+    });
+  }
+
+  return result;
+}
+
+// Convert linear array or spans into a tree representation.
+// Keep standalone and nested spans, throw away partially overlapping spans.
+function toSpanTree(spans) {
+  if (spans.length == 0) {
+    return [];
+  }
+
+  const tree = [spans[0]];
+  let last = spans[0];
+  for (let i = 1; i < spans.length; i++) {
+    // Keep spans which start after the end of the previous span or those which
+    // are complete within the previous span.
+    if (spans[i].at > last.end) {
+      // Span is completely outside of the previous span.
+      tree.push(spans[i]);
+      last = spans[i];
+    } else if (spans[i].end <= last.end) {
+      // Span is fully inside of the previous span. Push to subnode.
+      last.children.push(spans[i]);
+    }
+    // Span could partially overlap, ignoring it as invalid.
+  }
+
+  // Recursively rearrange the subnodes.
+  for (let i in tree) {
+    tree[i].children = toSpanTree(tree[i].children);
+  }
+
+  return tree;
+}
+
+// Convert drafty document into an array of spans with some
+// sanity checks and filled-out defaults.
+function draftyToSpans(doc) {
+  let {
+    txt,
+    fmt,
+    ent
+  } = doc;
+
+  txt = txt || "";
+  if (!Array.isArray(ent)) {
+    ent = [];
+  }
+
+  if (!Array.isArray(fmt)) {
+    if (ent.length == 1) {
+      // Handle special case when all values in fmt are 0 and fmt is skipped.
+      fmt = [{
+        at: 0,
+        len: 0,
+        key: 0
+      }];
+    } else {
+      return [txt];
+    }
+  }
+
+  const textLen = txt.length;
+
+  let spans = [].concat(fmt);
+  // Zero values may have been stripped. Restore them.
+  // Also ensure indexes and lengths are sane.
+  spans.forEach((s) => {
+    s.at = s.at || 0;
+    if (s.at < -1) {
+      s.at = -1;
+      s.len = 0;
+    }
+    s.len = s.len || 0;
+    if (s.len < 0) {
+      s.len = 0;
+    } else if (s.at > textLen) {
+      s.len = 0;
+    } else if (s.at + s.len > textLen) {
+      s.len = textLen - s.at;
+    }
+  });
+
+  // Denormalize entities into spans. Create a copy of the objects to leave
+  // original Drafty object unchanged.
+  spans = spans.map((s) => {
+    let data;
+    let tp = s.tp;
+    if (!tp) {
+      s.key = s.key || 0;
+      if (ent[s.key]) {
+        data = ent[s.key].data;
+        tp = ent[s.key].tp;
+      }
+    }
+
+    // Type still not defined? Hide invalid element.
+    tp = tp || 'HD';
+
+    return {
+      tp: s.tp,
+      at: s.at,
+      len: s.len,
+      data: data,
+    };
+  });
+
+  // Sort spans first by start index (asc) then by length (desc).
+  spans.sort((a, b) => {
+    const diff = a.at - b.at;
+    return diff != 0 ? diff : b.len - a.len;
+  });
+
+  // Drop invalid spans and staggered spans: the second and subsequent
+  // spans when they overlap like '_first *second_ third*'.
+  let end = -2;
+  spans = spans.filter((s) => {
+    if (s.at > textLen) {
+      return false;
+    }
+    if (s.at < end && s.at + s.len > end) {
+      return false;
+    }
+    end = Math.max(s.at + s.len, end);
+    return true;
+  });
+
+  return spans;
+}
+
+// Get a list of entities from a text.
+function extractEntities(line) {
+  let match;
+  let extracted = [];
+  ENTITY_TYPES.forEach((entity) => {
+    while ((match = entity.re.exec(line)) !== null) {
+      extracted.push({
+        offset: match['index'],
+        len: match[0].length,
+        unique: match[0],
+        data: entity.pack(match[0]),
+        type: entity.name
+      });
+    }
+  });
+
+  if (extracted.length == 0) {
+    return extracted;
+  }
+
+  // Remove entities detected inside other entities, like #hashtag in a URL.
+  extracted.sort((a, b) => {
+    return a.offset - b.offset;
+  });
+
+  let idx = -1;
+  extracted = extracted.filter((el) => {
+    const result = (el.offset > idx);
+    idx = el.offset + el.len;
+    return result;
+  });
+
+  return extracted;
+}
+
+// Convert the chunks into format suitable for serialization.
+function draftify(chunks, startAt) {
+  let plain = "";
+  let ranges = [];
+  for (let i in chunks) {
+    const chunk = chunks[i];
+    if (!chunk.txt) {
+      const drafty = draftify(chunk.children, plain.length + startAt);
+      chunk.txt = drafty.txt;
+      ranges = ranges.concat(drafty.fmt);
+    }
+
+    if (chunk.tp) {
+      ranges.push({
+        at: plain.length + startAt,
+        len: chunk.txt.length,
+        tp: chunk.tp
+      });
+    }
+
+    plain += chunk.txt;
+  }
+  return {
+    txt: plain,
+    fmt: ranges
+  };
+}
+
+// Splice two strings: insert second string into the first one at the given index
+function splice(src, at, insert) {
+  return src.slice(0, at) + insert + src.slice(at);
+}
+
+// forEach recursively iterates nested spans top down to form a tree.
+function iterTopDown(txt, start, end, spans) {
   const result = [];
 
   // Process ranges calling iterator for each range.
@@ -1828,21 +1792,24 @@ function forEach(txt, start, end, spans) {
 
     // Get all spans which are within current span.
     const subspans = [];
-    for (let si = i + 1; si < spans.length && spans[si].at < sp.end; si++) {
+    for (let si = i + 1; si < spans.length && spans[si].at < sp.at + sp.len; si++) {
       subspans.push(spans[si]);
       i = si;
     }
 
+    if (!HTML_TAGS[sp.tp]) {
+      console.log(sp);
+    }
     if (HTML_TAGS[sp.tp].isVoid) {
       result.push({sp: sp});
     } else {
-      const children = forEach(txt, start, sp.end, subspans)
+      const children = iterTopDown(txt, start, sp.at + sp.len, subspans);
       if (!children) {
         return null;
       }
       result.push({children: children, sp: sp});
     }
-    start = sp.end;
+    start = sp.at + sp.len;
   }
 
   // Add the remaining unformatted range.
