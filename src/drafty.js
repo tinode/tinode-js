@@ -1175,7 +1175,9 @@ Drafty.preview = function(original, length) {
     keymap: [],
   };
 
-  previewFormatter.call(state, tree);
+  if (tree) {
+    previewFormatter.call(state, tree.sp, tree.txt, tree.children);
+  }
 
   return state.drafty;
 }
@@ -1820,70 +1822,70 @@ function copyEntData(data, light) {
 }
 
 // previewFormatter converts a tree of formatted spans into a shortened drafty document.
-function previewFormatter(node) {
+function previewFormatter(sp, txt, children) {
   const at = this.drafty.txt.length;
   if (at >= this.maxLength) {
     // Maximum doc length reached.
     return null;
   }
 
-  if (node.sp) {
-    if (node.sp.tp == 'QQ') {
+  if (sp) {
+    if (sp.tp == 'QQ') {
       // Skip quoted text
       return null;
     }
-    if (node.sp.tp == 'BR' && at == 0) {
+    if (sp.tp == 'BR' && at == 0) {
       // Skip leading new lines.
       return null;
     }
   }
 
-  if (node.children) {
-    node.children.forEach((c) => {
-      previewFormatter.call(this, c);
+  if (children) {
+    children.forEach((c) => {
+      previewFormatter.call(this, c.sp, c.txt, c.children);
     });
-  } else if (node.txt) {
-    let txt = node.txt;
+  } else if (txt) {
     if (at + txt.length > this.maxLength) {
-      txt = txt.substring(0, this.maxLength - at);
+      this.drafty.txt += txt.slice(0, this.maxLength - at);
+    } else {
+      this.drafty.txt += txt;
     }
-    this.drafty.txt += txt;
   }
 
   const end = this.drafty.txt.length;
 
-  if (node.sp) {
+  if (sp) {
     const fmt = {};
-    if (node.sp.tp == 'EX') {
+    if (sp.tp == 'EX') {
       fmt.at = -1;
       fmt.len = 0;
-    } else if (at < end || HTML_TAGS[node.sp.tp].isVoid) {
+    } else if (at < end || HTML_TAGS[sp.tp].isVoid) {
       fmt.at = at;
       fmt.len = end - at;
     } else {
       return null;
     }
 
-    if (node.sp.data) {
+    if (sp.data) {
       this.drafty.ent = this.drafty.ent || [];
       // Check if we have already seen this payload.
-      let key = this.keymap[node.sp.key];
+      let key = this.keymap[sp.key];
       if (typeof key == 'undefined') {
         // Seeing payload for the first time, add it.
         const ent = {
-          tp: node.sp.tp
+          tp: sp.tp
         };
-        const data = copyEntData(node.sp.data, true);
+        const data = copyEntData(sp.data, true);
         if (data) {
           ent.data = data;
         }
         key = this.drafty.ent.length;
-        this.keymap[node.sp.key] = key;
+        this.keymap[sp.key] = key;
         this.drafty.ent.push(ent);
       }
       fmt.key = key;
     } else {
-      fmt.tp = node.sp.tp;
+      fmt.tp = sp.tp;
     }
 
     this.drafty.fmt = this.drafty.fmt || [];
