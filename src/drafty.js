@@ -1164,6 +1164,7 @@ Drafty.preview = function(original, length) {
 
   const spans = iterateSpans(original.txt, 0, (original.txt || '').length,
     draftyToSpans(original), nodeFormatter);
+
   const tree = (spans && spans.length > 0) ? {
     children: spans
   } : null;
@@ -1494,7 +1495,7 @@ function iterateSpans(line, start, end, spans, formatter, context) {
     const span = spans[i];
     if (span.at < 0) {
       // Ask formatter if it wants to do anything with the non-visual span.
-      const s = formatter.call(context, span.tp, span.data, undefined, result.length);
+      const s = formatter.call(context, span.tp, span.data, undefined, result.length, span.key);
       if (s) {
         result.push(s);
       }
@@ -1517,7 +1518,7 @@ function iterateSpans(line, start, end, spans, formatter, context) {
     const tag = HTML_TAGS[span.tp] || {}
     result.push(formatter.call(context, span.tp, span.data,
       tag.isVoid ? null : iterateSpans(line, start, span.at + span.len, subspans, formatter, context),
-      result.length));
+      result.length, span.key));
 
     start = span.at + span.len;
   }
@@ -1683,6 +1684,7 @@ function draftyToSpans(doc) {
       at: s.at,
       len: s.len,
       data: data,
+      key: s.key
     };
   });
 
@@ -1778,7 +1780,7 @@ function splice(src, at, insert) {
 }
 
 // A formatter which packs values into a tree node.
-function nodeFormatter(tp, data, content, unused) {
+function nodeFormatter(tp, data, content, unused, key) {
   const node = {};
   if (tp) {
     node.sp = {
@@ -1786,6 +1788,7 @@ function nodeFormatter(tp, data, content, unused) {
     };
     if (data) {
       node.sp.data = data;
+      node.sp.key = key;
     }
   }
   if (typeof content == 'string') {
@@ -1888,7 +1891,6 @@ function previewFormatter(node) {
   }
   return null;
 }
-
 
 if (typeof module != 'undefined') {
   module.exports = Drafty;

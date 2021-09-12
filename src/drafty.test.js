@@ -171,13 +171,13 @@ const preview_this = [
   [
     {
       "txt":"Url one, two",
-      "fmt":[{"at":9,"len":3,"key":0}, {"at":4,"len":3,"key":1}],
+      "fmt":[{"at":9,"len":3,"key":0},{"at":4,"len":3,"key":1}],
       "ent":[{"data":{"url":"http://tinode.co"},"tp":"LN"}, {"data":{"url":"http://example.com"},"tp":"LN"}]
     },
     {
       "txt":"Url one, two",
-      "fmt":[{"at":4,"len":3,"key":1}, {"at":9,"len":3,"key":0}],
-      "ent":[{"data":{"url":"http://tinode.co"},"tp":"LN"}, {"data":{"url":"http://example.com"},"tp":"LN"}]
+      "fmt":[{"at":4,"len":3,"key":0},{"at":9,"len":3,"key":1}],
+      "ent":[{"data":{"url":"http://example.com"},"tp":"LN"}, {"data":{"url":"http://tinode.co"},"tp":"LN"}]
     },
   ],
   [
