@@ -727,27 +727,14 @@ Drafty.insertImage = function(content, at, imageDesc) {
 /**
  * Create a quote to Drafty document.
  *
- * @param {Drafty} header - Quote header (title, etc.).
+ * @param {string} header - Quote header (title, etc.).
+ * @param {string} uid - UID of the author to mention.
  * @param {Drafty} body - Body of the quoted message.
- * @param {string} author - UID of the author.
  *
  * @returns Reply quote Drafty doc with the quote formatting.
  */
-Drafty.createQuote = function(header, body, author) {
-  const quote = Drafty.append(Drafty.appendLineBreak(header), body);
-
-  // Mention the author of the quoted message.
-  quote.fmt.push({
-    at: 0,
-    len: header.txt.length,
-    key: quote.ent.length
-  });
-  quote.ent.push({
-    tp: 'MN',
-    data: {
-      val: author
-    }
-  });
+Drafty.createQuote = function(header, uid, body) {
+  const quote = Drafty.append(Drafty.appendLineBreak(Drafty.mention(header, uid)), body);
 
   // Wrap into a quote.
   quote.fmt.push({
@@ -760,15 +747,28 @@ Drafty.createQuote = function(header, body, author) {
 }
 
 /**
- * Attach a reply quote to Drafty document.
+ * Create a Drafty document with a mention.
  *
- * @param {Drafty} content - Document to attach quote to.
- * @param {Drafty} quote - Quote to be attached.
+ * @param {string} name - mentioned name.
+ * @param {string} uid - mentioned user ID.
  *
- * @returns content with the attached quote.
+ * @returns {Drafty} document with the mention.
  */
-Drafty.attachQuote = function(content, quote) {
-  return Drafty.append(quote, content || {});
+Drafty.mention = function(name, uid) {
+  return {
+    txt: name || "",
+    fmt: [{
+      at: 0,
+      len: (name || "").length,
+      key: 0
+    }],
+    ent: [{
+      tp: 'MN',
+      data: {
+        val: uid
+      }
+    }]
+  };
 }
 
 /**
@@ -1129,12 +1129,14 @@ Drafty.UNSAFE_toHTML = function(content) {
 
 /**
  * Transform Drafty document using custom formatting.
+ * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
+ * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} content - content to transform.
+ * @param {Drafty|Object} content - Drafty document to transform.
  * @param {Formatter} formatter - callback which transforms individual elements
- * @param {Object} context - context provided to formatter as <code>this</code>.
+ * @param {Object} context - context provided to formatter as <code>this</code> and provide context formatter through <code>getFormatter(style)</code>.
  *
  * @return {Object} transformed object
  */
@@ -1148,14 +1150,17 @@ Drafty.format = function(content, formatter, context) {
 
 /**
  * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
+ * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
+ * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
  * @memberof Drafty
  * @static
  *
  * @param {Drafty|string} original - Drafty object to shorten.
  * @param {number} length - length in characters to shorten to.
+ * @param {Object} context - context provided to formatter as <code>this</code>.
  * @returns new shortened Drafty object leaving the original intact.
  */
-Drafty.preview = function(original, length) {
+Drafty.preview = function(original, length, context) {
   if (typeof original == 'string') {
     original = {
       txt: original
@@ -1163,7 +1168,7 @@ Drafty.preview = function(original, length) {
   }
 
   const spans = iterateSpans(original.txt, 0, (original.txt || '').length,
-    draftyToSpans(original), nodeFormatter);
+    draftyToSpans(original), nodeFormatter, context);
 
   const tree = (spans && spans.length > 0) ? {
     children: spans
@@ -1518,8 +1523,10 @@ function iterateSpans(line, start, end, spans, formatter, context) {
     }
 
     const tag = HTML_TAGS[span.tp] || {}
+    // Get context formatter.
+    const cformatter = (context && context.getFormatter) ? context.getFormatter(span.tp) : null;
     result.push(formatter.call(context, span.tp, span.data,
-      tag.isVoid ? null : iterateSpans(line, start, span.at + span.len, subspans, formatter, context),
+      tag.isVoid ? null : iterateSpans(line, start, span.at + span.len, subspans, cformatter || formatter, context),
       result.length, span.key));
 
     start = span.at + span.len;
