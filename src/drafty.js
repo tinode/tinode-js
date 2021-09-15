@@ -606,7 +606,7 @@ Drafty.parse = function(content) {
  * Append one Drafty document to another.
  *
  * @param {Drafty} first - Drafty document to append to.
- * @param {Drafty} second - Drafty document being appended.
+ * @param {Drafty|string} second - Drafty document or string being appended.
  *
  * @return {Drafty} first document with the second appended to it.
  */
@@ -619,10 +619,14 @@ Drafty.append = function(first, second) {
   }
 
   first.txt = first.txt || '';
-  second.txt = second.txt || '';
   const len = first.txt.length;
 
-  first.txt += second.txt;
+  if (typeof second == 'string') {
+    first.txt += second;
+  } else if (second.txt) {
+    first.txt += second.txt;
+  }
+
   if (Array.isArray(second.fmt)) {
     first.fmt = first.fmt || [];
     if (Array.isArray(second.ent)) {
@@ -733,7 +737,7 @@ Drafty.insertImage = function(content, at, imageDesc) {
  *
  * @returns Reply quote Drafty doc with the quote formatting.
  */
-Drafty.createQuote = function(header, uid, body) {
+Drafty.quote = function(header, uid, body) {
   const quote = Drafty.append(Drafty.appendLineBreak(Drafty.mention(header, uid)), body);
 
   // Wrap into a quote.
@@ -888,6 +892,35 @@ Drafty.attachFile = function(content, attachmentDesc) {
 }
 
 /**
+ * Wraps drafty document into a simple formatting style.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} content - document or string to wrap into a style.
+ * @param {string} style - two-letter style to wrap into.
+ * @param {number} at - index where the style starts, default 0.
+ * @param {number} len - length of the form content, default all of it.
+ *
+ * @return {Drafty} updated document.
+ */
+Drafty.wrapInto = function(content, style, at, len) {
+  if (typeof content == 'string') {
+    content = {
+      txt: content
+    };
+  }
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: at || 0,
+    len: len || content.txt.length,
+    tp: style,
+  });
+
+  return content;
+}
+
+/**
  * Wraps content into an interactive form.
  * @memberof Drafty
  * @static
@@ -899,20 +932,7 @@ Drafty.attachFile = function(content, attachmentDesc) {
  * @return {Drafty} updated document.
  */
 Drafty.wrapAsForm = function(content, at, len) {
-  if (typeof content == 'string') {
-    content = {
-      txt: content
-    };
-  }
-  content.fmt = content.fmt || [];
-
-  content.fmt.push({
-    at: at,
-    len: len,
-    tp: 'FM'
-  });
-
-  return content;
+  return Drafty.wrapInto(content, 'FM', at, len);
 }
 
 /**
@@ -1853,7 +1873,7 @@ function previewFormatter(sp, txt, children) {
     });
   } else if (txt) {
     if (at + txt.length > this.maxLength) {
-      this.drafty.txt += txt.slice(0, this.maxLength - at);
+      this.drafty.txt += txt.slice(0, this.maxLength - at - 1) + '…';
     } else {
       this.drafty.txt += txt;
     }
@@ -1882,7 +1902,7 @@ function previewFormatter(sp, txt, children) {
         const ent = {
           tp: sp.tp
         };
-        const data = copyEntData(sp.data, true);
+        const data = copyEntData(sp.data, false);
         if (data) {
           ent.data = data;
         }
