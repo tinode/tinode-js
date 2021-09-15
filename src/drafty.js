@@ -1514,7 +1514,7 @@ function chunkify(line, start, end, spans) {
 }
 
 // Inverse of chunkify: iterates spans bottom-up. Returns a tree of formatted spans.
-function iterateSpans(line, start, end, spans, formatter, context) {
+function iterateSpans(line, start, end, spans, defaultFormatter, context) {
   const result = [];
 
   // Process ranges calling formatter for each range.
@@ -1522,7 +1522,7 @@ function iterateSpans(line, start, end, spans, formatter, context) {
     const span = spans[i];
     if (span.at < 0) {
       // Ask formatter if it wants to do anything with the non-visual span.
-      const s = formatter.call(context, span.tp, span.data, undefined, result.length, span.key);
+      const s = defaultFormatter.call(context, span.tp, span.data, undefined, result.length, span.key);
       if (s) {
         result.push(s);
       }
@@ -1531,7 +1531,7 @@ function iterateSpans(line, start, end, spans, formatter, context) {
 
     // Add un-styled range before the styled span starts.
     if (start < span.at) {
-      result.push(formatter.call(context, null, undefined, line.slice(start, span.at), result.length));
+      result.push(defaultFormatter.call(context, null, undefined, line.slice(start, span.at), result.length));
       start = span.at;
     }
 
@@ -1545,8 +1545,9 @@ function iterateSpans(line, start, end, spans, formatter, context) {
     const tag = HTML_TAGS[span.tp] || {}
     // Get context formatter.
     const cformatter = (context && context.getFormatter) ? context.getFormatter(span.tp) : null;
-    result.push(formatter.call(context, span.tp, span.data,
-      tag.isVoid ? null : iterateSpans(line, start, span.at + span.len, subspans, cformatter || formatter, context),
+    result.push(defaultFormatter.call(context, span.tp, span.data,
+      tag.isVoid ? null : iterateSpans(line, start, span.at + span.len, subspans,
+        cformatter || defaultFormatter, context),
       result.length, span.key));
 
     start = span.at + span.len;
@@ -1554,7 +1555,7 @@ function iterateSpans(line, start, end, spans, formatter, context) {
 
   // Add the last unformatted range.
   if (start < end) {
-    result.push(formatter.call(context, null, undefined, line.slice(start, end), result.length));
+    result.push(defaultFormatter.call(context, null, undefined, line.slice(start, end), result.length));
   }
 
   return result;
@@ -1725,7 +1726,7 @@ function draftyToSpans(doc) {
 
   // Drop invalid spans and staggered spans: the second and subsequent
   // spans when they overlap like '_first *second_ third*'.
-  let end = -2;
+  let end = Number.MIN_SAFE_INTEGER;
   spans = spans.filter((s) => {
     if (s.at > textLen) {
       return false;
