@@ -1380,7 +1380,7 @@ Tinode.prototype = {
       if (this._apiKey) {
         parsed.searchParams.append('apikey', this._apiKey);
       }
-      if (this._authToken.token) {
+      if (this._authToken && this._authToken.token) {
         parsed.searchParams.append('auth', 'token');
         parsed.searchParams.append('secret', this._authToken.token);
       }
