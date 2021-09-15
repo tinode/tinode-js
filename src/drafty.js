@@ -175,10 +175,6 @@ const HTML_TAGS = {
     name: 'a',
     isVoid: false
   },
-  IC: {
-    name: 'span',
-    isVoid: false,
-  },
   IM: {
     name: 'img',
     isVoid: false
