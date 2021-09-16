@@ -60,6 +60,7 @@
 // non-localizable strings should be single quoted 'non-localized'.
 
 const MAX_FORM_ELEMENTS = 8;
+const MAX_PREVIEW_ATTACHMENTS = 3;
 const JSON_MIME_TYPE = 'application/json';
 const DRAFTY_MIME_TYPE = 'text/x-drafty';
 
@@ -1191,9 +1192,14 @@ Drafty.preview = function(original, length, context) {
   } : null;
 
   const state = {
+    // Shortened Drafty document.
     drafty: Drafty.init(),
+    // Maximum length of the document.
     maxLength: length,
+    // Mapping of entity indexes from the original index to the new index.
     keymap: [],
+    // Count of attachments (no more than MAX_PREVIEW_ATTACHMENTS are allowed).
+    attCount: 0,
   };
 
   if (tree) {
@@ -1266,7 +1272,8 @@ Drafty.isValid = function(content) {
 }
 
 /**
- * Check if the drafty document has attachments.
+ * Check if the drafty document has attachments: style EX and outside of normal rendering flow,
+ * i.e. <code>at = -1</code>.
  * @memberof Drafty
  * @static
  *
@@ -1274,11 +1281,14 @@ Drafty.isValid = function(content) {
  * @returns <code>true</code> if there are attachments.
  */
 Drafty.hasAttachments = function(content) {
-  if (content.ent && content.ent.length > 0) {
-    for (let i in content.ent) {
-      if (content.ent[i] && content.ent[i].data && content.ent[i].tp == 'EX') {
-        return true;
-      }
+  if (!Array.isArray(content.fmt)) {
+    return false;
+  }
+  for (let i in content.fmt) {
+    const fmt = content.fmt[i];
+    if (fmt && fmt.at < 0) {
+      const ent = content.ent[fmt.key | 0];
+      return ent && ent.tp == 'EX' && ent.data;
     }
   }
   return false;
@@ -1297,7 +1307,7 @@ Drafty.hasAttachments = function(content) {
  */
 
 /**
- * Enumerate attachments.
+ * Enumerate attachments: style EX and outside of normal rendering flow, i.e. <code>at = -1</code>.
  * @memberof Drafty
  * @static
  *
@@ -1306,13 +1316,18 @@ Drafty.hasAttachments = function(content) {
  * @param {Object} context - value of "this" for callback.
  */
 Drafty.attachments = function(content, callback, context) {
-  if (content.ent && content.ent.length > 0) {
-    for (let i in content.ent) {
-      if (content.ent[i] && content.ent[i].tp == 'EX' && content.ent[i].data) {
-        callback.call(context, content.ent[i].data, i, 'EX');
+  if (!Array.isArray(content.fmt)) {
+    return;
+  }
+  let i = 0;
+  content.fmt.forEach(fmt => {
+    if (fmt && fmt.at < 0) {
+      const ent = content.ent[fmt.key | 0];
+      if (ent && ent.tp == 'EX' && ent.data) {
+        callback.call(context, ent.data, i++, 'EX');
       }
     }
-  }
+  });
 }
 
 /**
@@ -1862,6 +1877,9 @@ function previewFormatter(sp, txt, children) {
       // Skip leading new lines.
       return null;
     }
+    if (sp.tp == 'EX') {
+      txt = ' ';
+    }
   }
 
   if (children) {
@@ -1879,14 +1897,16 @@ function previewFormatter(sp, txt, children) {
   const end = this.drafty.txt.length;
 
   if (sp) {
-    const fmt = {};
+    const fmt = {
+      at: at,
+      len: end - at,
+    };
     if (sp.tp == 'EX') {
-      fmt.at = -1;
-      fmt.len = 0;
-    } else if (at < end || HTML_TAGS[sp.tp].isVoid) {
-      fmt.at = at;
-      fmt.len = end - at;
-    } else {
+      if (this.attCount >= MAX_PREVIEW_ATTACHMENTS) {
+        return null;
+      }
+      this.attCount++;
+    } else if (at >= end && !HTML_TAGS[sp.tp].isVoid) {
       return null;
     }
 
