@@ -97,16 +97,15 @@ test.each(parse_this)('Drafty.parse %s', (src, exp) => {
 const preview_this = [
   [
     "This is a plain text string.",
-    {"txt":"This is a plain"},
+    {"txt":"This is a plai…"},
   ],
   [
     {
-      "txt":"This is a string with a line break.",
+      "txt":"This is a string.", // Maybe remove extra space.
       "fmt":[{"at":9,"tp":"BR"}]
     },
     {
-      "txt":"This is a strin",
-      "fmt":[{"tp":"BR","len":0,"at":9}]
+      "txt":"This is a  str…",
     },
   ],
   [
@@ -115,9 +114,9 @@ const preview_this = [
       "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}]
     },
     {
-      "txt": "",
-      "fmt":[{"at":-1,"key":0,"len":0}],
-      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","width":100}}]
+      "txt": " ",
+      "fmt":[{"at":0,"key":0,"len":1}],
+      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","val":"<38992, bytes: ...>","name":"hello.jpg","width":100}}]
     },
   ],
   [
@@ -127,9 +126,9 @@ const preview_this = [
       "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}]
     },
     {
-      "txt": "Message with at",
-      "fmt":[{"at":-1,"len":0,"key":0},{"at":8,"len":4,"tp":"ST"}],
-      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","width":100}}]
+      "txt": " Message with …",
+      "fmt":[{"at":0,"len":1,"key":0},{"at":9,"len":4,"tp":"ST"}],
+      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100}}]
     },
   ],
   [
@@ -139,7 +138,7 @@ const preview_this = [
       "ent":[{"data":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"},"tp":"LN"}]
     },
     {
-      "txt":"https://api.tin",
+      "txt":"https://api.ti…",
       "fmt":[{"at":0,"len":15,"key":0}],
       "ent":[{"tp":"LN","data":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"}}]
     },
@@ -151,7 +150,7 @@ const preview_this = [
       "ent":[{"data":{"url":"https://api.tinode.co/"},"tp":"LN"}]
     },
     {
-      "txt":"https://api.tin",
+      "txt":"https://api.ti…",
       "fmt":[{"at":0,"len":15,"key":0}],
       "ent":[{"tp":"LN","data":{"url":"https://api.tinode.co/"}}]
     },
@@ -189,7 +188,7 @@ const preview_this = [
     {
       "txt":" ",
       "fmt":[{"at":0,"len":1,"key":0}],
-      "ent":[{"tp":"IM","data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","width":638}}]
+      "ent":[{"tp":"IM","data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","val":"<38992, bytes: ...>","width":638}}]
     },
   ],
   [
@@ -198,7 +197,7 @@ const preview_this = [
       "fmt":[{"at":5,"len":8,"tp":"EM"},{"at":10,"len":13,"tp":"ST"}]
     },
     {
-      "txt":"This text has s",
+      "txt":"This text has …",
       "fmt":[{"tp":"EM","at":5,"len":8}]
     },
   ],
@@ -208,7 +207,7 @@ const preview_this = [
       "fmt":[{"at":5,"len":4,"tp":"ST"},{"at":13,"len":9,"tp":"EM"},{"at":35,"len":3,"tp":"ST"},{"at":27,"len":11,"tp":"DL"}]
     },
     {
-      "txt":"This text is fo",
+      "txt":"This text is f…",
       "fmt":[{"tp":"ST","at":5,"len":4},{"tp":"EM","at":13,"len":2}]
     },
   ],
@@ -227,23 +226,11 @@ const preview_this = [
       "txt":"Alice Johnson    This is a test",
       "fmt":[{"at":13,"len":1,"tp":"BR"},{"at":15,"len":1},{"len":13,"key":1},{"len":16,"tp":"QQ"},{"at":16,"len":1,"tp":"BR"}],
       "ent":[{"tp":"IM","data":{"mime":"image/jpeg","val":"<1292, bytes: /9j/4AAQSkZJ...rehH5o6D/9k=>","width":25,"height":14,"size":968}},{"tp":"MN","data":{"color":2}}]
-	},
-    {
-      "txt":"This is a test"
     },
+  {
+    "txt":"This is a test"
+  },
   ],
-  [
-    {
-      "txt":"Tino the Chatbot Post responseYesДа reply to a form",
-      "fmt":[{"at":30,"len":3},{"at":33,"len":2,"key":1},{"len":16,"key":2}],
-      "ent":[{"tp":"IC","data":{"orig":"BN","name":"button"}},{"tp":"IC","data":{"orig":"BN","name":"button"}},{"tp":"MN","data":{"colorId":6}}]
-    },
-    {
-      "txt":"Tino the Chatbo",
-      "fmt":[{"at":0,"len":15,"key":0}],
-      "ent":[{"tp":"MN"}]
-    },
-  ]
 ];
 
 test.each(preview_this)('Drafty.preview %j', (src,exp) => {
