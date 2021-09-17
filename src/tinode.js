@@ -1380,7 +1380,7 @@ Tinode.prototype = {
       if (this._apiKey) {
         parsed.searchParams.append('apikey', this._apiKey);
       }
-      if (this._authToken.token) {
+      if (this._authToken && this._authToken.token) {
         parsed.searchParams.append('auth', 'token');
         parsed.searchParams.append('secret', this._authToken.token);
       }
@@ -1907,7 +1907,7 @@ Tinode.prototype = {
     const what = [];
 
     if (params) {
-      ['desc', 'sub', 'tags', 'cred'].map(function(key) {
+      ['desc', 'sub', 'tags', 'cred'].forEach(function(key) {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];
@@ -2900,7 +2900,7 @@ Topic.prototype = {
         this._maxDel = ctrl.params.del;
       }
 
-      ranges.map((r) => {
+      ranges.forEach((r) => {
         if (r.hi) {
           this.flushMessageRange(r.low, r.hi);
         } else {
@@ -3860,7 +3860,7 @@ Topic.prototype = {
     const topic = this;
     let count = 0;
     if (Array.isArray(delseq)) {
-      delseq.map(function(range) {
+      delseq.forEach(function(range) {
         if (!range.hi) {
           count++;
           topic.flushMessage(range.low);
@@ -4044,7 +4044,7 @@ Topic.prototype = {
     }
 
     // Insert new gaps into cache.
-    ranges.map((gap) => {
+    ranges.forEach((gap) => {
       gap._status = MESSAGE_STATUS_DEL_RANGE;
       this._messages.put(gap);
     });
@@ -4212,7 +4212,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         creds = [];
       }
       if (upd) {
-        creds.map((cr) => {
+        creds.forEach((cr) => {
           if (cr.val) {
             // Adding a credential.
             let idx = this._credentials.findIndex((el) => {
