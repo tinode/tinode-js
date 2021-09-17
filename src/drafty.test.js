@@ -227,9 +227,9 @@ const preview_this = [
       "fmt":[{"at":13,"len":1,"tp":"BR"},{"at":15,"len":1},{"len":13,"key":1},{"len":16,"tp":"QQ"},{"at":16,"len":1,"tp":"BR"}],
       "ent":[{"tp":"IM","data":{"mime":"image/jpeg","val":"<1292, bytes: /9j/4AAQSkZJ...rehH5o6D/9k=>","width":25,"height":14,"size":968}},{"tp":"MN","data":{"color":2}}]
     },
-  {
-    "txt":"This is a test"
-  },
+    {
+      "txt":"This is a test"
+    },
   ],
 ];
 
