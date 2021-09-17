@@ -1873,11 +1873,14 @@ function previewFormatter(sp, txt, children) {
       // Skip quoted text
       return null;
     }
-    if (sp.tp == 'BR' && at == 0) {
-      // Skip leading new lines.
-      return null;
-    }
-    if (sp.tp == 'EX') {
+    if (sp.tp == 'BR') {
+      // Skip the leading new line.
+      if (at == 0) {
+        return null;
+      }
+      txt = ' ';
+      sp = null;
+    } else if (sp.tp == 'EX') {
       txt = ' ';
     }
   }
