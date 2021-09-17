@@ -1890,7 +1890,7 @@ function previewFormatter(sp, txt, children) {
       previewFormatter.call(this, c.sp, c.txt, c.children);
     });
   } else if (txt) {
-    if (at + txt.length > this.maxLength) {
+    if (at + txt.length >= this.maxLength) {
       this.drafty.txt += txt.slice(0, this.maxLength - at - 1) + '…';
     } else {
       this.drafty.txt += txt;
