@@ -324,7 +324,7 @@ const DECORATORS = {
     },
     props: function(data) {
       return data ? {
-        name: data.val
+        id: data.val
       } : null;
     },
   },
@@ -338,7 +338,7 @@ const DECORATORS = {
     },
     props: function(data) {
       return data ? {
-        name: data.val
+        id: data.val
       } : null;
     },
   },
@@ -381,11 +381,12 @@ const DECORATORS = {
         src: base64toDataUrl(data._tempPreview, data.mime) ||
           data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
         title: data.name,
+        alt: data.name,
         'data-width': data.width,
         'data-height': data.height,
         'data-name': data.name,
         'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
-        'data-mime': data.mime
+        'data-mime': data.mime,
       };
     },
   },
@@ -407,7 +408,7 @@ const DECORATORS = {
       return '</div>';
     }
   },
-  // Reply quote.
+  // Quoted block.
   QQ: {
     open: function(data) {
       return '<div>';
@@ -419,19 +420,6 @@ const DECORATORS = {
       if (!data) return null;
       return {};
     },
-  },
-  // Icon.
-  IC: {
-    open: function(data) {
-      return '<i>';
-    },
-    close: function(data) {
-      return '</i>';
-    },
-    props: function(data) {
-      if (!data) return null;
-      return {};
-    }
   }
 };
 
