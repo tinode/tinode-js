@@ -4121,6 +4121,8 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       // Copy parameters from desc object to this topic.
       mergeObj(this, desc);
       this._tinode._db.updTopic(this);
+      // Update current user's record in the global cache.
+      this._updateCachedUser(this._tinode._myUID, desc);
 
       // 'P' permission was removed. All topics are offline now.
       if (turnOff) {
