@@ -110,6 +110,33 @@ const preview_this = [
   ],
   [
     {
+      "txt":"This is a string.",
+      "fmt":[{"at":true,"tp":"XX","len":{}}]
+    },
+    {
+      "txt":"T",
+    },
+  ],
+  [
+    {
+      "txt":"This is a string.",
+      "fmt":[{"at":{},"tp":123,"len":null}]
+    },
+    {
+      "txt":"",
+    },
+  ],
+  [
+    {
+      "txt":"This is a string.",
+      "fmt":[{"test": 123},{"at":NaN,"tp":123,"len":-12}]
+    },
+    {
+      "txt":"This is a stri…",
+    },
+  ],
+  [
+    {
       "fmt":[{"at":-1}],
       "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}]
     },
@@ -117,6 +144,15 @@ const preview_this = [
       "txt": " ",
       "fmt":[{"at":0,"key":0,"len":1}],
       "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","val":"<38992, bytes: ...>","name":"hello.jpg","width":100}}]
+    },
+  ],
+  [
+    {
+      "fmt":[{"at":-1, "key": "fake"}],
+      "ent":[{"data":{"width":100},"tp":"EX"}]
+    },
+    {
+      "txt": ""
     },
   ],
   [
