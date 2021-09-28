@@ -1541,7 +1541,7 @@ function iterateSpans(line, start, end, spans, defaultFormatter, context) {
       i = si;
     }
 
-    const tag = HTML_TAGS[span.tp] || {}
+    const tag = HTML_TAGS[span.tp] || {};
     // Get context formatter.
     const cformatter = (context && context.getFormatter) ? context.getFormatter(span.tp) : null;
     result.push(defaultFormatter.call(context, span.tp, span.data,
@@ -1892,12 +1892,13 @@ function previewFormatter(sp, txt, children) {
       at: at,
       len: end - at,
     };
+    const tag = HTML_TAGS[sp.tp] || {};
     if (sp.tp == 'EX') {
       if (this.attCount >= MAX_PREVIEW_ATTACHMENTS) {
         return null;
       }
       this.attCount++;
-    } else if (at >= end && !HTML_TAGS[sp.tp].isVoid) {
+    } else if (at >= end && !tag.isVoid) {
       return null;
     }
 
