@@ -1153,19 +1153,9 @@ Drafty.format = function(content, formatter, context) {
     context);
 }
 
-/**
- * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
- * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
- * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
- * @memberof Drafty
- * @static
- *
- * @param {Drafty|string} original - Drafty object to shorten.
- * @param {number} length - length in characters to shorten to.
- * @param {Object} context - context provided to formatter as <code>this</code>.
- * @returns new shortened Drafty object leaving the original intact.
- */
-Drafty.preview = function(original, length, context) {
+// Takes in an `original` document (Drafty or string) and transforms it
+// using formatter.
+function transform(original, state, formatter, context) {
   if (typeof original == 'string') {
     original = {
       txt: original
@@ -1179,6 +1169,24 @@ Drafty.preview = function(original, length, context) {
     children: spans
   } : null;
 
+  if (tree) {
+    formatter.call(state, tree.sp, tree.txt, tree.children);
+  }
+}
+
+/**
+ * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
+ * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
+ * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @param {number} length - length in characters to shorten to.
+ * @param {Object} context - context provided to formatter as <code>this</code>.
+ * @returns new shortened Drafty object leaving the original intact.
+ */
+Drafty.preview = function(original, length, context) {
   const state = {
     // Shortened Drafty document.
     drafty: Drafty.init(),
@@ -1189,10 +1197,21 @@ Drafty.preview = function(original, length, context) {
     // Count of attachments (no more than MAX_PREVIEW_ATTACHMENTS are allowed).
     attCount: 0,
   };
+  transform(original, state, previewFormatter, context);
+  return state.drafty;
+}
 
-  if (tree) {
-    previewFormatter.call(state, tree.sp, tree.txt, tree.children);
-  }
+Drafty.forwardedContent = function(original, context) {
+  const state = {
+    // Shortened Drafty document.
+    drafty: Drafty.init(),
+    // Mapping of entity indexes from the original index to the new index.
+    keymap: [],
+    // Indicates whether the mention of the original author of the forwarded
+    // message has been stripped.
+    mnStripped: false
+  };
+  transform(original, state, forwardedFormatter, context);
 
   return state.drafty;
 }
@@ -1848,6 +1867,62 @@ function copyEntData(data, light) {
   return null;
 }
 
+function handleStyle(fmt, sp) {
+  if (sp.data) {
+    this.drafty.ent = this.drafty.ent || [];
+    // Check if we have already seen this payload.
+    let key = this.keymap[sp.key];
+    if (typeof key == 'undefined') {
+      // Seeing payload for the first time, add it.
+      const ent = {
+        tp: sp.tp
+      };
+      const data = copyEntData(sp.data, false);
+      if (data) {
+        ent.data = data;
+      }
+      key = this.drafty.ent.length;
+      this.keymap[sp.key] = key;
+      this.drafty.ent.push(ent);
+    }
+    fmt.key = key;
+  } else {
+    fmt.tp = sp.tp;
+  }
+
+  this.drafty.fmt = this.drafty.fmt || [];
+  this.drafty.fmt.push(fmt);
+}
+
+// forwardedFormatter converts a tree of formatted spans into a drafty document ready for forwarding.
+function forwardedFormatter(sp, txt, children) {
+  const at = this.drafty.txt.length;
+  if (sp && at == 0 && !this.mnStripped) {
+    this.mnStripped = true;
+    if (sp.tp == 'MN') {
+      // Skip the first mention (of the author of the originally forwarded message).
+      return null;
+    }
+  }
+  if (children) {
+    children.forEach((c) => {
+      forwardedFormatter.call(this, c.sp, c.txt, c.children);
+    });
+  } else if (txt) {
+    this.drafty.txt += txt;
+  }
+  const end = this.drafty.txt.length;
+
+  if (sp) {
+    const fmt = {
+      at: at,
+      len: end - at,
+    };
+    handleStyle.call(this, fmt, sp);
+  }
+  return null;
+}
+
 // previewFormatter converts a tree of formatted spans into a shortened drafty document.
 function previewFormatter(sp, txt, children) {
   const at = this.drafty.txt.length;
@@ -1902,30 +1977,7 @@ function previewFormatter(sp, txt, children) {
       return null;
     }
 
-    if (sp.data) {
-      this.drafty.ent = this.drafty.ent || [];
-      // Check if we have already seen this payload.
-      let key = this.keymap[sp.key];
-      if (typeof key == 'undefined') {
-        // Seeing payload for the first time, add it.
-        const ent = {
-          tp: sp.tp
-        };
-        const data = copyEntData(sp.data, false);
-        if (data) {
-          ent.data = data;
-        }
-        key = this.drafty.ent.length;
-        this.keymap[sp.key] = key;
-        this.drafty.ent.push(ent);
-      }
-      fmt.key = key;
-    } else {
-      fmt.tp = sp.tp;
-    }
-
-    this.drafty.fmt = this.drafty.fmt || [];
-    this.drafty.fmt.push(fmt);
+    handleStyle.call(this, fmt, sp);
   }
   return null;
 }
