@@ -1172,6 +1172,8 @@ function transform(original, state, formatter, context) {
   if (tree) {
     formatter.call(state, tree.sp, tree.txt, tree.children);
   }
+
+  return state.drafty;
 }
 
 /**
@@ -1184,9 +1186,10 @@ function transform(original, state, formatter, context) {
  * @param {Drafty|string} original - Drafty object to shorten.
  * @param {number} length - length in characters to shorten to.
  * @param {Object} context - context provided to formatter as <code>this</code>.
+ * @params {Boolean} isForwarded - indicates whether original is a forwarded message.
  * @returns new shortened Drafty object leaving the original intact.
  */
-Drafty.preview = function(original, length, context) {
+Drafty.preview = function(original, length, context, isForwarded) {
   const state = {
     // Shortened Drafty document.
     drafty: Drafty.init(),
@@ -1196,9 +1199,10 @@ Drafty.preview = function(original, length, context) {
     keymap: [],
     // Count of attachments (no more than MAX_PREVIEW_ATTACHMENTS are allowed).
     attCount: 0,
+    // Indicates whether the original author mention should be stripped.
+    stripForwardedMention: isForwarded
   };
-  transform(original, state, previewFormatter, context);
-  return state.drafty;
+  return transform(original, state, previewFormatter, context);
 }
 
 Drafty.forwardedContent = function(original, context) {
@@ -1209,11 +1213,9 @@ Drafty.forwardedContent = function(original, context) {
     keymap: [],
     // Indicates whether the mention of the original author of the forwarded
     // message has been stripped.
-    mnStripped: false
+    stripForwardedMention: true
   };
-  transform(original, state, forwardedFormatter, context);
-
-  return state.drafty;
+  return transform(original, state, forwardedFormatter, context);
 }
 
 /**
@@ -1897,10 +1899,16 @@ function handleStyle(fmt, sp) {
 // forwardedFormatter converts a tree of formatted spans into a drafty document ready for forwarding.
 function forwardedFormatter(sp, txt, children) {
   const at = this.drafty.txt.length;
-  if (sp && at == 0 && !this.mnStripped) {
-    this.mnStripped = true;
+  if (sp && at == 0) {
     if (sp.tp == 'MN') {
-      // Skip the first mention (of the author of the originally forwarded message).
+      if (this.stripForwardedMention) {
+        this.stripForwardedMention = false;
+        // Skip the first mention (of the author of the originally forwarded message).
+        return null;
+      }
+    }
+    if (sp.tp == 'BR') {
+      // Remove any leading line breaks.
       return null;
     }
   }
@@ -1932,11 +1940,18 @@ function previewFormatter(sp, txt, children) {
   }
 
   if (sp) {
-    if (sp.tp == 'QQ') {
+    if (sp.tp == 'MN') {
+      if (this.stripForwardedMention && at == 0) {
+        this.stripForwardedMention = false;
+        // Replace the mention (of the author of the originally forwarded message).
+        txt = '➦ ';
+        sp = null;
+        children = null;
+      }
+    } else if (sp.tp == 'QQ') {
       // Skip quoted text
       return null;
-    }
-    if (sp.tp == 'BR') {
+    } else if (sp.tp == 'BR') {
       // Skip the leading new line.
       if (at == 0) {
         return null;
