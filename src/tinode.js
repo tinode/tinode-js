@@ -4343,7 +4343,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             dummy.acs = acs;
             this._tinode.attachCacheToTopic(dummy);
             dummy._cachePutSelf();
-            this._db.updTopic(dummy);
+            this._tinode._db.updTopic(dummy);
           }
         } else if (pres.what == 'tags') {
           this.getMeta(this.startMetaQuery().withTags().build());
