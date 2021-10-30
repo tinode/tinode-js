@@ -17,12 +17,15 @@
  *  ...
  * <script>
  *  // Instantiate tinode.
- *  const tinode = new Tinode(APP_NAME, HOST, API_KEY, null, true);
+ *  const tinode = new Tinode(config, () => {
+ *    // Called on init completion.
+ *  });
  *  tinode.enableLogging(true);
- *  // Add logic to handle disconnects.
- *  tinode.onDisconnect = function(err) { ... };
+ *  tinode.onDisconnect = (err) => {
+ *    // Handle disconnect.
+ *  };
  *  // Connect to the server.
- *  tinode.connect().then(() => {
+ *  tinode.connect('https://example.com/').then(() => {
  *    // Connected. Login now.
  *    return tinode.loginBasic(login, password);
  *  }).then((ctrl) => {
@@ -1042,14 +1045,6 @@ const Tinode = function(config, onComplete) {
 // Static methods.
 
 /**
- * @typedef Credential
- * @type {object}
- * @property {string} meth - validation method.
- * @property {string} val - value to validate (e.g. email or phone number).
- * @property {string} resp - validation response.
- * @property {Object} params - validation parameters.
- */
-/**
  * Helper method to package account credential.
  *
  * @memberof Tinode
@@ -1573,11 +1568,20 @@ Tinode.prototype = {
   },
 
   /**
+   * @typedef Credential
+   * @type {Object}
+   * @property {string} meth - validation method.
+   * @property {string} val - value to validate (e.g. email or phone number).
+   * @property {string} resp - validation response.
+   * @property {Object} params - validation parameters.
+   */
+  /**
    * Authenticate current session.
    * @memberof Tinode#
    *
    * @param {string} scheme - Authentication scheme; <code>"basic"</code> is the only currently supported scheme.
    * @param {string} secret - Authentication secret, assumed to be already base64 encoded.
+   * @param {Credential=} cred - credential confirmation, if required.
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
@@ -1599,6 +1603,8 @@ Tinode.prototype = {
    *
    * @param {string} uname - User name.
    * @param {string} password  - Password.
+   * @param {Credential=} cred - credential confirmation, if required.
+   *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   loginBasic: function(uname, password, cred) {
@@ -1614,6 +1620,8 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {string} token - Token received in response to earlier login.
+   * @param {Credential=} cred - credential confirmation, if required.
+   *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   loginToken: function(token, cred) {
