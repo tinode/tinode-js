@@ -1195,6 +1195,9 @@ Tinode.getVersion = function() {
 Tinode.setNetworkProviders = function(wsProvider, xhrProvider) {
   WebSocketProvider = wsProvider;
   XHRProvider = xhrProvider;
+
+  Connection.setNetworkProviders(WebSocketProvider, XHRProvider);
+  LargeFileHelper.setNetworkProvider(XHRProvider);
 };
 
 /**
@@ -1205,6 +1208,8 @@ Tinode.setNetworkProviders = function(wsProvider, xhrProvider) {
  */
 Tinode.setDatabaseProvider = function(idbProvider) {
   IndexedDBProvider = idbProvider;
+
+  DBCache.setDatabaseProvider(IndexedDBProvider);
 };
 
 /**
