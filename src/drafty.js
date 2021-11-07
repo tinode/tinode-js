@@ -1162,6 +1162,10 @@ function transform(original, state, formatter, context) {
     };
   }
 
+  if (!Drafty.isValid(original)) {
+    return null;
+  }
+
   const spans = iterateSpans(original.txt, 0, (original.txt || '').length,
     draftyToSpans(original), nodeFormatter, context);
 
@@ -1205,6 +1209,17 @@ Drafty.preview = function(original, length, context, isForwarded) {
   return transform(original, state, previewFormatter, context);
 }
 
+/**
+ * Strip leading @mention.
+ * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
+ * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @param {Object} context - context provided to formatter as <code>this</code>.
+ * @returns new shortened Drafty object leaving the original intact.
+ */
 Drafty.forwardedContent = function(original, context) {
   const state = {
     // Shortened Drafty document.
