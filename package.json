@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Tinode SDK",
-  "version": "0.17.10",
+  "version": "0.18.0-beta1",
   "scripts": {
     "format": "js-beautify -r src/tinode.js && js-beautify -r src/drafty.js && js-beautify -r src/db.js && js-beautify -r src/connection.js && js-beautify -r src/cbuffer.js",
     "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
@@ -9,7 +9,7 @@
     "build:dev": "browserify ./src/tinode.js --debug --standalone Tinode > ./umd/tinode.dev.js",
     "build:docs": "jsdoc ./src -t ./node_modules/minami -d ../tinode.github.io/js-api",
     "vers": "echo \"{\\\"version\\\": \\\"`node -p -e \"require('./package.json').version\"`\\\"}\" > version.json",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "browserslist": "> 0.5%, not IE 11, not op_mini all, not and_uc >0",
   "repository": {
@@ -39,6 +39,7 @@
     "@babel/preset-env": "^7.12.11",
     "babelify": "^10.0.0",
     "browserify": "^17.0.0",
+    "jest": "^27.1.1",
     "js-beautify": "^1.13.0",
     "jsdoc": "^3.6.6",
     "minami": "^1.2.3",

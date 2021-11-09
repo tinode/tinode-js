@@ -2,7 +2,7 @@
  * @copyright 2015-2021 Tinode
  * @summary Minimally rich text representation and formatting for Tinode.
  * @license Apache 2.0
- * @version 0.16
+ * @version 0.18
  *
  * @file Basic parser and formatter for very simple text markup. Mostly targeted at
  * mobile use cases similar to Telegram, WhatsApp, and FB Messenger.
@@ -60,7 +60,9 @@
 // non-localizable strings should be single quoted 'non-localized'.
 
 const MAX_FORM_ELEMENTS = 8;
+const MAX_PREVIEW_ATTACHMENTS = 3;
 const JSON_MIME_TYPE = 'application/json';
+const DRAFTY_MIME_TYPE = 'text/x-drafty';
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
@@ -117,7 +119,7 @@ const ENTITY_TYPES = [
         val: val.slice(1)
       };
     },
-    re: /\B@(\w\w+)/g
+    re: /\B@([\p{L}\p{N}][._\p{L}\p{N}]*[\p{L}\p{N}])/ug
   },
   // Hashtags #hashtag, like metion 2 or more characters.
   {
@@ -128,58 +130,38 @@ const ENTITY_TYPES = [
         val: val.slice(1)
       };
     },
-    re: /\B#(\w\w+)/g
+    re: /\B#([\p{L}\p{N}][._\p{L}\p{N}]*[\p{L}\p{N}])/ug
   }
 ];
 
 // HTML tag name suggestions
 const HTML_TAGS = {
-  ST: {
-    name: 'b',
-    isVoid: false
-  },
-  EM: {
-    name: 'i',
-    isVoid: false
-  },
-  DL: {
-    name: 'del',
-    isVoid: false
-  },
-  CO: {
-    name: 'tt',
+  BN: {
+    name: 'button',
     isVoid: false
   },
   BR: {
     name: 'br',
     isVoid: true
   },
-  LN: {
-    name: 'a',
+  CO: {
+    name: 'tt',
     isVoid: false
   },
-  MN: {
-    name: 'a',
+  DL: {
+    name: 'del',
     isVoid: false
   },
-  HT: {
-    name: 'a',
+  EM: {
+    name: 'i',
     isVoid: false
   },
-  IM: {
-    name: 'img',
+  EX: {
+    name: '',
     isVoid: true
   },
   FM: {
     name: 'div',
-    isVoid: false
-  },
-  RW: {
-    name: 'div',
-    isVoid: false,
-  },
-  BN: {
-    name: 'button',
     isVoid: false
   },
   HD: {
@@ -189,7 +171,35 @@ const HTML_TAGS = {
   HL: {
     name: 'span',
     isVoid: false
-  }
+  },
+  HT: {
+    name: 'a',
+    isVoid: false
+  },
+  IM: {
+    name: 'img',
+    isVoid: false
+  },
+  LN: {
+    name: 'a',
+    isVoid: false
+  },
+  MN: {
+    name: 'a',
+    isVoid: false
+  },
+  RW: {
+    name: 'div',
+    isVoid: false,
+  },
+  QQ: {
+    name: 'div',
+    isVoid: false
+  },
+  ST: {
+    name: 'b',
+    isVoid: false
+  },
 };
 
 // Convert base64-encoded string into Blob.
@@ -300,7 +310,7 @@ const DECORATORS = {
     props: function(data) {
       return data ? {
         href: data.url,
-        target: "_blank"
+        target: '_blank'
       } : null;
     },
   },
@@ -314,7 +324,7 @@ const DECORATORS = {
     },
     props: function(data) {
       return data ? {
-        name: data.val
+        id: data.val
       } : null;
     },
   },
@@ -328,7 +338,7 @@ const DECORATORS = {
     },
     props: function(data) {
       return data ? {
-        name: data.val
+        id: data.val
       } : null;
     },
   },
@@ -371,11 +381,12 @@ const DECORATORS = {
         src: base64toDataUrl(data._tempPreview, data.mime) ||
           data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
         title: data.name,
+        alt: data.name,
         'data-width': data.width,
         'data-height': data.height,
         'data-name': data.name,
         'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
-        'data-mime': data.mime
+        'data-mime': data.mime,
       };
     },
   },
@@ -396,6 +407,19 @@ const DECORATORS = {
     close: function(data) {
       return '</div>';
     }
+  },
+  // Quoted block.
+  QQ: {
+    open: function(data) {
+      return '<div>';
+    },
+    close: function(data) {
+      return '</div>';
+    },
+    props: function(data) {
+      if (!data) return null;
+      return {};
+    },
   }
 };
 
@@ -404,250 +428,29 @@ const DECORATORS = {
  * @class Drafty
  * @constructor
  */
-const Drafty = function() {}
-
-// Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
-// a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
-// ('hello ', (b: 'bold ', (i: 'italic')), ' and ', (s: 'more'), ' world');
-//
-// This is needed in order to clear markup, i.e. 'hello *world*' -> 'hello world' and convert
-// ranges from markup-ed offsets to plain text offsets.
-function chunkify(line, start, end, spans) {
-  const chunks = [];
-
-  if (spans.length == 0) {
-    return [];
-  }
-
-  for (let i in spans) {
-    // Get the next chunk from the queue
-    const span = spans[i];
-
-    // Grab the initial unstyled chunk
-    if (span.start > start) {
-      chunks.push({
-        text: line.slice(start, span.start)
-      });
-    }
-
-    // Grab the styled chunk. It may include subchunks.
-    const chunk = {
-      type: span.type
-    };
-    const chld = chunkify(line, span.start + 1, span.end, span.children);
-    if (chld.length > 0) {
-      chunk.children = chld;
-    } else {
-      chunk.text = span.text;
-    }
-    chunks.push(chunk);
-    start = span.end + 1; // '+1' is to skip the formatting character
-  }
-
-  // Grab the remaining unstyled chunk, after the last span
-  if (start < end) {
-    chunks.push({
-      text: line.slice(start, end)
-    });
-  }
-
-  return chunks;
+const Drafty = function() {
+  this.txt = '';
+  this.fmt = [];
+  this.ent = [];
 }
 
-// Inverse of chunkify. Returns a tree of formatted spans.
-function forEach(line, start, end, spans, formatter, context) {
-  const result = [];
-
-  // Process ranges calling formatter for each range.
-  for (let i = 0; i < spans.length; i++) {
-    const span = spans[i];
-    if (span.at < 0) {
-      // Ask formatter if it wants to do anything with the non-visual span.
-      const s = formatter.call(context, span.tp, span.data, undefined, result.length);
-      if (s) {
-        result.push(s);
-      }
-      continue;
-    }
-    // Add un-styled range before the styled span starts.
-    if (start < span.at) {
-      result.push(formatter.call(context, null, undefined, line.slice(start, span.at), result.length));
-      start = span.at;
-    }
-    // Get all spans which are within current span.
-    const subspans = [];
-    for (let si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
-      subspans.push(spans[si]);
-      i = si;
-    }
-
-    const tag = HTML_TAGS[span.tp] || {}
-    result.push(formatter.call(context, span.tp, span.data,
-      tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context),
-      result.length));
-
-    start = span.at + span.len;
+/**
+ * Initialize Drafty document to a plain text string.
+ *
+ * @param {String} plainText - string to use as Drafty content.
+ *
+ * @returns new Drafty document or null is plainText is not a string or undefined.
+ */
+Drafty.init = function(plainText) {
+  if (typeof plainText == 'undefined') {
+    plainText = '';
+  } else if (typeof plainText != 'string') {
+    return null;
   }
 
-  // Add the last unformatted range.
-  if (start < end) {
-    result.push(formatter.call(context, null, undefined, line.slice(start, end), result.length));
-  }
-
-  return result;
-}
-
-// Detect starts and ends of formatting spans. Unformatted spans are
-// ignored at this stage.
-function spannify(original, re_start, re_end, type) {
-  const result = [];
-  let index = 0;
-  let line = original.slice(0); // make a copy;
-
-  while (line.length > 0) {
-    // match[0]; // match, like '*abc*'
-    // match[1]; // match captured in parenthesis, like 'abc'
-    // match['index']; // offset where the match started.
-
-    // Find the opening token.
-    const start = re_start.exec(line);
-    if (start == null) {
-      break;
-    }
-
-    // Because javascript RegExp does not support lookbehind, the actual offset may not point
-    // at the markup character. Find it in the matched string.
-    let start_offset = start['index'] + start[0].lastIndexOf(start[1]);
-    // Clip the processed part of the string.
-    line = line.slice(start_offset + 1);
-    // start_offset is an offset within the clipped string. Convert to original index.
-    start_offset += index;
-    // Index now point to the beginning of 'line' within the 'original' string.
-    index = start_offset + 1;
-
-    // Find the matching closing token.
-    const end = re_end ? re_end.exec(line) : null;
-    if (end == null) {
-      break;
-    }
-    let end_offset = end['index'] + end[0].indexOf(end[1]);
-    // Clip the processed part of the string.
-    line = line.slice(end_offset + 1);
-    // Update offsets
-    end_offset += index;
-    // Index now point to the beginning of 'line' within the 'original' string.
-    index = end_offset + 1;
-
-    result.push({
-      text: original.slice(start_offset + 1, end_offset),
-      children: [],
-      start: start_offset,
-      end: end_offset,
-      type: type
-    });
-  }
-
-  return result;
-}
-
-// Convert linear array or spans into a tree representation.
-// Keep standalone and nested spans, throw away partially overlapping spans.
-function toTree(spans) {
-  if (spans.length == 0) {
-    return [];
-  }
-
-  const tree = [spans[0]];
-  let last = spans[0];
-  for (let i = 1; i < spans.length; i++) {
-    // Keep spans which start after the end of the previous span or those which
-    // are complete within the previous span.
-
-    if (spans[i].start > last.end) {
-      // Span is completely outside of the previous span.
-      tree.push(spans[i]);
-      last = spans[i];
-    } else if (spans[i].end < last.end) {
-      // Span is fully inside of the previous span. Push to subnode.
-      last.children.push(spans[i]);
-    }
-    // Span could partially overlap, ignoring it as invalid.
-  }
-
-  // Recursively rearrange the subnodes.
-  for (let i in tree) {
-    tree[i].children = toTree(tree[i].children);
-  }
-
-  return tree;
-}
-
-// Get a list of entities from a text.
-function extractEntities(line) {
-  let match;
-  let extracted = [];
-  ENTITY_TYPES.map(function(entity) {
-    while ((match = entity.re.exec(line)) !== null) {
-      extracted.push({
-        offset: match['index'],
-        len: match[0].length,
-        unique: match[0],
-        data: entity.pack(match[0]),
-        type: entity.name
-      });
-    }
-  });
-
-  if (extracted.length == 0) {
-    return extracted;
-  }
-
-  // Remove entities detected inside other entities, like #hashtag in a URL.
-  extracted.sort(function(a, b) {
-    return a.offset - b.offset;
-  });
-
-  let idx = -1;
-  extracted = extracted.filter(function(el) {
-    const result = (el.offset > idx);
-    idx = el.offset + el.len;
-    return result;
-  });
-
-  return extracted;
-}
-
-// Convert the chunks into format suitable for serialization.
-function draftify(chunks, startAt) {
-  let plain = "";
-  let ranges = [];
-  for (let i in chunks) {
-    const chunk = chunks[i];
-    if (!chunk.text) {
-      const drafty = draftify(chunk.children, plain.length + startAt);
-      chunk.text = drafty.txt;
-      ranges = ranges.concat(drafty.fmt);
-    }
-
-    if (chunk.type) {
-      ranges.push({
-        at: plain.length + startAt,
-        len: chunk.text.length,
-        tp: chunk.type
-      });
-    }
-
-    plain += chunk.text;
-  }
   return {
-    txt: plain,
-    fmt: ranges
+    txt: plainText
   };
-}
-
-// Splice two strings: insert second string into the first one at the given index
-function splice(src, at, insert) {
-  return src.slice(0, at) + insert + src.slice(at);
 }
 
 /**
@@ -673,15 +476,15 @@ Drafty.parse = function(content) {
 
   // Processing lines one by one, hold intermediate result in blx.
   const blx = [];
-  lines.map(function(line) {
+  lines.forEach((line) => {
     let spans = [];
     let entities;
 
     // Find formatted spans in the string.
     // Try to match each style.
-    INLINE_STYLES.map(function(style) {
+    INLINE_STYLES.forEach((tag) => {
       // Each style could be matched multiple times.
-      spans = spans.concat(spannify(line, style.start, style.end, style.name));
+      spans = spans.concat(spannify(line, tag.start, tag.end, tag.name));
     });
 
     let block;
@@ -690,13 +493,14 @@ Drafty.parse = function(content) {
         txt: line
       };
     } else {
-      // Sort spans by style occurence early -> late
-      spans.sort(function(a, b) {
-        return a.start - b.start;
+      // Sort spans by style occurence early -> late, then by length: first long then short.
+      spans.sort((a, b) => {
+        const diff = a.at - b.at;
+        return diff != 0 ? diff : b.end - a.end;
       });
 
-      // Convert an array of possibly overlapping spans into a tree
-      spans = toTree(spans);
+      // Convert an array of possibly overlapping spans into a tree.
+      spans = toSpanTree(spans);
 
       // Build a tree representation of the entire string, not
       // just the formatted parts.
@@ -759,13 +563,13 @@ Drafty.parse = function(content) {
 
       result.txt += " " + block.txt;
       if (block.fmt) {
-        result.fmt = result.fmt.concat(block.fmt.map(function(s) {
+        result.fmt = result.fmt.concat(block.fmt.map((s) => {
           s.at += offset;
           return s;
         }));
       }
       if (block.ent) {
-        result.fmt = result.fmt.concat(block.ent.map(function(s) {
+        result.fmt = result.fmt.concat(block.ent.map((s) => {
           s.at += offset;
           return s;
         }));
@@ -784,26 +588,10 @@ Drafty.parse = function(content) {
 }
 
 /**
- * Initialize Drafty document to a plain text string.
- *
- * @param {String} plainText - string to use as Drafty content.
- *
- * @returns new Drafty document or null is plainText is not a string.
- */
-Drafty.init = function(plainText) {
-  if (typeof plainText != 'string') {
-    return null;
-  }
-  return {
-    txt: plainText
-  };
-}
-
-/**
  * Append one Drafty document to another.
  *
  * @param {Drafty} first - Drafty document to append to.
- * @param {Drafty} second - Drafty document being appended.
+ * @param {Drafty|string} second - Drafty document or string being appended.
  *
  * @return {Drafty} first document with the second appended to it.
  */
@@ -816,10 +604,14 @@ Drafty.append = function(first, second) {
   }
 
   first.txt = first.txt || '';
-  second.txt = second.txt || '';
   const len = first.txt.length;
 
-  first.txt += second.txt;
+  if (typeof second == 'string') {
+    first.txt += second;
+  } else if (second.txt) {
+    first.txt += second.txt;
+  }
+
   if (Array.isArray(second.fmt)) {
     first.fmt = first.fmt || [];
     if (Array.isArray(second.ent)) {
@@ -830,6 +622,11 @@ Drafty.append = function(first, second) {
         at: src.at + len,
         len: src.len
       };
+      // Special case for the outside of the normal rendering flow styles.
+      if (src.at == -1) {
+        fmt.at = -1;
+        fmt.len = 0;
+      }
       if (src.tp) {
         fmt.tp = src.tp;
       } else {
@@ -917,6 +714,87 @@ Drafty.insertImage = function(content, at, imageDesc) {
 }
 
 /**
+ * Create a quote to Drafty document.
+ *
+ * @param {string} header - Quote header (title, etc.).
+ * @param {string} uid - UID of the author to mention.
+ * @param {Drafty} body - Body of the quoted message.
+ *
+ * @returns Reply quote Drafty doc with the quote formatting.
+ */
+Drafty.quote = function(header, uid, body) {
+  const quote = Drafty.append(Drafty.appendLineBreak(Drafty.mention(header, uid)), body);
+
+  // Wrap into a quote.
+  quote.fmt.push({
+    at: 0,
+    len: quote.txt.length,
+    tp: 'QQ'
+  });
+
+  return quote;
+}
+
+/**
+ * Create a Drafty document with a mention.
+ *
+ * @param {string} name - mentioned name.
+ * @param {string} uid - mentioned user ID.
+ *
+ * @returns {Drafty} document with the mention.
+ */
+Drafty.mention = function(name, uid) {
+  return {
+    txt: name || "",
+    fmt: [{
+      at: 0,
+      len: (name || "").length,
+      key: 0
+    }],
+    ent: [{
+      tp: 'MN',
+      data: {
+        val: uid
+      }
+    }]
+  };
+}
+
+/**
+ * Append a link to a Drafty document.
+ *
+ * @param {Drafty} content - Drafty document to append link to.
+ * @param {Object} linkData - Link info in format <code>{txt: 'ankor text', url: 'http://...'}</code>.
+ *
+ * @returns {Drafty} the same document as <code>content</code>.
+ */
+Drafty.appendLink = function(content, linkData) {
+  content = content || {
+    txt: ""
+  };
+
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: content.txt.length,
+    len: linkData.txt.length,
+    key: content.ent.length
+  });
+  content.txt += linkData.txt;
+
+  const ex = {
+    tp: 'LN',
+    data: {
+      url: linkData.url
+    }
+  }
+  content.ent.push(ex);
+
+  return content;
+}
+
+/**
  * Append inline image to Drafty document.
  * @memberof Drafty
  * @static
@@ -960,6 +838,7 @@ Drafty.attachFile = function(content, attachmentDesc) {
   content = content || {
     txt: ""
   };
+
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
 
@@ -998,6 +877,35 @@ Drafty.attachFile = function(content, attachmentDesc) {
 }
 
 /**
+ * Wraps drafty document into a simple formatting style.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} content - document or string to wrap into a style.
+ * @param {string} style - two-letter style to wrap into.
+ * @param {number} at - index where the style starts, default 0.
+ * @param {number} len - length of the form content, default all of it.
+ *
+ * @return {Drafty} updated document.
+ */
+Drafty.wrapInto = function(content, style, at, len) {
+  if (typeof content == 'string') {
+    content = {
+      txt: content
+    };
+  }
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: at || 0,
+    len: len || content.txt.length,
+    tp: style,
+  });
+
+  return content;
+}
+
+/**
  * Wraps content into an interactive form.
  * @memberof Drafty
  * @static
@@ -1009,20 +917,7 @@ Drafty.attachFile = function(content, attachmentDesc) {
  * @return {Drafty} updated document.
  */
 Drafty.wrapAsForm = function(content, at, len) {
-  if (typeof content == 'string') {
-    content = {
-      txt: content
-    };
-  }
-  content.fmt = content.fmt || [];
-
-  content.fmt.push({
-    at: at,
-    len: len,
-    tp: 'FM'
-  });
-
-  return content;
+  return Drafty.wrapInto(content, 'FM', at, len);
 }
 
 /**
@@ -1163,17 +1058,17 @@ Drafty.appendLineBreak = function(content) {
 /**
  * Given Drafty document, convert it to HTML.
  * No attempt is made to strip pre-existing html markup.
- * This is potentially unsafe because <code>content.txt</code> may contain malicious
+ * This is potentially unsafe because <code>content.txt</code> may contain malicious HTML
  * markup.
  * @memberof Tinode.Drafty
  * @static
  *
- * @param {Drafy} content - document to convert.
+ * @param {Drafty} content - document to convert.
  *
  * @returns {string} HTML-representation of content.
  */
 Drafty.UNSAFE_toHTML = function(content) {
-  let {
+  const {
     txt,
     fmt,
     ent
@@ -1211,7 +1106,7 @@ Drafty.UNSAFE_toHTML = function(content) {
     }
   }
 
-  markup.sort(function(a, b) {
+  markup.sort((a, b) => {
     return b.idx == a.idx ? b.len - a.len : b.idx - a.idx; // in descending order
   });
 
@@ -1226,7 +1121,7 @@ Drafty.UNSAFE_toHTML = function(content) {
 
 /**
  * Callback for applying custom formatting/transformation to a Drafty document.
- * Called once for each syle span.
+ * Called once for each style span.
  * @memberof Drafty
  * @static
  *
@@ -1234,94 +1129,108 @@ Drafty.UNSAFE_toHTML = function(content) {
  * @param {string} style - style code such as "ST" or "IM".
  * @param {Object} data - entity's data
  * @param {Object} values - possibly styled subspans contained in this style span.
- * @param {number} index - of the current element among its siblings.
+ * @param {number} index - index of the current element among its siblings.
  */
 
 /**
  * Transform Drafty document using custom formatting.
+ * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
+ * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} content - content to transform.
+ * @param {Drafty|Object} content - Drafty document to transform.
  * @param {Formatter} formatter - callback which transforms individual elements
- * @param {Object} context - context provided to formatter as <code>this</code>.
+ * @param {Object} context - context provided to formatter as <code>this</code> and provide context formatter through <code>getFormatter(style)</code>.
  *
  * @return {Object} transformed object
  */
 Drafty.format = function(content, formatter, context) {
-  let {
-    txt,
-    fmt,
-    ent
-  } = content;
+  return iterateSpans(content.txt, 0,
+    (content.txt || '').length,
+    draftyToSpans(content),
+    formatter,
+    context);
+}
 
-  // Assign default values.
-  txt = txt || "";
-  if (!Array.isArray(ent)) {
-    ent = [];
-  }
-
-  if (!Array.isArray(fmt)) {
-    // Handle special case when all values in fmt are 0 and fmt is skipped.
-    if (ent.length == 1) {
-      fmt = [{
-        at: 0,
-        len: 0,
-        key: 0
-      }];
-    } else {
-      return [txt];
-    }
-  }
-
-  let spans = [].concat(fmt);
-
-  // Zero values may have been stripped. Restore them.
-  // Also ensure indexes and lengths are sane.
-  spans.map(function(s) {
-    s.at = s.at || 0;
-    s.len = s.len || 0;
-    if (s.len < 0) {
-      s.len = 0;
-    }
-    if (s.at < -1) {
-      s.at = -1;
-    }
-  });
-
-  // Sort spans first by start index (asc) then by length (desc).
-  spans.sort(function(a, b) {
-    if (a.at - b.at == 0) {
-      return b.len - a.len; // longer one comes first (<0)
-    }
-    return a.at - b.at;
-  });
-
-  // Denormalize entities into spans. Create a copy of the objects to leave
-  // original Drafty object unchanged.
-  spans = spans.map((s) => {
-    let data;
-    let tp = s.tp;
-    if (!tp) {
-      s.key = s.key || 0;
-      if (ent[s.key]) {
-        data = ent[s.key].data;
-        tp = ent[s.key].tp;
-      }
-    }
-
-    // Type still not defined? Hide invalid element.
-    tp = tp || 'HD';
-
-    return {
-      tp: tp,
-      data: data,
-      at: s.at,
-      len: s.len
+// Takes in an `original` document (Drafty or string) and transforms it
+// using formatter.
+function transform(original, state, formatter, context) {
+  if (typeof original == 'string') {
+    original = {
+      txt: original
     };
-  });
+  }
 
-  return forEach(txt, 0, txt.length, spans, formatter, context);
+  if (!Drafty.isValid(original)) {
+    return null;
+  }
+
+  const spans = iterateSpans(original.txt, 0, (original.txt || '').length,
+    draftyToSpans(original), nodeFormatter, context);
+
+  const tree = (spans && spans.length > 0) ? {
+    children: spans
+  } : null;
+
+  if (tree) {
+    formatter.call(state, tree.sp, tree.txt, tree.children);
+  }
+
+  return state.drafty;
+}
+
+/**
+ * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
+ * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
+ * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @param {number} length - length in characters to shorten to.
+ * @param {Object} context - context provided to formatter as <code>this</code>.
+ * @params {Boolean} isForwarded - indicates whether original is a forwarded message.
+ * @returns new shortened Drafty object leaving the original intact.
+ */
+Drafty.preview = function(original, length, context, isForwarded) {
+  const state = {
+    // Shortened Drafty document.
+    drafty: Drafty.init(),
+    // Maximum length of the document.
+    maxLength: length,
+    // Mapping of entity indexes from the original index to the new index.
+    keymap: [],
+    // Count of attachments (no more than MAX_PREVIEW_ATTACHMENTS are allowed).
+    attCount: 0,
+    // Indicates whether the original author mention should be stripped.
+    stripForwardedMention: isForwarded
+  };
+  return transform(original, state, previewFormatter, context);
+}
+
+/**
+ * Strip leading @mention.
+ * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
+ * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @param {Object} context - context provided to formatter as <code>this</code>.
+ * @returns new shortened Drafty object leaving the original intact.
+ */
+Drafty.forwardedContent = function(original, context) {
+  const state = {
+    // Shortened Drafty document.
+    drafty: Drafty.init(),
+    // Mapping of entity indexes from the original index to the new index.
+    keymap: [],
+    // Indicates whether the mention of the original author of the forwarded
+    // message has been stripped.
+    stripForwardedMention: true
+  };
+  return transform(original, state, forwardedFormatter, context);
 }
 
 /**
@@ -1387,7 +1296,8 @@ Drafty.isValid = function(content) {
 }
 
 /**
- * Check if the drafty document has attachments.
+ * Check if the drafty document has attachments: style EX and outside of normal rendering flow,
+ * i.e. <code>at = -1</code>.
  * @memberof Drafty
  * @static
  *
@@ -1395,11 +1305,14 @@ Drafty.isValid = function(content) {
  * @returns <code>true</code> if there are attachments.
  */
 Drafty.hasAttachments = function(content) {
-  if (content.ent && content.ent.length > 0) {
-    for (let i in content.ent) {
-      if (content.ent[i] && content.ent[i].data && content.ent[i].tp == 'EX') {
-        return true;
-      }
+  if (!Array.isArray(content.fmt)) {
+    return false;
+  }
+  for (let i in content.fmt) {
+    const fmt = content.fmt[i];
+    if (fmt && fmt.at < 0) {
+      const ent = content.ent[fmt.key | 0];
+      return ent && ent.tp == 'EX' && ent.data;
     }
   }
   return false;
@@ -1418,7 +1331,7 @@ Drafty.hasAttachments = function(content) {
  */
 
 /**
- * Enumerate attachments.
+ * Enumerate attachments: style EX and outside of normal rendering flow, i.e. <code>at = -1</code>.
  * @memberof Drafty
  * @static
  *
@@ -1427,13 +1340,18 @@ Drafty.hasAttachments = function(content) {
  * @param {Object} context - value of "this" for callback.
  */
 Drafty.attachments = function(content, callback, context) {
-  if (content.ent && content.ent.length > 0) {
-    for (let i in content.ent) {
-      if (content.ent[i] && content.ent[i].tp == 'EX' && content.ent[i].data) {
-        callback.call(context, content.ent[i].data, i, 'EX');
+  if (!Array.isArray(content.fmt)) {
+    return;
+  }
+  let i = 0;
+  content.fmt.forEach(fmt => {
+    if (fmt && fmt.at < 0) {
+      const ent = content.ent[fmt.key | 0];
+      if (ent && ent.tp == 'EX' && ent.data) {
+        callback.call(context, ent.data, i++, 'EX');
       }
     }
-  }
+  });
 }
 
 /**
@@ -1576,113 +1494,522 @@ Drafty.attrValue = function(style, data) {
  * @memberof Drafty
  * @static
  *
- * @returns {string} HTTP Content-Type "text/x-drafty".
+ * @returns {string} content-Type "text/x-drafty".
  */
 Drafty.getContentType = function() {
-  return 'text/x-drafty';
+  return DRAFTY_MIME_TYPE;
 }
 
-/**
- * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
- * @memberof Drafty
- * @static
- *
- * @param {Drafty} original - Drafty object to shorten.
- * @param {number} length - length in characters to shorten to.
- * @returns new shortened Drafty object leaving the original intact.
- */
-Drafty.preview = function(original, length) {
-  if (!original || length <= 0 || typeof original != 'object') {
-    return null;
+// Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
+// a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
+// ('hello ', (b: 'bold ', (i: 'italic')), ' and ', (s: 'more'), ' world');
+//
+// This is needed in order to clear markup, i.e. 'hello *world*' -> 'hello world' and convert
+// ranges from markup-ed offsets to plain text offsets.
+function chunkify(line, start, end, spans) {
+  const chunks = [];
+
+  if (spans.length == 0) {
+    return [];
   }
 
-  const {
+  for (let i in spans) {
+    // Get the next chunk from the queue
+    const span = spans[i];
+
+    // Grab the initial unstyled chunk
+    if (span.at > start) {
+      chunks.push({
+        txt: line.slice(start, span.at)
+      });
+    }
+
+    // Grab the styled chunk. It may include subchunks.
+    const chunk = {
+      tp: span.tp
+    };
+    const chld = chunkify(line, span.at + 1, span.end, span.children);
+    if (chld.length > 0) {
+      chunk.children = chld;
+    } else {
+      chunk.txt = span.txt;
+    }
+    chunks.push(chunk);
+    start = span.end + 1; // '+1' is to skip the formatting character
+  }
+
+  // Grab the remaining unstyled chunk, after the last span
+  if (start < end) {
+    chunks.push({
+      txt: line.slice(start, end)
+    });
+  }
+
+  return chunks;
+}
+
+// Inverse of chunkify: iterates spans bottom-up. Returns a tree of formatted spans.
+function iterateSpans(line, start, end, spans, defaultFormatter, context) {
+  const result = [];
+
+  // Process ranges calling formatter for each range.
+  for (let i = 0; i < spans.length; i++) {
+    const span = spans[i];
+    if (span.at < 0) {
+      // Ask formatter if it wants to do anything with the non-visual span.
+      const s = defaultFormatter.call(context, span.tp, span.data, undefined, result.length, span.key);
+      if (s) {
+        result.push(s);
+      }
+      continue;
+    }
+
+    // Add un-styled range before the styled span starts.
+    if (start < span.at) {
+      result.push(defaultFormatter.call(context, null, undefined, line.slice(start, span.at), result.length));
+      start = span.at;
+    }
+
+    // Get all spans which are within current span.
+    const subspans = [];
+    for (let si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
+      subspans.push(spans[si]);
+      i = si;
+    }
+
+    const tag = HTML_TAGS[span.tp] || {};
+    // Get context formatter.
+    const cformatter = (context && context.getFormatter) ? context.getFormatter(span.tp) : null;
+    result.push(defaultFormatter.call(context, span.tp, span.data,
+      tag.isVoid ? null : iterateSpans(line, start, span.at + span.len, subspans,
+        cformatter || defaultFormatter, context),
+      result.length, span.key));
+
+    start = span.at + span.len;
+  }
+
+  // Add the last unformatted range.
+  if (start < end) {
+    result.push(defaultFormatter.call(context, null, undefined, line.slice(start, end), result.length));
+  }
+
+  return result;
+}
+
+// Detect starts and ends of formatting spans. Unformatted spans are
+// ignored at this stage.
+function spannify(original, re_start, re_end, type) {
+  const result = [];
+  let index = 0;
+  let line = original.slice(0); // make a copy;
+
+  while (line.length > 0) {
+    // match[0]; // match, like '*abc*'
+    // match[1]; // match captured in parenthesis, like 'abc'
+    // match['index']; // offset where the match started.
+
+    // Find the opening token.
+    const start = re_start.exec(line);
+    if (start == null) {
+      break;
+    }
+
+    // Because javascript RegExp does not support lookbehind, the actual offset may not point
+    // at the markup character. Find it in the matched string.
+    let start_offset = start['index'] + start[0].lastIndexOf(start[1]);
+    // Clip the processed part of the string.
+    line = line.slice(start_offset + 1);
+    // start_offset is an offset within the clipped string. Convert to original index.
+    start_offset += index;
+    // Index now point to the beginning of 'line' within the 'original' string.
+    index = start_offset + 1;
+
+    // Find the matching closing token.
+    const end = re_end ? re_end.exec(line) : null;
+    if (end == null) {
+      break;
+    }
+    let end_offset = end['index'] + end[0].indexOf(end[1]);
+    // Clip the processed part of the string.
+    line = line.slice(end_offset + 1);
+    // Update offsets
+    end_offset += index;
+    // Index now points to the beginning of 'line' within the 'original' string.
+    index = end_offset + 1;
+
+    result.push({
+      txt: original.slice(start_offset + 1, end_offset),
+      children: [],
+      at: start_offset,
+      end: end_offset,
+      tp: type
+    });
+  }
+
+  return result;
+}
+
+// Convert linear array or spans into a tree representation.
+// Keep standalone and nested spans, throw away partially overlapping spans.
+function toSpanTree(spans) {
+  if (spans.length == 0) {
+    return [];
+  }
+
+  const tree = [spans[0]];
+  let last = spans[0];
+  for (let i = 1; i < spans.length; i++) {
+    // Keep spans which start after the end of the previous span or those which
+    // are complete within the previous span.
+    if (spans[i].at > last.end) {
+      // Span is completely outside of the previous span.
+      tree.push(spans[i]);
+      last = spans[i];
+    } else if (spans[i].end <= last.end) {
+      // Span is fully inside of the previous span. Push to subnode.
+      last.children.push(spans[i]);
+    }
+    // Span could partially overlap, ignoring it as invalid.
+  }
+
+  // Recursively rearrange the subnodes.
+  for (let i in tree) {
+    tree[i].children = toSpanTree(tree[i].children);
+  }
+
+  return tree;
+}
+
+// Convert drafty document into an array of spans with some
+// sanity checks and filled-out defaults.
+function draftyToSpans(doc) {
+  let {
     txt,
     fmt,
     ent
-  } = original;
+  } = doc;
 
-  const preview = {
-    txt: ''
-  };
-
-  if (typeof txt == 'string') {
-    preview.txt = txt.substr(0, length);
-  }
-  let len = preview.txt.length;
-
-  if (Array.isArray(fmt) && fmt.length > 0) {
-    // Old key to new key entity mapping.
-    const ent_refs = [];
-    // Count styles which start within the new length of the text and save entity keys as a set.
-    let fmt_count = 0;
-    let ent_count = 0;
-    fmt.forEach((st) => {
-      st.at |= 0;
-      if (st.at < len) {
-        fmt_count++;
-        if (!st.tp) {
-          st.key |= 0;
-          if (!ent_refs[st.key]) {
-            ent_refs[st.key] = ent_count;
-            ent_count++;
-          }
-        }
-      }
-    });
-
-    if (fmt_count == 0) {
-      return preview;
-    }
-
-    // Allocate space for copying styles and entities.
-    preview.fmt = [];
-    if (Array.isArray(ent) && ent_refs.length > 0) {
-      preview.ent = [];
-    }
-
-    // Insertion point for styles.
-    let fmt_idx = 0;
-    fmt.forEach((st) => {
-      if (st.at < len) {
-        const style = {
-          at: st.at,
-          len: st.len | 0
-        };
-        if (st.tp) {
-          style.tp = '' + st.tp;
-        } else if (Array.isArray(ent) && ent.length > st.key && typeof ent_refs[st.key] == 'number') {
-          style.key = ent_refs[st.key];
-          preview.ent[style.key] = copyLight(ent[st.key]);
-        } else {
-          return;
-        }
-        preview.fmt[fmt_idx++] = style;
-      }
-    });
+  txt = txt || "";
+  if (!Array.isArray(ent)) {
+    ent = [];
   }
 
-  return preview;
+  if (!Array.isArray(fmt)) {
+    if (ent.length == 1) {
+      // Handle special case when all values in fmt are 0 and fmt is skipped.
+      fmt = [{
+        at: 0,
+        len: 0,
+        key: 0
+      }];
+    } else {
+      return [];
+    }
+  }
+
+  const textLen = txt.length;
+
+  let spans = [].concat(fmt);
+  // Zero values may have been stripped. Restore them.
+  // Also ensure indexes and lengths are sane.
+  spans.forEach((s) => {
+    s.at = s.at || 0;
+    if (s.at < -1) {
+      s.at = -1;
+      s.len = 0;
+    }
+    s.len = s.len || 0;
+    if (s.len < 0) {
+      s.len = 0;
+    } else if (s.at > textLen) {
+      s.len = 0;
+    } else if (s.at + s.len > textLen) {
+      s.len = textLen - s.at;
+    }
+  });
+
+  // Denormalize entities into spans. Create a copy of the objects to leave
+  // original Drafty object unchanged.
+  spans = spans.map((s) => {
+    let data;
+    let tp = s.tp;
+    if (!tp) {
+      s.key = s.key || 0;
+      if (ent[s.key]) {
+        data = ent[s.key].data;
+        tp = ent[s.key].tp;
+      }
+    }
+
+    // Type still not defined? Hide invalid element.
+    tp = tp || 'HD';
+
+    return {
+      tp: tp,
+      at: s.at,
+      len: s.len,
+      data: data,
+      key: s.key
+    };
+  });
+
+  // Sort spans first by start index (asc) then by length (desc).
+  spans.sort((a, b) => {
+    const diff = a.at - b.at;
+    return diff != 0 ? diff : b.len - a.len;
+  });
+
+  // Drop invalid spans and staggered spans: the second and subsequent
+  // spans when they overlap like '_first *second_ third*'.
+  let end = Number.MIN_SAFE_INTEGER;
+  spans = spans.filter((s) => {
+    if (s.at > textLen) {
+      return false;
+    }
+    if (s.at < end && s.at + s.len > end) {
+      return false;
+    }
+    end = Math.max(s.at + s.len, end);
+    return true;
+  });
+
+  return spans;
 }
 
-// Create a copy of an entity without large data.
-function copyLight(ent) {
-  let result = {
-    tp: ent.tp
+// Get a list of entities from a text.
+function extractEntities(line) {
+  let match;
+  let extracted = [];
+  ENTITY_TYPES.forEach((entity) => {
+    while ((match = entity.re.exec(line)) !== null) {
+      extracted.push({
+        offset: match['index'],
+        len: match[0].length,
+        unique: match[0],
+        data: entity.pack(match[0]),
+        type: entity.name
+      });
+    }
+  });
+
+  if (extracted.length == 0) {
+    return extracted;
+  }
+
+  // Remove entities detected inside other entities, like #hashtag in a URL.
+  extracted.sort((a, b) => {
+    return a.offset - b.offset;
+  });
+
+  let idx = -1;
+  extracted = extracted.filter((el) => {
+    const result = (el.offset > idx);
+    idx = el.offset + el.len;
+    return result;
+  });
+
+  return extracted;
+}
+
+// Convert the chunks into format suitable for serialization.
+function draftify(chunks, startAt) {
+  let plain = "";
+  let ranges = [];
+  for (let i in chunks) {
+    const chunk = chunks[i];
+    if (!chunk.txt) {
+      const drafty = draftify(chunk.children, plain.length + startAt);
+      chunk.txt = drafty.txt;
+      ranges = ranges.concat(drafty.fmt);
+    }
+
+    if (chunk.tp) {
+      ranges.push({
+        at: plain.length + startAt,
+        len: chunk.txt.length,
+        tp: chunk.tp
+      });
+    }
+
+    plain += chunk.txt;
+  }
+  return {
+    txt: plain,
+    fmt: ranges
   };
-  if (ent.data && Object.entries(ent.data).length != 0) {
-    const dc = {};
-    ["mime", "name", "width", "height", "size"].forEach((key) => {
-      const val = ent.data[key];
-      if (val) {
-        dc[key] = val;
-      }
-    });
-    if (Object.entries(dc).length != 0) {
-      result.data = dc;
+}
+
+// Splice two strings: insert second string into the first one at the given index
+function splice(src, at, insert) {
+  return src.slice(0, at) + insert + src.slice(at);
+}
+
+// A formatter which packs values into a tree node.
+function nodeFormatter(tp, data, content, unused, key) {
+  const node = {};
+  if (tp) {
+    node.sp = {
+      tp: tp
+    };
+    if (data) {
+      node.sp.data = data;
+      node.sp.key = key;
     }
   }
-  return result;
+  if (typeof content == 'string') {
+    node.txt = content;
+  } else if (Array.isArray(content)) {
+    node.children = content;
+  }
+  return node;
+}
+
+// Create a copy of entity data with (light=false) or without (light=true) the large payload.
+function copyEntData(data, light) {
+  if (data && Object.entries(data).length > 0) {
+    const dc = {};
+    if (light) {
+      ['mime', 'name', 'width', 'height', 'size', 'url', 'ref'].forEach((key) => {
+        if (data.hasOwnProperty(key)) {
+          dc[key] = data[key];
+        }
+      });
+    } else {
+      Object.assign(dc, data);
+    }
+    if (Object.entries(dc).length != 0) {
+      return dc;
+    }
+  }
+  return null;
+}
+
+function handleStyle(fmt, sp) {
+  if (sp.data) {
+    this.drafty.ent = this.drafty.ent || [];
+    // Check if we have already seen this payload.
+    let key = this.keymap[sp.key];
+    if (typeof key == 'undefined') {
+      // Seeing payload for the first time, add it.
+      const ent = {
+        tp: sp.tp
+      };
+      const data = copyEntData(sp.data, false);
+      if (data) {
+        ent.data = data;
+      }
+      key = this.drafty.ent.length;
+      this.keymap[sp.key] = key;
+      this.drafty.ent.push(ent);
+    }
+    fmt.key = key;
+  } else {
+    fmt.tp = sp.tp;
+  }
+
+  this.drafty.fmt = this.drafty.fmt || [];
+  this.drafty.fmt.push(fmt);
+}
+
+// forwardedFormatter converts a tree of formatted spans into a drafty document ready for forwarding.
+function forwardedFormatter(sp, txt, children) {
+  const at = this.drafty.txt.length;
+  if (sp && at == 0) {
+    if (sp.tp == 'MN') {
+      if (this.stripForwardedMention) {
+        this.stripForwardedMention = false;
+        // Skip the first mention (of the author of the originally forwarded message).
+        return null;
+      }
+    }
+    if (sp.tp == 'BR') {
+      // Remove any leading line breaks.
+      return null;
+    }
+  }
+  if (children) {
+    children.forEach((c) => {
+      forwardedFormatter.call(this, c.sp, c.txt, c.children);
+    });
+  } else if (txt) {
+    this.drafty.txt += txt;
+  }
+  const end = this.drafty.txt.length;
+
+  if (sp) {
+    const fmt = {
+      at: at,
+      len: end - at,
+    };
+    handleStyle.call(this, fmt, sp);
+  }
+  return null;
+}
+
+// previewFormatter converts a tree of formatted spans into a shortened drafty document.
+function previewFormatter(sp, txt, children) {
+  const at = this.drafty.txt.length;
+  if (at >= this.maxLength) {
+    // Maximum doc length reached.
+    return null;
+  }
+
+  if (sp) {
+    if (sp.tp == 'MN') {
+      if (this.stripForwardedMention && at == 0) {
+        this.stripForwardedMention = false;
+        // Replace the mention (of the author of the originally forwarded message).
+        txt = '➦ ';
+        sp = null;
+        children = null;
+      }
+    } else if (sp.tp == 'QQ') {
+      // Skip quoted text
+      return null;
+    } else if (sp.tp == 'BR') {
+      // Skip the leading new line.
+      if (at == 0) {
+        return null;
+      }
+      txt = ' ';
+      sp = null;
+    } else if (sp.tp == 'EX') {
+      txt = ' ';
+    }
+  }
+
+  if (children) {
+    children.forEach((c) => {
+      previewFormatter.call(this, c.sp, c.txt, c.children);
+    });
+  } else if (txt) {
+    if (at + txt.length >= this.maxLength) {
+      this.drafty.txt += txt.slice(0, this.maxLength - at - 1) + '…';
+    } else {
+      this.drafty.txt += txt;
+    }
+  }
+
+  const end = this.drafty.txt.length;
+
+  if (sp) {
+    const fmt = {
+      at: at,
+      len: end - at,
+    };
+    const tag = HTML_TAGS[sp.tp] || {};
+    if (sp.tp == 'EX') {
+      if (this.attCount >= MAX_PREVIEW_ATTACHMENTS) {
+        return null;
+      }
+      this.attCount++;
+    } else if (at >= end && !tag.isVoid) {
+      return null;
+    }
+
+    handleStyle.call(this, fmt, sp);
+  }
+  return null;
 }
 
 if (typeof module != 'undefined') {
