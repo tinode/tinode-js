@@ -2101,7 +2101,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {string} topicName - Name of the topic to check.
-   * @returns {boolean} true if topic is found in cache, false oterwise.
+   * @returns {boolean} true if topic is found in cache, false otherwise.
    */
   isTopicCached: function(topicName) {
     return !!this.cacheGet('topic', topicName);
@@ -3705,11 +3705,10 @@ Topic.prototype = {
         break;
       case 'upd':
         // A topic subscriber has updated his description.
-        uid = pres.src || this._tinode.getCurrentUserID();
-        if (!this._tinode.isTopicCached()) {
-          // Issue {get sub} only if the current user has no relationship with the updated user.
-          // Otherwise 'me' will issue a {get desc} request.
-          this.getMeta(this.startMetaQuery().withLaterOneSub(uid).build());
+        // Issue {get sub} only if the current user has no p2p topics with the updated user (p2p name is not in cache).
+        // Otherwise 'me' will issue a {get desc} request.
+        if (pres.src && !this._tinode.isTopicCached(pres.src)) {
+          this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
         }
         break;
       case 'acs':
