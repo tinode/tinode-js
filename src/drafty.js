@@ -1552,15 +1552,13 @@ function chunkify(line, start, end, spans) {
 function iterateSpans(line, start, end, spans, defaultFormatter, context) {
   const result = [];
 
+  const attachments = [];
+
   // Process ranges calling formatter for each range.
   for (let i = 0; i < spans.length; i++) {
     const span = spans[i];
     if (span.at < 0) {
-      // Ask formatter if it wants to do anything with the non-visual span.
-      const s = defaultFormatter.call(context, span.tp, span.data, undefined, result.length, span.key);
-      if (s) {
-        result.push(s);
-      }
+      attachments.push(span);
       continue;
     }
 
@@ -1592,6 +1590,14 @@ function iterateSpans(line, start, end, spans, defaultFormatter, context) {
   if (start < end) {
     result.push(defaultFormatter.call(context, null, undefined, line.slice(start, end), result.length));
   }
+
+  // Ask formatter if it wants to do anything with the non-visual spans.
+  attachments.forEach((span) => {
+    const s = defaultFormatter.call(context, span.tp, span.data, undefined, result.length, span.key);
+    if (s) {
+      result.push(s);
+    }
+  });
 
   return result;
 }
