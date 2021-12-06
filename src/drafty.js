@@ -1210,7 +1210,7 @@ Drafty.preview = function(original, length, context, isForwarded) {
 }
 
 /**
- * Strip leading @mention.
+ * Transform Drafty doc for forwarding: strip leading @mention.
  * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
  * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
  * @memberof Drafty
@@ -1218,7 +1218,7 @@ Drafty.preview = function(original, length, context, isForwarded) {
  *
  * @param {Drafty|string} original - Drafty object to shorten.
  * @param {Object} context - context provided to formatter as <code>this</code>.
- * @returns new shortened Drafty object leaving the original intact.
+ * @returns converted Drafty object leaving the original intact.
  */
 Drafty.forwardedContent = function(original, context) {
   const state = {
@@ -1920,17 +1920,24 @@ function handleStyle(fmt, sp) {
 // forwardedFormatter converts a tree of formatted spans into a drafty document ready for forwarding.
 function forwardedFormatter(sp, txt, children) {
   const at = this.drafty.txt.length;
-  if (sp && at == 0) {
-    if (sp.tp == 'MN') {
-      if (this.stripForwardedMention) {
-        this.stripForwardedMention = false;
-        // Skip the first mention (of the author of the originally forwarded message).
-        return null;
+  if (sp) {
+    if (sp.tp == 'EX') {
+      handleStyle.call(this, {
+        at: -1
+      }, sp);
+      return;
+    } else if (at == 0) {
+      if (sp.tp == 'MN') {
+        if (this.stripForwardedMention) {
+          this.stripForwardedMention = false;
+          // Skip the first mention (of the author of the originally forwarded message).
+          return;
+        }
       }
-    }
-    if (sp.tp == 'BR') {
-      // Remove any leading line breaks.
-      return null;
+      if (sp.tp == 'BR') {
+        // Remove any leading line breaks.
+        return;
+      }
     }
   }
   if (children) {
@@ -1949,7 +1956,6 @@ function forwardedFormatter(sp, txt, children) {
     };
     handleStyle.call(this, fmt, sp);
   }
-  return null;
 }
 
 // previewFormatter converts a tree of formatted spans into a shortened drafty document.
@@ -1957,7 +1963,7 @@ function previewFormatter(sp, txt, children) {
   const at = this.drafty.txt.length;
   if (at >= this.maxLength) {
     // Maximum doc length reached.
-    return null;
+    return;
   }
 
   if (sp) {
@@ -1971,11 +1977,11 @@ function previewFormatter(sp, txt, children) {
       }
     } else if (sp.tp == 'QQ') {
       // Skip quoted text
-      return null;
+      return;
     } else if (sp.tp == 'BR') {
       // Skip the leading new line.
       if (at == 0) {
-        return null;
+        return;
       }
       txt = ' ';
       sp = null;
@@ -2006,16 +2012,15 @@ function previewFormatter(sp, txt, children) {
     const tag = HTML_TAGS[sp.tp] || {};
     if (sp.tp == 'EX') {
       if (this.attCount >= MAX_PREVIEW_ATTACHMENTS) {
-        return null;
+        return;
       }
       this.attCount++;
     } else if (at >= end && !tag.isVoid) {
-      return null;
+      return;
     }
 
     handleStyle.call(this, fmt, sp);
   }
-  return null;
 }
 
 if (typeof module != 'undefined') {
