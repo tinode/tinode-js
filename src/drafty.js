@@ -1920,13 +1920,13 @@ function handleStyle(fmt, sp) {
 // forwardedFormatter converts a tree of formatted spans into a drafty document ready for forwarding.
 function forwardedFormatter(sp, txt, children) {
   const at = this.drafty.txt.length;
-  if (sp) {
+  if (sp && at == 0) {
     if (sp.tp == 'EX') {
       handleStyle.call(this, {
         at: -1
       }, sp);
       return;
-    } else if (at == 0) {
+    } else {
       if (sp.tp == 'MN') {
         if (this.stripForwardedMention) {
           this.stripForwardedMention = false;
@@ -1940,6 +1940,7 @@ function forwardedFormatter(sp, txt, children) {
       }
     }
   }
+
   if (children) {
     children.forEach((c) => {
       forwardedFormatter.call(this, c.sp, c.txt, c.children);
@@ -1968,10 +1969,15 @@ function previewFormatter(sp, txt, children) {
 
   if (sp) {
     if (sp.tp == 'MN') {
+      const body = txt ? txt : ((Array.isArray(children) && children.length > 0) ? (children[0].txt || '') : '');
       if (this.stripForwardedMention && at == 0) {
         this.stripForwardedMention = false;
-        // Replace the mention (of the author of the originally forwarded message).
-        txt = '➦ ';
+        if (body.startsWith('➦')) {
+          // Replace the mention (of the author of the originally forwarded message).
+          txt = '➦ ';
+        } else {
+          txt = null;
+        }
         sp = null;
         children = null;
       }
