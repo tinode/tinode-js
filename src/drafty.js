@@ -93,6 +93,9 @@ const INLINE_STYLES = [
   }
 ];
 
+// Relative weights of formatting spans. Greater index in array means greater weight.
+const FMT_WEIGHT = ['QQ'];
+
 // RegExps for entity extraction (RF = reference)
 const ENTITY_TYPES = [
   // URLs
@@ -561,7 +564,7 @@ Drafty.parse = function(content) {
         at: offset - 1
       });
 
-      result.txt += " " + block.txt;
+      result.txt += ' ' + block.txt;
       if (block.fmt) {
         result.fmt = result.fmt.concat(block.fmt.map((s) => {
           s.at += offset;
@@ -1133,14 +1136,14 @@ Drafty.UNSAFE_toHTML = function(content) {
  */
 
 /**
- * Transform Drafty document using custom formatting.
+ * Convert Drafty document to a representation suitable for display.
  * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
  * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
  * @memberof Drafty
  * @static
  *
  * @param {Drafty|Object} content - Drafty document to transform.
- * @param {Formatter} formatter - callback which transforms individual elements
+ * @param {Formatter} formatter - callback which formats individual elements
  * @param {Object} context - context provided to formatter as <code>this</code> and provide context formatter through <code>getFormatter(style)</code>.
  *
  * @return {Object} transformed object
@@ -1181,6 +1184,18 @@ function transform(original, state, formatter, context) {
 }
 
 /**
+ * Normalize Drafty document: strip invalid elements and formats.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @returns new correct Drafty document (could be empty).
+ */
+Drafty.normalize = function(original) {
+  return treeToDrafty({}, draftyToTree(typeof original == 'string' ? {txt: original} : original), []);
+}
+
+/**
  * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
  * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
  * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
@@ -1206,6 +1221,7 @@ Drafty.preview = function(original, length, context, isForwarded) {
     // Indicates whether the original author mention should be stripped.
     stripForwardedMention: isForwarded
   };
+
   return transform(original, state, previewFormatter, context);
 }
 
@@ -1500,6 +1516,10 @@ Drafty.getContentType = function() {
   return DRAFTY_MIME_TYPE;
 }
 
+// =================
+// Utility methods.
+// =================
+
 // Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
 // a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
 // ('hello ', (b: 'bold ', (i: 'italic')), ' and ', (s: 'more'), ' world');
@@ -1686,6 +1706,231 @@ function toSpanTree(spans) {
   return tree;
 }
 
+// Convert drafty document to a tree.
+function draftyToTree(doc) {
+  let {
+    txt,
+    fmt,
+    ent
+  } = doc;
+
+  txt = txt || '';
+  if (!Array.isArray(ent)) {
+    ent = [];
+  }
+
+  if (!Array.isArray(fmt) || fmt.length == 0) {
+    if (ent.length == 0) {
+      return {text: txt};
+    }
+
+    // Handle special case when all values in fmt are 0 and fmt therefore was skipped.
+    fmt = [{
+      at: 0,
+      len: 0,
+      key: 0
+    }];
+  }
+
+  // Sanitize spans.
+  const spans = [];
+  const attachments = [];
+  fmt.forEach((span) => {
+    if (!['undefined', 'number'].includes(typeof span.at)) {
+      // Present, but non-numeric 'at'.
+      return;
+    }
+    if (!['undefined', 'number'].includes(typeof span.len)) {
+      // Present, but non-numeric 'len'.
+      return;
+    }
+    let at = span.at | 0;
+    let len = span.len | 0;
+    if (len < 0) {
+      // Invalid span length.
+      return;
+    }
+
+    let key = span.key || 0;
+    if (ent.length > 0 && (typeof key != 'number' || key < 0 || key >= ent.length)) {
+      // Invalid key value.
+      return;
+    }
+
+    if (at <= -1) {
+      // Attachment. Store attachments separately.
+      attachments.push({start: -1, end: 0, key: key});
+      return;
+    } else if (at + len > txt.length) {
+      // Span is out of bounds.
+      return;
+    }
+
+    if (!span.tp) {
+      if (ent.length > 0 && (typeof ent[key] == 'object')) {
+        spans.push({start: at, end: at + len, key: key});
+      }
+    } else {
+      spans.push({type: span.tp, start: at, end: at + len});
+    }
+  });
+
+  // Sort spans first by start index (asc) then by length (desc), then by weight.
+  spans.sort((a, b) => {
+    let diff = a.start - b.start;
+    if (diff != 0) {
+      return diff;
+    }
+    diff = b.end - a.end;
+    if (diff != 0) {
+      return diff;
+    }
+    return FMT_WEIGHT.indexOf(b.type) - FMT_WEIGHT.indexOf(a.type);
+  });
+
+  // Move attachments to the end of the list.
+  if (attachments.length > 0) {
+    spans.push(...attachments);
+  }
+
+  spans.forEach((span) => {
+    if (ent.length > 0 && !span.type) {
+      span.type = ent[span.key].tp;
+      span.data = ent[span.key].data;
+    }
+
+    // Is type still undefined? Hide the invalid element!
+    if (!span.type) {
+      span.type = 'HD';
+    }
+  });
+
+  let tree = spansToTree({}, txt, 0, txt.length, spans);
+  if (Array.isArray(tree.children) && tree.children.length == 1 && !tree.type) {
+    // Unwrap.
+    tree = tree.children[0];
+    delete tree.parent;
+  }
+
+  return tree;
+}
+
+function addNode(parent, n) {
+  if (!n) {
+    return parent;
+  }
+
+  if (!parent.children) {
+    parent.children = [];
+  }
+
+  // If text is present, move it to a subnode.
+  if (parent.text) {
+    parent.children.push({text: parent.text, parent: parent});
+    delete parent.text;
+  }
+
+  n.parent = parent;
+  parent.children.push(n);
+
+  return parent;
+}
+
+// Returns a tree of nodes.
+function spansToTree(parent, text, start, end, spans) {
+  if (!spans || spans.length == 0) {
+    if (start < end) {
+      addNode(parent, {text: text.substring(start, end)});
+    }
+    return parent;
+  }
+
+  // Process subspans.
+  for (let i = 0; i < spans.length; i++) {
+    const span = spans[i];
+    if (span.start < 0 && span.type == 'EX') {
+      addNode(parent, {type: span.type, data: span.data, key: span.key, att: true});
+      continue;
+    }
+
+    // Add un-styled range before the styled span starts.
+    if (start < span.start) {
+      addNode(parent, {text: text.substring(start, span.start)});
+      start = span.start;
+    }
+
+    // Get all spans which are within the current span.
+    const subspans = [];
+    while (i < spans.length - 1) {
+      const inner = spans[i + 1];
+      if (inner.start < 0) {
+        // Attachments are in the end. Stop.
+        break;
+      } else if (inner.start < span.end) {
+        if (inner.end <= span.end) {
+          const tag = HTML_TAGS[inner.tp] || {};
+          if (inner.start < inner.end || tag.isVoid) {
+            // Valid subspan: completely within the current span and
+            // either non-zero length or zero length is acceptable.
+            subspans.push(inner);
+          }
+        }
+        i ++;
+        // Overlapping subspans are ignored.
+      } else {
+        // Past the end of the current span. Stop.
+        break;
+      }
+    }
+
+    addNode(parent, spansToTree({type: span.type, data: span.data, key: span.key}, text, start, span.end, subspans));
+    start = span.end;
+  }
+
+  // Add the last unformatted range.
+  if (start < end) {
+    addNode(parent, {text: text.substring(start, end)});
+  }
+
+  return parent;
+}
+
+// Append a tree to a Drafty doc.
+function treeToDrafty(doc, tree, keymap) {
+  doc.txt = doc.txt || '';
+
+  // Checkpoint to measure length of the current tree node.
+  const start = doc.txt.length;
+
+  if (tree.text) {
+    doc.txt += tree.text;
+  } else if (Array.isArray(tree.children)) {
+    tree.children.forEach((c) => {
+      treeToDrafty(doc, c, keymap);
+    });
+  }
+
+  if (tree.type) {
+    const len = doc.txt.length - start;
+    doc.fmt = doc.fmt || [];
+    if (Object.keys(tree.data || {}).length > 0) {
+      doc.ent = doc.ent || [];
+      const newKey = (typeof keymap[tree.key] == 'undefined') ? doc.ent.length : keymap[tree.key];
+      keymap[tree.key] = newKey;
+      doc.ent[newKey] = {tp: tree.type, data: tree.data};
+      if (tree.att) {
+        // Attachment.
+        doc.fmt.push({at: -1, len: 0, key: newKey});
+      } else {
+        doc.fmt.push({at: start, len: len, key: newKey});
+      }
+    } else {
+      doc.fmt.push({tp: tree.type, at: start, len: len});
+    }
+  }
+  return doc;
+}
+
 // Convert drafty document into an array of spans with some
 // sanity checks and filled-out defaults.
 function draftyToSpans(doc) {
@@ -1759,10 +2004,17 @@ function draftyToSpans(doc) {
     };
   });
 
-  // Sort spans first by start index (asc) then by length (desc).
+  // Sort spans first by start index (asc) then by length (desc), then by weight.
   spans.sort((a, b) => {
-    const diff = a.at - b.at;
-    return diff != 0 ? diff : b.len - a.len;
+    let diff = a.at - b.at;
+    if (diff != 0) {
+      return diff;
+    }
+    diff = b.len - a.len;
+    if (diff != 0) {
+      return diff;
+    }
+    return FMT_WEIGHT.indexOf(b.tp) - FMT_WEIGHT.indexOf(a.tp);
   });
 
   // Drop invalid spans and staggered spans: the second and subsequent
@@ -1874,15 +2126,16 @@ function nodeFormatter(tp, data, content, unused, key) {
 function copyEntData(data, light) {
   if (data && Object.entries(data).length > 0) {
     const dc = {};
-    if (light) {
-      ['mime', 'name', 'width', 'height', 'size', 'url', 'ref'].forEach((key) => {
-        if (data.hasOwnProperty(key)) {
-          dc[key] = data[key];
-        }
-      });
-    } else {
-      Object.assign(dc, data);
+    const fields = ['act', 'mime', 'name', 'width', 'height', 'size', 'url', 'ref'];
+    if (!light) {
+      fields.push('val');
     }
+    fields.forEach((key) => {
+      if (data.hasOwnProperty(key)) {
+        dc[key] = data[key];
+      }
+    });
+
     if (Object.entries(dc).length != 0) {
       return dc;
     }
