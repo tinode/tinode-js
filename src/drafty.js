@@ -1192,7 +1192,26 @@ function transform(original, state, formatter, context) {
  * @returns new correct Drafty document (could be empty).
  */
 Drafty.normalize = function(original) {
-  return treeToDrafty({}, draftyToTree(typeof original == 'string' ? {txt: original} : original), []);
+  return treeToDrafty({}, draftyToTree(original), []);
+}
+
+/**
+ * Shorten Drafty document making the drafty text no longer than the limit.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @param {number} limit - length in characrets to shorten to.
+ * @param {boolean} light - remove heavy data from entities.
+ * @returns new shortened Drafty object leaving the original intact.
+ */
+Drafty.shorten = function(original, limit, light) {
+  let tree = draftyToTree(original);
+  tree = shortenTree(tree, limit, '…');
+  if (tree && light) {
+    tree = lightEntity(tree);
+  }
+  return treeToDrafty({}, tree, []);
 }
 
 /**
@@ -1708,6 +1727,9 @@ function toSpanTree(spans) {
 
 // Convert drafty document to a tree.
 function draftyToTree(doc) {
+  doc = (typeof doc == 'string') ? {
+    txt: doc
+  } : doc;
   let {
     txt,
     fmt,
@@ -1721,7 +1743,9 @@ function draftyToTree(doc) {
 
   if (!Array.isArray(fmt) || fmt.length == 0) {
     if (ent.length == 0) {
-      return {text: txt};
+      return {
+        text: txt
+      };
     }
 
     // Handle special case when all values in fmt are 0 and fmt therefore was skipped.
@@ -1759,7 +1783,11 @@ function draftyToTree(doc) {
 
     if (at <= -1) {
       // Attachment. Store attachments separately.
-      attachments.push({start: -1, end: 0, key: key});
+      attachments.push({
+        start: -1,
+        end: 0,
+        key: key
+      });
       return;
     } else if (at + len > txt.length) {
       // Span is out of bounds.
@@ -1768,10 +1796,18 @@ function draftyToTree(doc) {
 
     if (!span.tp) {
       if (ent.length > 0 && (typeof ent[key] == 'object')) {
-        spans.push({start: at, end: at + len, key: key});
+        spans.push({
+          start: at,
+          end: at + len,
+          key: key
+        });
       }
     } else {
-      spans.push({type: span.tp, start: at, end: at + len});
+      spans.push({
+        type: span.tp,
+        start: at,
+        end: at + len
+      });
     }
   });
 
@@ -1815,6 +1851,7 @@ function draftyToTree(doc) {
   return tree;
 }
 
+// Add tree node to a parent tree.
 function addNode(parent, n) {
   if (!n) {
     return parent;
@@ -1826,7 +1863,10 @@ function addNode(parent, n) {
 
   // If text is present, move it to a subnode.
   if (parent.text) {
-    parent.children.push({text: parent.text, parent: parent});
+    parent.children.push({
+      text: parent.text,
+      parent: parent
+    });
     delete parent.text;
   }
 
@@ -1840,7 +1880,9 @@ function addNode(parent, n) {
 function spansToTree(parent, text, start, end, spans) {
   if (!spans || spans.length == 0) {
     if (start < end) {
-      addNode(parent, {text: text.substring(start, end)});
+      addNode(parent, {
+        text: text.substring(start, end)
+      });
     }
     return parent;
   }
@@ -1849,13 +1891,20 @@ function spansToTree(parent, text, start, end, spans) {
   for (let i = 0; i < spans.length; i++) {
     const span = spans[i];
     if (span.start < 0 && span.type == 'EX') {
-      addNode(parent, {type: span.type, data: span.data, key: span.key, att: true});
+      addNode(parent, {
+        type: span.type,
+        data: span.data,
+        key: span.key,
+        att: true
+      });
       continue;
     }
 
     // Add un-styled range before the styled span starts.
     if (start < span.start) {
-      addNode(parent, {text: text.substring(start, span.start)});
+      addNode(parent, {
+        text: text.substring(start, span.start)
+      });
       start = span.start;
     }
 
@@ -1875,7 +1924,7 @@ function spansToTree(parent, text, start, end, spans) {
             subspans.push(inner);
           }
         }
-        i ++;
+        i++;
         // Overlapping subspans are ignored.
       } else {
         // Past the end of the current span. Stop.
@@ -1883,13 +1932,19 @@ function spansToTree(parent, text, start, end, spans) {
       }
     }
 
-    addNode(parent, spansToTree({type: span.type, data: span.data, key: span.key}, text, start, span.end, subspans));
+    addNode(parent, spansToTree({
+      type: span.type,
+      data: span.data,
+      key: span.key
+    }, text, start, span.end, subspans));
     start = span.end;
   }
 
   // Add the last unformatted range.
   if (start < end) {
-    addNode(parent, {text: text.substring(start, end)});
+    addNode(parent, {
+      text: text.substring(start, end)
+    });
   }
 
   return parent;
@@ -1897,6 +1952,10 @@ function spansToTree(parent, text, start, end, spans) {
 
 // Append a tree to a Drafty doc.
 function treeToDrafty(doc, tree, keymap) {
+  if (!tree) {
+    return;
+  }
+
   doc.txt = doc.txt || '';
 
   // Checkpoint to measure length of the current tree node.
@@ -1917,18 +1976,100 @@ function treeToDrafty(doc, tree, keymap) {
       doc.ent = doc.ent || [];
       const newKey = (typeof keymap[tree.key] == 'undefined') ? doc.ent.length : keymap[tree.key];
       keymap[tree.key] = newKey;
-      doc.ent[newKey] = {tp: tree.type, data: tree.data};
+      doc.ent[newKey] = {
+        tp: tree.type,
+        data: tree.data
+      };
       if (tree.att) {
         // Attachment.
-        doc.fmt.push({at: -1, len: 0, key: newKey});
+        doc.fmt.push({
+          at: -1,
+          len: 0,
+          key: newKey
+        });
       } else {
-        doc.fmt.push({at: start, len: len, key: newKey});
+        doc.fmt.push({
+          at: start,
+          len: len,
+          key: newKey
+        });
       }
     } else {
-      doc.fmt.push({tp: tree.type, at: start, len: len});
+      doc.fmt.push({
+        tp: tree.type,
+        at: start,
+        len: len
+      });
     }
   }
   return doc;
+}
+
+// Transform drafty tree: recursively apply transformer to every tree node top-down.
+function transformTree(src, transformer, context) {
+  let dst = transformer.call(context, src);
+  if (!dst || !dst.children) {
+    return dst;
+  }
+
+  const children = [];
+  for (let i in dst.children) {
+    let n = dst.children[i];
+    if (n) {
+      n = transformTree(n, transformer, context);
+      if (n) {
+        children.push(n);
+      }
+    }
+  }
+
+  if (children.length == 0) {
+    dst.children = null;
+  } else {
+    dst.children = children;
+  }
+
+  return dst;
+}
+
+// Clip tree to the provided limit.
+function shortenTree(tree, limit, tail) {
+  if (tail) {
+    limit -= tail.length;
+  }
+
+  const shortener = function(node) {
+    if (limit == 0) {
+      return null;
+    }
+
+    if (node.att) {
+      // Attachments are unchanged.
+      return node;
+    }
+
+    if (node.text) {
+      const len = node.text.length;
+      if (len > limit) {
+        node.text = node.text.substring(0, limit) + tail;
+        limit = 0;
+      } else {
+        limit -= len;
+      }
+    }
+    return node;
+  }
+
+  return transformTree(tree, shortener);
+}
+
+// Strip heavy entities from a tree.
+function lightEntity(tree) {
+  const lightCopy = function(node) {
+    node.data = copyEntData(node.data, true);
+    return node;
+  }
+  return transformTree(tree, lightCopy);
 }
 
 // Convert drafty document into an array of spans with some
@@ -2126,7 +2267,7 @@ function nodeFormatter(tp, data, content, unused, key) {
 function copyEntData(data, light) {
   if (data && Object.entries(data).length > 0) {
     const dc = {};
-    const fields = ['act', 'mime', 'name', 'width', 'height', 'size', 'url', 'ref'];
+    const fields = ['act', 'height', 'mime', 'name', 'ref', 'size', 'uid', 'url', 'width'];
     if (!light) {
       fields.push('val');
     }

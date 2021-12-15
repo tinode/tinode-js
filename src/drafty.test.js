@@ -93,7 +93,7 @@ test.each(parse_this)('Drafty.parse %s', (src, exp) => {
   expect(Drafty.parse(src)).toEqual(exp);
 });
 
-// Drafty docs for testing Drafty.preview.
+// Drafty docs for testing Drafty.preview and Drafty.normalize.
 const preview_this = [
   [
     "This is a plain text string.",
@@ -105,7 +105,7 @@ const preview_this = [
       "txt":"This is a string.", // Maybe remove extra space.
       "fmt":[{"at":9,"tp":"BR"}]
     },
-    {"txt":"This is a  str…"},
+    {"txt":"This is a stri…","fmt":[{"at":9,len:0,"tp":"BR"}]},
     {"txt":"This is a string.","fmt":[{"at":9,len:0,"tp":"BR"}]},
   ],
   [
@@ -113,7 +113,7 @@ const preview_this = [
       "txt":"This is a string.",
       "fmt":[{"at":true,"tp":"XX","len":{}}]
     },
-    {"txt":"T"},
+    {"txt":"This is a stri…"},
     {"txt":"This is a string."},
   ],
   [
@@ -121,7 +121,7 @@ const preview_this = [
       "txt":"This is a string.",
       "fmt":[{"at":{},"tp":123,"len":null}]
     },
-    {"txt":""},
+    {"txt":"This is a stri…"},
     {"txt":"This is a string."},
   ],
   [
@@ -138,9 +138,9 @@ const preview_this = [
       "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}]
     },
     {
-      "txt": " ",
-      "fmt":[{"at":0,"key":0,"len":1}],
-      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","val":"<38992, bytes: ...>","name":"hello.jpg","width":100}}]
+      "txt": "",
+      "fmt":[{"at":-1,"key":0,"len":0}],
+      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","width":100}}]
     },
     {
       "txt": "",
@@ -154,9 +154,9 @@ const preview_this = [
       "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}]
     },
     {
-      "txt": " ",
-      "fmt":[{"at":0,"key":0,"len":1}],
-      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","val":"<38992, bytes: ...>","name":"hello.jpg","width":100}}]
+      "txt": "",
+      "fmt":[{"at":-1,"key":0,"len":0}],
+      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","width":100}}]
     },
     {
       "txt": "",
@@ -183,9 +183,9 @@ const preview_this = [
       "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}]
     },
     {
-      "txt": " Message with …",
-      "fmt":[{"at":0,"len":1,"key":0},{"at":9,"len":4,"tp":"ST"}],
-      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100}}]
+      "txt": "Message with a…",
+      "fmt":[{"at":8,"len":4,"tp":"ST"},{"at":-1,"len":0,"key":0}],
+      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","width":100}}]
     },
     {
       "txt": "Message with attachment",
@@ -270,7 +270,7 @@ const preview_this = [
     {
       "txt":" ",
       "fmt":[{"at":0,"len":1,"key":0}],
-      "ent":[{"tp":"IM","data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","val":"<38992, bytes: ...>","width":638}}]
+      "ent":[{"tp":"IM","data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","width":638}}]
     },
     {
       "txt":" ",
@@ -327,7 +327,11 @@ const preview_this = [
       "ent":[{"tp":"IM","data":{"mime":"image/jpeg","val":"<1292, bytes: /9j/4AAQSkZJ...rehH5o6D/9k=>","width":25,"height":14,"size":968}},{"tp":"MN","data":{"uid":"usr123abcDE"}}]
     },
     {
-      "txt":"This is a test"
+      "txt":"Alice Johnson …",
+      "fmt":[{"at":0,"len":13,"key":0},{"at":13,"len":1,"tp":"BR"},{"at":0,"len":15,"tp":"QQ"}],
+      "ent":[
+        {"tp":"MN","data":{"uid":"usr123abcDE"}},
+      ]
     },
     {
       "txt":"Alice Johnson    This is a test",
@@ -340,10 +344,14 @@ const preview_this = [
   ],
 ];
 
-test.each(preview_this)('Drafty.normalize %j', (src,_,exp) => {
-  expect(Drafty.normalize(src)).toEqual(exp);
+test.each(preview_this)('Drafty.shorten %j', (src,exp,_) => {
+  expect(Drafty.shorten(src, 15, true)).toEqual(exp);
 });
 
 test.each(preview_this)('Drafty.preview %j', (src,exp,_) => {
-  expect(Drafty.preview(src, 15)).toEqual(exp);
+  // expect(Drafty.preview(src, 15)).toEqual(exp);
+});
+
+test.each(preview_this)('Drafty.normalize %j', (src,_,exp) => {
+  expect(Drafty.normalize(src)).toEqual(exp);
 });
