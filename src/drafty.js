@@ -1183,17 +1183,24 @@ function transform(original, state, formatter, context) {
   return state.drafty;
 }
 
-/**
- * Normalize Drafty document: strip invalid elements and formats.
- * @memberof Drafty
- * @static
- *
- * @param {Drafty|string} original - Drafty object to shorten.
- * @returns new correct Drafty document (could be empty).
- */
-Drafty.normalize = function(original) {
-  return treeToDrafty({}, draftyToTree(original), []);
-}
+/*
+// safely handles circular references
+JSON.safeStringify = (obj, indent = 2) => {
+  let cache = [];
+  const retVal = JSON.stringify(
+    obj,
+    (key, value) =>
+      typeof value === "object" && value !== null
+        ? cache.includes(value)
+          ? undefined // Duplicate reference found, discard key
+          : cache.push(value) && value // Store value in our collection
+        : value,
+    indent
+  );
+  cache = null;
+  return retVal;
+};
+*/
 
 /**
  * Shorten Drafty document making the drafty text no longer than the limit.
@@ -1215,7 +1222,34 @@ Drafty.shorten = function(original, limit, light) {
 }
 
 /**
- * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
+ * Transform Drafty doc for forwarding: strip leading @mention and any leading line breaks or whitespace.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @returns converted Drafty object leaving the original intact.
+ */
+Drafty.forwardedContent = function(original) {
+  let tree = draftyToTree(original);
+  const rmMention = function(node) {
+    if (node.type == 'MN') {
+      if (!node.parent || !node.parent.type) {
+        return null;
+      }
+    }
+    return node;
+  }
+  // Strip leading mention.
+  tree = transformTree(tree, rmMention);
+  // Remove leading whitespace.
+  tree = lTrim(tree);
+  // Convert back to Drafty.
+  return treeToDrafty({}, tree, []);
+}
+
+/**
+ * Shorten Drafty document, strip all entity data leaving just inline styles and entity references,
+ * move all attachments to the end of the document and make them visible.
  * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
  * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
  * @memberof Drafty
@@ -1242,30 +1276,6 @@ Drafty.preview = function(original, length, context, isForwarded) {
   };
 
   return transform(original, state, previewFormatter, context);
-}
-
-/**
- * Transform Drafty doc for forwarding: strip leading @mention.
- * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
- * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
- * @memberof Drafty
- * @static
- *
- * @param {Drafty|string} original - Drafty object to shorten.
- * @param {Object} context - context provided to formatter as <code>this</code>.
- * @returns converted Drafty object leaving the original intact.
- */
-Drafty.forwardedContent = function(original, context) {
-  const state = {
-    // Shortened Drafty document.
-    drafty: Drafty.init(),
-    // Mapping of entity indexes from the original index to the new index.
-    keymap: [],
-    // Indicates whether the mention of the original author of the forwarded
-    // message has been stripped.
-    stripForwardedMention: true
-  };
-  return transform(original, state, forwardedFormatter, context);
 }
 
 /**
@@ -2039,7 +2049,8 @@ function shortenTree(tree, limit, tail) {
   }
 
   const shortener = function(node) {
-    if (limit == 0) {
+    if (limit == -1) {
+      // Limit -1 means the doc was already clipped.
       return null;
     }
 
@@ -2047,12 +2058,14 @@ function shortenTree(tree, limit, tail) {
       // Attachments are unchanged.
       return node;
     }
-
-    if (node.text) {
+    if (limit == 0) {
+      node.text = tail;
+      limit = -1;
+    } else if (node.text) {
       const len = node.text.length;
       if (len > limit) {
         node.text = node.text.substring(0, limit) + tail;
-        limit = 0;
+        limit = -1;
       } else {
         limit -= len;
       }
@@ -2070,6 +2083,31 @@ function lightEntity(tree) {
     return node;
   }
   return transformTree(tree, lightCopy);
+}
+
+// Remove spaces and breaks on the left.
+function lTrim(tree) {
+  if (tree.type == 'BR') {
+    tree = null;
+  } else if (tree.text) {
+    if (!tree.type) {
+      tree.text = tree.text.trimStart();
+      if (!tree.text) {
+        tree = null;
+      }
+    }
+  } else if (tree.children && tree.children.length > 0) {
+    const c = lTrim(tree.children[0]);
+    if (c) {
+      tree.children[0] = c;
+    } else {
+      tree.children.shift();
+      if (!tree.type && tree.children.length == 0) {
+        tree = null;
+      }
+    }
+  }
+  return tree;
 }
 
 // Convert drafty document into an array of spans with some
@@ -2309,48 +2347,6 @@ function handleStyle(fmt, sp) {
 
   this.drafty.fmt = this.drafty.fmt || [];
   this.drafty.fmt.push(fmt);
-}
-
-// forwardedFormatter converts a tree of formatted spans into a drafty document ready for forwarding.
-function forwardedFormatter(sp, txt, children) {
-  const at = this.drafty.txt.length;
-  if (sp && at == 0) {
-    if (sp.tp == 'EX') {
-      handleStyle.call(this, {
-        at: -1
-      }, sp);
-      return;
-    } else {
-      if (sp.tp == 'MN') {
-        if (this.stripForwardedMention) {
-          this.stripForwardedMention = false;
-          // Skip the first mention (of the author of the originally forwarded message).
-          return;
-        }
-      }
-      if (sp.tp == 'BR') {
-        // Remove any leading line breaks.
-        return;
-      }
-    }
-  }
-
-  if (children) {
-    children.forEach((c) => {
-      forwardedFormatter.call(this, c.sp, c.txt, c.children);
-    });
-  } else if (txt) {
-    this.drafty.txt += txt;
-  }
-  const end = this.drafty.txt.length;
-
-  if (sp) {
-    const fmt = {
-      at: at,
-      len: end - at,
-    };
-    handleStyle.call(this, fmt, sp);
-  }
 }
 
 // previewFormatter converts a tree of formatted spans into a shortened drafty document.
