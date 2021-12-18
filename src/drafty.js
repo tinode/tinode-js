@@ -1157,6 +1157,7 @@ Drafty.format = function(content, formatter, context) {
     context);
 }
 
+/*
 // safely handles circular references
 JSON.safeStringify = (obj, indent = 2) => {
   let cache = [];
@@ -1173,6 +1174,7 @@ JSON.safeStringify = (obj, indent = 2) => {
   cache = null;
   return retVal;
 };
+*/
 
 /**
  * Shorten Drafty document making the drafty text no longer than the limit.
@@ -1269,7 +1271,6 @@ Drafty.preview = function(original, limit) {
   // Convert leading mention to '➦' and replace QQ and BR with a space ' '.
   const convMNnQQnBR = function(node) {
     if (node.type == 'MN') {
-      console.log("MN", JSON.safeStringify(node));
       if ((!node.parent || !node.parent.type) && (node.text || '').startsWith('➦')) {
         node.text = '➦';
         delete node.children;
@@ -1775,7 +1776,7 @@ function draftyToTree(doc) {
       };
     }
 
-    // Handle special case when all values in fmt are 0 and fmt therefore was skipped.
+    // Handle special case when all values in fmt are 0 and fmt therefore is skipped.
     fmt = [{
       at: 0,
       len: 0,
@@ -1869,11 +1870,24 @@ function draftyToTree(doc) {
   });
 
   let tree = spansToTree({}, txt, 0, txt.length, spans);
-  if (Array.isArray(tree.children) && tree.children.length == 1 && !tree.type) {
-    // Unwrap.
-    tree = tree.children[0];
-    delete tree.parent;
+
+  // Flatten tree nodes.
+  const flatten = function(node) {
+    if (Array.isArray(node.children) && node.children.length == 1) {
+      // Unwrap.
+      const child = node.children[0];
+      if (!node.type) {
+        const parent = node.parent;
+        node = child;
+        node.parent = parent;
+      } else if (!child.type && !child.children) {
+        node.text = child.text;
+        delete node.children;
+      }
+    }
+    return node;
   }
+  tree = transformTree(tree, flatten);
 
   return tree;
 }

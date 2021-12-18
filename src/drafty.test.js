@@ -333,7 +333,7 @@ const preview_this = [
     },
     {
       "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
-      "fmt":[{"at":0,"key":0,"len":1},{"at":1,"len":1,"tp":"QQ"}],
+      "fmt":[{"at":0,"key":0,"len":1},{"at":2,"len":1,"tp":"QQ"}],
       "txt":"➦  This is a reply to re…"
     }
   ],
