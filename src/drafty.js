@@ -1269,6 +1269,7 @@ Drafty.preview = function(original, limit) {
   // Convert leading mention to '➦' and replace QQ and BR with a space ' '.
   const convMNnQQnBR = function(node) {
     if (node.type == 'MN') {
+      console.log("MN", JSON.safeStringify(node));
       if ((!node.parent || !node.parent.type) && (node.text || '').startsWith('➦')) {
         node.text = '➦';
         delete node.children;
