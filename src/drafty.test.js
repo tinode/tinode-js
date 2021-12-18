@@ -342,3 +342,33 @@ const preview_this = [
 test.each(preview_this)('Drafty.preview %j', (src,exp) => {
   expect(Drafty.preview(src, 25)).toEqual(exp);
 });
+
+// Drafty docs for testing Drafty.replyContent.
+const reply_this = [
+  [
+    {
+      "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
+      "fmt":[{"len":13},{"at":13,"len":1,"tp":"BR"},{"len":38,"tp":"QQ"}],
+      "txt":"Alice Johnson This is a reply to replyThis is a Reply -> Forward -> Reply."
+    },
+    {
+      "txt":"This is a Reply -> Forwa…"
+    },
+  ],
+  [
+    {
+      "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"},{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
+      "fmt":[{"len":15},{"at":15,"len":1,"tp":"BR"},{"at":16,"key":1,"len":13},{"at":29,"len":1,"tp":"BR"},{"at":16,"len":36,"tp":"QQ"}],
+      "txt":"➦ Alice Johnson Alice Johnson This is a simple replyThis is a reply to reply"
+    },
+    {
+      "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
+      "fmt":[{"at":0,"key":0,"len":1}],
+      "txt":"➦ This is a reply to rep…"
+    }
+  ],
+];
+
+test.each(reply_this)('Drafty.replyContent %j', (src,exp) => {
+  expect(Drafty.replyContent(src, 25)).toEqual(exp);
+});

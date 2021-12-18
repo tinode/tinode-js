@@ -1222,12 +1222,52 @@ Drafty.forwardedContent = function(original) {
 }
 
 /**
+ * Transform Drafty doc for sending it as a reply:
+ *  - Replace forwarding mention with symbol '➦'.
+ *  - Remove quoted text completely.
+ *  - Replace line breaks with spaces.
+ *  - Strip heavy entities of content.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @param {number} limit - length in characters to shorten to.
+ * @returns converted Drafty object leaving the original intact.
+ */
+ Drafty.replyContent = function(original, limit) {
+  let tree = draftyToTree(original);
+  const convMNnQQnBR = function(node) {
+    if (node.type == 'QQ') {
+      return null;
+    } else if (node.type == 'MN') {
+      if ((!node.parent || !node.parent.type) && (node.text || '').startsWith('➦')) {
+        node.text = '➦';
+        delete node.children;
+      }
+    } else if (node.type == 'BR') {
+      node.text = ' ';
+      delete node.type;
+      delete node.children;
+    }
+    return node;
+  }
+  // Strip leading mention.
+  tree = transformTree(tree, convMNnQQnBR);
+  // Shorten the doc.
+  tree = shortenTree(tree, limit, '…');
+  tree = lightEntity(tree);
+  // Convert back to Drafty.
+  return treeToDrafty({}, tree, []);
+}
+
+
+/**
  * Generate drafty previe:
  *  - Shorten the document.
  *  - Strip all heavy entity data leaving just inline styles and entity references.
  *  - Replace line breaks with spaces.
  *  - Replace content of QQ with a space.
- *  - Replace forwarding mendion with symbol '➦'.
+ *  - Replace forwarding mention with symbol '➦'.
  * move all attachments to the end of the document and make them visible.
  * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
  * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
@@ -1288,9 +1328,7 @@ Drafty.preview = function(original, limit) {
   tree = transformTree(tree, convMNnQQnBR);
 
   tree = shortenTree(tree, limit, '…');
-  if (tree) {
-    tree = lightEntity(tree);
-  }
+  tree = lightEntity(tree);
 
   // Convert back to Drafty.
   return treeToDrafty({}, tree, []);
@@ -2048,6 +2086,10 @@ function treeToDrafty(doc, tree, keymap) {
 
 // Transform drafty tree: recursively apply transformer to every tree node top-down.
 function transformTree(src, transformer, context) {
+  if (!src) {
+    return null;
+  }
+
   let dst = transformer.call(context, src);
   if (!dst || !dst.children) {
     return dst;
