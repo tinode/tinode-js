@@ -61,6 +61,7 @@
 
 const MAX_FORM_ELEMENTS = 8;
 const MAX_PREVIEW_ATTACHMENTS = 3;
+const MAX_PREVIEW_DATA_SIZE = 64;
 const JSON_MIME_TYPE = 'application/json';
 const DRAFTY_MIME_TYPE = 'text/x-drafty';
 
@@ -1156,34 +1157,6 @@ Drafty.format = function(content, formatter, context) {
     context);
 }
 
-// Takes in an `original` document (Drafty or string) and transforms it
-// using formatter.
-function transform(original, state, formatter, context) {
-  if (typeof original == 'string') {
-    original = {
-      txt: original
-    };
-  }
-
-  if (!Drafty.isValid(original)) {
-    return null;
-  }
-
-  const spans = iterateSpans(original.txt, 0, (original.txt || '').length,
-    draftyToSpans(original), nodeFormatter, context);
-
-  const tree = (spans && spans.length > 0) ? {
-    children: spans
-  } : null;
-
-  if (tree) {
-    formatter.call(state, tree.sp, tree.txt, tree.children);
-  }
-
-  return state.drafty;
-}
-
-/*
 // safely handles circular references
 JSON.safeStringify = (obj, indent = 2) => {
   let cache = [];
@@ -1200,7 +1173,6 @@ JSON.safeStringify = (obj, indent = 2) => {
   cache = null;
   return retVal;
 };
-*/
 
 /**
  * Shorten Drafty document making the drafty text no longer than the limit.
@@ -1248,7 +1220,12 @@ Drafty.forwardedContent = function(original) {
 }
 
 /**
- * Shorten Drafty document, strip all entity data leaving just inline styles and entity references,
+ * Generate drafty previe:
+ *  - Shorten the document.
+ *  - Strip all heavy entity data leaving just inline styles and entity references.
+ *  - Replace line breaks with spaces.
+ *  - Replace content of QQ with a space.
+ *  - Replace forwarding mendion with symbol '➦'.
  * move all attachments to the end of the document and make them visible.
  * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
  * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
@@ -1256,26 +1233,65 @@ Drafty.forwardedContent = function(original) {
  * @static
  *
  * @param {Drafty|string} original - Drafty object to shorten.
- * @param {number} length - length in characters to shorten to.
- * @param {Object} context - context provided to formatter as <code>this</code>.
- * @params {Boolean} isForwarded - indicates whether original is a forwarded message.
+ * @param {number} limit - length in characters to shorten to.
  * @returns new shortened Drafty object leaving the original intact.
  */
-Drafty.preview = function(original, length, context, isForwarded) {
-  const state = {
-    // Shortened Drafty document.
-    drafty: Drafty.init(),
-    // Maximum length of the document.
-    maxLength: length,
-    // Mapping of entity indexes from the original index to the new index.
-    keymap: [],
-    // Count of attachments (no more than MAX_PREVIEW_ATTACHMENTS are allowed).
-    attCount: 0,
-    // Indicates whether the original author mention should be stripped.
-    stripForwardedMention: isForwarded
-  };
+Drafty.preview = function(original, limit) {
+  let tree = draftyToTree(original);
 
-  return transform(original, state, previewFormatter, context);
+  if (tree.children) {
+    // Move attachments to the end. Attachments must be at the top level, no need to traverse the tree.
+    const attachments = [];
+    const children = [];
+    for (let i in tree.children) {
+      const c = tree.children[i];
+      if (c.att) {
+        if (attachments.length == MAX_PREVIEW_ATTACHMENTS) {
+          // Too many attachments to preview;
+          continue;
+        }
+        if (c.data['mime'] == JSON_MIME_TYPE) {
+          // JSON attachments are not shown in preview.
+          continue;
+        }
+
+        delete c.att;
+        delete c.children;
+        c.text = ' ';
+        attachments.push(c);
+      } else {
+        children.push(c);
+      }
+    }
+    tree.children = children.concat(attachments);
+  }
+
+  // Convert leading mention to '➦' and replace QQ and BR with a space ' '.
+  const convMNnQQnBR = function(node) {
+    if (node.type == 'MN') {
+      if ((!node.parent || !node.parent.type) && (node.text || '').startsWith('➦')) {
+        node.text = '➦';
+        delete node.children;
+      }
+    } else if (node.type == 'QQ') {
+      node.text = ' ';
+      delete node.children;
+    } else if (node.type == 'BR') {
+      node.text = ' ';
+      delete node.children;
+      delete node.type;
+    }
+    return node;
+  }
+  tree = transformTree(tree, convMNnQQnBR);
+
+  tree = shortenTree(tree, limit, '…');
+  if (tree) {
+    tree = lightEntity(tree);
+  }
+
+  // Convert back to Drafty.
+  return treeToDrafty({}, tree, []);
 }
 
 /**
@@ -2079,7 +2095,12 @@ function shortenTree(tree, limit, tail) {
 // Strip heavy entities from a tree.
 function lightEntity(tree) {
   const lightCopy = function(node) {
-    node.data = copyEntData(node.data, true);
+    const data = copyEntData(node.data, true);
+    if (data) {
+      node.data = data;
+    } else {
+      delete node.data;
+    }
     return node;
   }
   return transformTree(tree, lightCopy);
@@ -2305,12 +2326,16 @@ function nodeFormatter(tp, data, content, unused, key) {
 function copyEntData(data, light) {
   if (data && Object.entries(data).length > 0) {
     const dc = {};
-    const fields = ['act', 'height', 'mime', 'name', 'ref', 'size', 'uid', 'url', 'width'];
-    if (!light) {
-      fields.push('val');
-    }
+    const fields = ['act', 'height', 'mime', 'name', 'ref', 'size', 'url', 'val', 'width'];
     fields.forEach((key) => {
       if (data.hasOwnProperty(key)) {
+        if ((typeof data[key] == 'string' || Array.isArray(data[key])) &&
+            data[key].length > MAX_PREVIEW_DATA_SIZE) {
+          return;
+        }
+        if (typeof data[key] == 'object') {
+          return;
+        }
         dc[key] = data[key];
       }
     });
@@ -2320,103 +2345,6 @@ function copyEntData(data, light) {
     }
   }
   return null;
-}
-
-function handleStyle(fmt, sp) {
-  if (sp.data) {
-    this.drafty.ent = this.drafty.ent || [];
-    // Check if we have already seen this payload.
-    let key = this.keymap[sp.key];
-    if (typeof key == 'undefined') {
-      // Seeing payload for the first time, add it.
-      const ent = {
-        tp: sp.tp
-      };
-      const data = copyEntData(sp.data, false);
-      if (data) {
-        ent.data = data;
-      }
-      key = this.drafty.ent.length;
-      this.keymap[sp.key] = key;
-      this.drafty.ent.push(ent);
-    }
-    fmt.key = key;
-  } else {
-    fmt.tp = sp.tp;
-  }
-
-  this.drafty.fmt = this.drafty.fmt || [];
-  this.drafty.fmt.push(fmt);
-}
-
-// previewFormatter converts a tree of formatted spans into a shortened drafty document.
-function previewFormatter(sp, txt, children) {
-  const at = this.drafty.txt.length;
-  if (at >= this.maxLength) {
-    // Maximum doc length reached.
-    return;
-  }
-
-  if (sp) {
-    if (sp.tp == 'MN') {
-      const body = txt ? txt : ((Array.isArray(children) && children.length > 0) ? (children[0].txt || '') : '');
-      if (this.stripForwardedMention && at == 0) {
-        this.stripForwardedMention = false;
-        if (body.startsWith('➦')) {
-          // Replace the mention (of the author of the originally forwarded message).
-          txt = '➦ ';
-        } else {
-          txt = null;
-        }
-        sp = null;
-        children = null;
-      }
-    } else if (sp.tp == 'QQ') {
-      // Skip quoted text
-      return;
-    } else if (sp.tp == 'BR') {
-      // Skip the leading new line.
-      if (at == 0) {
-        return;
-      }
-      txt = ' ';
-      sp = null;
-    } else if (sp.tp == 'EX') {
-      txt = ' ';
-    }
-  }
-
-  if (children) {
-    children.forEach((c) => {
-      previewFormatter.call(this, c.sp, c.txt, c.children);
-    });
-  } else if (txt) {
-    if (at + txt.length >= this.maxLength) {
-      this.drafty.txt += txt.slice(0, this.maxLength - at - 1) + '…';
-    } else {
-      this.drafty.txt += txt;
-    }
-  }
-
-  const end = this.drafty.txt.length;
-
-  if (sp) {
-    const fmt = {
-      at: at,
-      len: end - at,
-    };
-    const tag = HTML_TAGS[sp.tp] || {};
-    if (sp.tp == 'EX') {
-      if (this.attCount >= MAX_PREVIEW_ATTACHMENTS) {
-        return;
-      }
-      this.attCount++;
-    } else if (at >= end && !tag.isVoid) {
-      return;
-    }
-
-    handleStyle.call(this, fmt, sp);
-  }
 }
 
 if (typeof module != 'undefined') {

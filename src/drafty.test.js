@@ -94,7 +94,7 @@ test.each(parse_this)('Drafty.parse %s', (src, exp) => {
 });
 
 // Drafty docs for testing Drafty.preview and Drafty.normalize.
-const preview_this = [
+const shorten_this = [
   [
     "This is a plain text string.",
     {"txt":"This is a plai…"},
@@ -130,7 +130,7 @@ const preview_this = [
   [
     {
       "fmt":[{"at":-1}],
-      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}]
+      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: 123456789012345678901234567890123456789012345678901234567890>","width":100, "height":80},"tp":"EX"}]
     },
     {
       "txt": "",
@@ -141,7 +141,7 @@ const preview_this = [
   [
     {
       "fmt":[{"at":-100,"len":99}],
-      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}]
+      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: 123456789012345678901234567890123456789012345678901234567890>","width":100, "height":80},"tp":"EX"}]
     },
     {
       "txt": "",
@@ -162,7 +162,7 @@ const preview_this = [
     {
       "txt": "Message with attachment",
       "fmt":[{"at":-1,"len":0,"key":0},{"at":8,"len":4,"tp":"ST"}],
-      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: ...>","width":100, "height":80},"tp":"EX"}]
+      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: 123456789012345678901234567890123456789012345678901234567890>","width":100, "height":80},"tp":"EX"}]
     },
     {
       "txt": "Message with a…",
@@ -222,7 +222,7 @@ const preview_this = [
     {
       "txt":" ",
       "fmt":[{"len":1}],
-      "ent":[{"data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","val":"<38992, bytes: ...>","width":638},"tp":"IM"}]
+      "ent":[{"data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","val":"<38992, bytes: 123456789012345678901234567890123456789012345678901234567890>","width":638},"tp":"IM"}]
     },
     {
       "txt":" ",
@@ -264,25 +264,21 @@ const preview_this = [
     {
       "txt":"Alice Johnson    This is a test",
       "fmt":[{"at":13,"len":1,"tp":"BR"},{"at":15,"len":1},{"len":13,"key":1},{"len":16,"tp":"QQ"},{"at":16,"len":1,"tp":"BR"}],
-      "ent":[{"tp":"IM","data":{"mime":"image/jpeg","val":"<1292, bytes: /9j/4AAQSkZJ...rehH5o6D/9k=>","width":25,"height":14,"size":968}},{"tp":"MN","data":{"uid":"usr123abcDE"}}]
+      "ent":[{"tp":"IM","data":{"mime":"image/jpeg","val":"<1292, bytes: /9j/4AAQSkZJ123456789012345678901234567890123456789012345678901234567890rehH5o6D/9k=>","width":25,"height":14,"size":968}},{"tp":"MN","data":{"val":"usr123abcDE"}}]
     },
     {
       "txt":"Alice Johnson …",
       "fmt":[{"at":0,"len":13,"key":0},{"at":13,"len":1,"tp":"BR"},{"at":0,"len":15,"tp":"QQ"}],
       "ent":[
-        {"tp":"MN","data":{"uid":"usr123abcDE"}},
+        {"tp":"MN","data":{"val":"usr123abcDE"}},
       ]
     },
   ],
 ];
 
-test.each(preview_this)('Drafty.shorten %j', (src,exp) => {
+test.each(shorten_this)('Drafty.shorten %j', (src,exp) => {
   expect(Drafty.shorten(src, 15, true)).toEqual(exp);
 });
-
-//test.each(preview_this)('Drafty.preview %j', (src,exp) => {
-  // expect(Drafty.preview(src, 15)).toEqual(exp);
-//});
 
 // Drafty docs for testing Drafty.forwardedContent.
 const forward_this = [
@@ -316,3 +312,33 @@ test.each(forward_this)('Drafty.forwardedContent %j', (src,exp) => {
   expect(Drafty.forwardedContent(src)).toEqual(exp);
 });
 
+// Drafty docs for testing Drafty.preview.
+const preview_this = [
+  [
+    {
+      "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
+      "fmt":[{"len":13},{"at":13,"len":1,"tp":"BR"},{"len":38,"tp":"QQ"}],
+      "txt":"Alice Johnson This is a reply to replyThis is a Reply -> Forward -> Reply."
+    },
+    {
+      "fmt":[{"at":0,"len":1,"tp":"QQ"}],
+      "txt":" This is a Reply -> Forw…"
+    },
+  ],
+  [
+    {
+      "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"},{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
+      "fmt":[{"len":15},{"at":15,"len":1,"tp":"BR"},{"at":16,"key":1,"len":13},{"at":29,"len":1,"tp":"BR"},{"at":16,"len":36,"tp":"QQ"}],
+      "txt":"➦ Alice Johnson Alice Johnson This is a simple replyThis is a reply to reply"
+    },
+    {
+      "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
+      "fmt":[{"at":0,"key":0,"len":1},{"at":1,"len":1,"tp":"QQ"}],
+      "txt":"➦  This is a reply to re…"
+    }
+  ],
+];
+
+test.each(preview_this)('Drafty.preview %j', (src,exp) => {
+  expect(Drafty.preview(src, 25)).toEqual(exp);
+});
