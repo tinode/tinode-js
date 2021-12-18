@@ -1124,7 +1124,7 @@ Drafty.UNSAFE_toHTML = function(content) {
 }
 
 /**
- * Callback for applying custom formatting/transformation to a Drafty document.
+ * Callback for applying custom formatting to a Drafty document.
  * Called once for each style span.
  * @memberof Drafty
  * @static
@@ -1133,7 +1133,7 @@ Drafty.UNSAFE_toHTML = function(content) {
  * @param {string} style - style code such as "ST" or "IM".
  * @param {Object} data - entity's data
  * @param {Object} values - possibly styled subspans contained in this style span.
- * @param {number} index - index of the current element among its siblings.
+ * @param {number} index - index of the element guaranteed to be unique.
  */
 
 /**
@@ -1150,31 +1150,12 @@ Drafty.UNSAFE_toHTML = function(content) {
  * @return {Object} transformed object
  */
 Drafty.format = function(content, formatter, context) {
-  return iterateSpans(content.txt, 0,
-    (content.txt || '').length,
-    draftyToSpans(content),
-    formatter,
-    context);
+  let index = 0;
+  const adapter = function(node) {
+    formatter.call(context, node.type, node.data, node.children, index++);
+  }
+  return transformTree(draftyToTree(original), adapter, context);
 }
-
-/*
-// safely handles circular references
-JSON.safeStringify = (obj, indent = 2) => {
-  let cache = [];
-  const retVal = JSON.stringify(
-    obj,
-    (key, value) =>
-      typeof value === "object" && value !== null
-        ? cache.includes(value)
-          ? undefined // Duplicate reference found, discard key
-          : cache.push(value) && value // Store value in our collection
-        : value,
-    indent
-  );
-  cache = null;
-  return retVal;
-};
-*/
 
 /**
  * Shorten Drafty document making the drafty text no longer than the limit.
@@ -1222,11 +1203,11 @@ Drafty.forwardedContent = function(original) {
 }
 
 /**
- * Transform Drafty doc for sending it as a reply:
+ * Prepare Drafty doc for wrapping into QQ as a reply:
  *  - Replace forwarding mention with symbol '➦'.
  *  - Remove quoted text completely.
  *  - Replace line breaks with spaces.
- *  - Strip heavy entities of content.
+ *  - Strip entities of heavy content.
  * @memberof Drafty
  * @static
  *
@@ -1651,60 +1632,6 @@ function chunkify(line, start, end, spans) {
   }
 
   return chunks;
-}
-
-// Inverse of chunkify: iterates spans bottom-up. Returns a tree of formatted spans.
-function iterateSpans(line, start, end, spans, defaultFormatter, context) {
-  const result = [];
-
-  const attachments = [];
-
-  // Process ranges calling formatter for each range.
-  for (let i = 0; i < spans.length; i++) {
-    const span = spans[i];
-    if (span.at < 0) {
-      attachments.push(span);
-      continue;
-    }
-
-    // Add un-styled range before the styled span starts.
-    if (start < span.at) {
-      result.push(defaultFormatter.call(context, null, undefined, line.slice(start, span.at), result.length));
-      start = span.at;
-    }
-
-    // Get all spans which are within current span.
-    const subspans = [];
-    for (let si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
-      subspans.push(spans[si]);
-      i = si;
-    }
-
-    const tag = HTML_TAGS[span.tp] || {};
-    // Get context formatter.
-    const cformatter = (context && context.getFormatter) ? context.getFormatter(span.tp) : null;
-    result.push(defaultFormatter.call(context, span.tp, span.data,
-      tag.isVoid ? null : iterateSpans(line, start, span.at + span.len, subspans,
-        cformatter || defaultFormatter, context),
-      result.length, span.key));
-
-    start = span.at + span.len;
-  }
-
-  // Add the last unformatted range.
-  if (start < end) {
-    result.push(defaultFormatter.call(context, null, undefined, line.slice(start, end), result.length));
-  }
-
-  // Ask formatter if it wants to do anything with the non-visual spans.
-  attachments.forEach((span) => {
-    const s = defaultFormatter.call(context, span.tp, span.data, undefined, result.length, span.key);
-    if (s) {
-      result.push(s);
-    }
-  });
-
-  return result;
 }
 
 // Detect starts and ends of formatting spans. Unformatted spans are
@@ -2188,109 +2115,6 @@ function lTrim(tree) {
   return tree;
 }
 
-// Convert drafty document into an array of spans with some
-// sanity checks and filled-out defaults.
-function draftyToSpans(doc) {
-  let {
-    txt,
-    fmt,
-    ent
-  } = doc;
-
-  txt = txt || "";
-  if (!Array.isArray(ent)) {
-    ent = [];
-  }
-
-  if (!Array.isArray(fmt)) {
-    if (ent.length == 1) {
-      // Handle special case when all values in fmt are 0 and fmt is skipped.
-      fmt = [{
-        at: 0,
-        len: 0,
-        key: 0
-      }];
-    } else {
-      return [];
-    }
-  }
-
-  const textLen = txt.length;
-
-  let spans = [].concat(fmt);
-  // Zero values may have been stripped. Restore them.
-  // Also ensure indexes and lengths are sane.
-  spans.forEach((s) => {
-    s.at = s.at || 0;
-    if (s.at < -1) {
-      s.at = -1;
-      s.len = 0;
-    }
-    s.len = s.len || 0;
-    if (s.len < 0) {
-      s.len = 0;
-    } else if (s.at > textLen) {
-      s.len = 0;
-    } else if (s.at + s.len > textLen) {
-      s.len = textLen - s.at;
-    }
-  });
-
-  // Denormalize entities into spans. Create a copy of the objects to leave
-  // original Drafty object unchanged.
-  spans = spans.map((s) => {
-    let data;
-    let tp = s.tp;
-    if (!tp) {
-      s.key = s.key || 0;
-      if (ent[s.key]) {
-        data = ent[s.key].data;
-        tp = ent[s.key].tp;
-      }
-    }
-
-    // Type still not defined? Hide invalid element.
-    tp = tp || 'HD';
-
-    return {
-      tp: tp,
-      at: s.at,
-      len: s.len,
-      data: data,
-      key: s.key
-    };
-  });
-
-  // Sort spans first by start index (asc) then by length (desc), then by weight.
-  spans.sort((a, b) => {
-    let diff = a.at - b.at;
-    if (diff != 0) {
-      return diff;
-    }
-    diff = b.len - a.len;
-    if (diff != 0) {
-      return diff;
-    }
-    return FMT_WEIGHT.indexOf(b.tp) - FMT_WEIGHT.indexOf(a.tp);
-  });
-
-  // Drop invalid spans and staggered spans: the second and subsequent
-  // spans when they overlap like '_first *second_ third*'.
-  let end = Number.MIN_SAFE_INTEGER;
-  spans = spans.filter((s) => {
-    if (s.at > textLen) {
-      return false;
-    }
-    if (s.at < end && s.at + s.len > end) {
-      return false;
-    }
-    end = Math.max(s.at + s.len, end);
-    return true;
-  });
-
-  return spans;
-}
-
 // Get a list of entities from a text.
 function extractEntities(line) {
   let match;
@@ -2357,26 +2181,6 @@ function draftify(chunks, startAt) {
 // Splice two strings: insert second string into the first one at the given index
 function splice(src, at, insert) {
   return src.slice(0, at) + insert + src.slice(at);
-}
-
-// A formatter which packs values into a tree node.
-function nodeFormatter(tp, data, content, unused, key) {
-  const node = {};
-  if (tp) {
-    node.sp = {
-      tp: tp
-    };
-    if (data) {
-      node.sp.data = data;
-      node.sp.key = key;
-    }
-  }
-  if (typeof content == 'string') {
-    node.txt = content;
-  } else if (Array.isArray(content)) {
-    node.children = content;
-  }
-  return node;
 }
 
 // Create a copy of entity data with (light=false) or without (light=true) the large payload.
