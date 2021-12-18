@@ -1149,7 +1149,7 @@ Drafty.UNSAFE_toHTML = function(content) {
  *
  * @return {Object} transformed object
  */
-Drafty.format = function(content, formatter, context) {
+Drafty.format = function(original, formatter, context) {
   let index = 0;
   const adapter = function(node) {
     formatter.call(context, node.type, node.data, node.children, index++);
@@ -1215,7 +1215,7 @@ Drafty.forwardedContent = function(original) {
  * @param {number} limit - length in characters to shorten to.
  * @returns converted Drafty object leaving the original intact.
  */
- Drafty.replyContent = function(original, limit) {
+Drafty.replyContent = function(original, limit) {
   let tree = draftyToTree(original);
   const convMNnQQnBR = function(node) {
     if (node.type == 'QQ') {
@@ -2191,7 +2191,7 @@ function copyEntData(data, light) {
     fields.forEach((key) => {
       if (data.hasOwnProperty(key)) {
         if ((typeof data[key] == 'string' || Array.isArray(data[key])) &&
-            data[key].length > MAX_PREVIEW_DATA_SIZE) {
+          data[key].length > MAX_PREVIEW_DATA_SIZE) {
           return;
         }
         if (typeof data[key] == 'object') {
