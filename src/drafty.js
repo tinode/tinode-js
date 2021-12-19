@@ -547,7 +547,7 @@ Drafty.parse = function(content) {
   });
 
   const result = {
-    txt: ""
+    txt: ''
   };
 
   // Merge lines and save line breaks as BR inline formatting.
@@ -600,10 +600,10 @@ Drafty.parse = function(content) {
  * @return {Drafty} first document with the second appended to it.
  */
 Drafty.append = function(first, second) {
-  if (first == null) {
+  if (!first) {
     return second;
   }
-  if (second == null) {
+  if (!second) {
     return first;
   }
 
@@ -672,7 +672,7 @@ Drafty.append = function(first, second) {
  */
 Drafty.insertImage = function(content, at, imageDesc) {
   content = content || {
-    txt: " "
+    txt: ' '
   };
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
@@ -749,10 +749,10 @@ Drafty.quote = function(header, uid, body) {
  */
 Drafty.mention = function(name, uid) {
   return {
-    txt: name || "",
+    txt: name || '',
     fmt: [{
       at: 0,
-      len: (name || "").length,
+      len: (name || '').length,
       key: 0
     }],
     ent: [{
@@ -774,7 +774,7 @@ Drafty.mention = function(name, uid) {
  */
 Drafty.appendLink = function(content, linkData) {
   content = content || {
-    txt: ""
+    txt: ''
   };
 
   content.ent = content.ent || [];
@@ -810,9 +810,9 @@ Drafty.appendLink = function(content, linkData) {
  */
 Drafty.appendImage = function(content, imageDesc) {
   content = content || {
-    txt: ""
+    txt: ''
   };
-  content.txt += " ";
+  content.txt += ' ';
   return Drafty.insertImage(content, content.txt.length - 1, imageDesc);
 }
 
@@ -840,7 +840,7 @@ Drafty.appendImage = function(content, imageDesc) {
  */
 Drafty.attachFile = function(content, attachmentDesc) {
   content = content || {
-    txt: ""
+    txt: ''
   };
 
   content.ent = content.ent || [];
@@ -996,7 +996,7 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue, 
  */
 Drafty.appendButton = function(content, title, name, actionType, actionValue, refUrl) {
   content = content || {
-    txt: ""
+    txt: ''
   };
   const at = content.txt.length;
   content.txt += title;
@@ -1016,7 +1016,7 @@ Drafty.appendButton = function(content, title, name, actionType, actionValue, re
  */
 Drafty.attachJSON = function(content, data) {
   content = content || {
-    txt: ""
+    txt: ''
   };
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
@@ -1047,7 +1047,7 @@ Drafty.attachJSON = function(content, data) {
  */
 Drafty.appendLineBreak = function(content) {
   content = content || {
-    txt: ""
+    txt: ''
   };
   content.fmt = content.fmt || [];
   content.fmt.push({
@@ -1055,7 +1055,7 @@ Drafty.appendLineBreak = function(content) {
     len: 1,
     tp: 'BR'
   });
-  content.txt += " ";
+  content.txt += ' ';
 
   return content;
 }
@@ -2134,7 +2134,7 @@ function extractEntities(line) {
 
 // Convert the chunks into format suitable for serialization.
 function draftify(chunks, startAt) {
-  let plain = "";
+  let plain = '';
   let ranges = [];
   for (let i in chunks) {
     const chunk = chunks[i];
