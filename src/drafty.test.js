@@ -362,10 +362,32 @@ const reply_this = [
       "txt":"➦ Alice Johnson Alice Johnson This is a simple replyThis is a reply to reply"
     },
     {
-      "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
-      "fmt":[{"at":0,"key":0,"len":1}],
+      "fmt":[{"at":0,"tp":"MN","len":1}],
       "txt":"➦ This is a reply to rep…"
     }
+  ],
+  [
+    {
+      "txt": "Message with attachment",
+      "fmt":[{"at":-1,"len":0,"key":0},{"at":8,"len":4,"tp":"ST"}],
+      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: 123456789012345678901234567890123456789012345678901234567890>","width":100, "height":80},"tp":"EX"}]
+    },
+    {
+      "txt": "Message with attachment ",
+      "fmt":[{"at":8,"len":4,"tp":"ST"},{"at":23,"len":1,"key":0}],
+      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","width":100, "height":80},"tp":"EX"}]
+    }
+  ],
+  [
+    {
+      "fmt":[{"at":-1}],
+      "ent":[{"data":{"mime":"image/jpeg","name":"hello.jpg","val":"<38992, bytes: 123456789012345678901234567890123456789012345678901234567890>","width":100, "height":80},"tp":"EX"}]
+    },
+    {
+      "txt": " ",
+      "fmt":[{"at":0,"key":0,"len":1}],
+      "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","width":100}}]
+    },
   ],
 ];
 

@@ -1194,9 +1194,7 @@ Drafty.replyContent = function(original, limit) {
   // Strip leading mention.
   tree = treeTopDown(tree, convMNnQQnBR);
   // Move attachments to the end of the doc.
-  if (tree.children) {
-    tree = attachmentsToEnd(tree, MAX_PREVIEW_ATTACHMENTS);
-  }
+  tree = attachmentsToEnd(tree, MAX_PREVIEW_ATTACHMENTS);
   // Shorten the doc.
   tree = shortenTree(tree, limit, '…');
   tree = lightEntity(tree);
@@ -1226,9 +1224,7 @@ Drafty.preview = function(original, limit) {
   let tree = draftyToTree(original);
 
   // Move attachments to the end.
-  if (tree.children) {
-    tree = attachmentsToEnd(tree, MAX_PREVIEW_ATTACHMENTS);
-  }
+  tree = attachmentsToEnd(tree, MAX_PREVIEW_ATTACHMENTS);
 
   // Convert leading mention to '➦' and replace QQ and BR with a space ' '.
   const convMNnQQnBR = function(node) {
@@ -2087,29 +2083,35 @@ function lTrim(tree) {
 
 // Move attachments to the end. Attachments must be at the top level, no need to traverse the tree.
 function attachmentsToEnd(tree, limit) {
-  const attachments = [];
-  const children = [];
-  for (let i in tree.children) {
-    const c = tree.children[i];
-    if (c.att) {
-      if (attachments.length == limit) {
-        // Too many attachments to preview;
-        continue;
-      }
-      if (c.data['mime'] == JSON_MIME_TYPE) {
-        // JSON attachments are not shown in preview.
-        continue;
-      }
+  if (tree.att) {
+    tree.text = ' ';
+    delete tree.att;
+    delete tree.children;
+  } else if (tree.children) {
+    const attachments = [];
+    const children = [];
+    for (let i in tree.children) {
+      const c = tree.children[i];
+      if (c.att) {
+        if (attachments.length == limit) {
+          // Too many attachments to preview;
+          continue;
+        }
+        if (c.data['mime'] == JSON_MIME_TYPE) {
+          // JSON attachments are not shown in preview.
+          continue;
+        }
 
-      delete c.att;
-      delete c.children;
-      c.text = ' ';
-      attachments.push(c);
-    } else {
-      children.push(c);
+        delete c.att;
+        delete c.children;
+        c.text = ' ';
+        attachments.push(c);
+      } else {
+        children.push(c);
+      }
     }
+    tree.children = children.concat(attachments);
   }
-  tree.children = children.concat(attachments);
   return tree;
 }
 
