@@ -2018,7 +2018,11 @@ function treeBottomUp(src, formatter, index, context) {
     }
   }
   if (values.length == 0) {
-    values = [src.text];
+    if (src.text) {
+      values = [src.text];
+    } else {
+      values = null;
+    }
   }
 
   return formatter.call(context, src.type, src.data, values, index);
