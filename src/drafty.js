@@ -1165,6 +1165,7 @@ Drafty.forwardedContent = function(original) {
  *  - Remove quoted text completely.
  *  - Replace line breaks with spaces.
  *  - Strip entities of heavy content.
+ *  - Move attachments to the end of the document.
  * @memberof Drafty
  * @static
  *
@@ -1191,6 +1192,10 @@ Drafty.replyContent = function(original, limit) {
   }
   // Strip leading mention.
   tree = treeTopDown(tree, convMNnQQnBR);
+  // Move attachments to the end of the doc.
+  if (tree.children) {
+    tree = attachmentsToEnd(tree, MAX_PREVIEW_ATTACHMENTS);
+  }
   // Shorten the doc.
   tree = shortenTree(tree, limit, '…');
   tree = lightEntity(tree);
@@ -1219,31 +1224,9 @@ Drafty.replyContent = function(original, limit) {
 Drafty.preview = function(original, limit) {
   let tree = draftyToTree(original);
 
+  // Move attachments to the end.
   if (tree.children) {
-    // Move attachments to the end. Attachments must be at the top level, no need to traverse the tree.
-    const attachments = [];
-    const children = [];
-    for (let i in tree.children) {
-      const c = tree.children[i];
-      if (c.att) {
-        if (attachments.length == MAX_PREVIEW_ATTACHMENTS) {
-          // Too many attachments to preview;
-          continue;
-        }
-        if (c.data['mime'] == JSON_MIME_TYPE) {
-          // JSON attachments are not shown in preview.
-          continue;
-        }
-
-        delete c.att;
-        delete c.children;
-        c.text = ' ';
-        attachments.push(c);
-      } else {
-        children.push(c);
-      }
-    }
-    tree.children = children.concat(attachments);
+    tree = attachmentsToEnd(tree, MAX_PREVIEW_ATTACHMENTS);
   }
 
   // Convert leading mention to '➦' and replace QQ and BR with a space ' '.
@@ -2098,6 +2081,34 @@ function lTrim(tree) {
       }
     }
   }
+  return tree;
+}
+
+// Move attachments to the end. Attachments must be at the top level, no need to traverse the tree.
+function attachmentsToEnd(tree, limit) {
+  const attachments = [];
+  const children = [];
+  for (let i in tree.children) {
+    const c = tree.children[i];
+    if (c.att) {
+      if (attachments.length == limit) {
+        // Too many attachments to preview;
+        continue;
+      }
+      if (c.data['mime'] == JSON_MIME_TYPE) {
+        // JSON attachments are not shown in preview.
+        continue;
+      }
+
+      delete c.att;
+      delete c.children;
+      c.text = ' ';
+      attachments.push(c);
+    } else {
+      children.push(c);
+    }
+  }
+  tree.children = children.concat(attachments);
   return tree;
 }
 
