@@ -1161,7 +1161,7 @@ Drafty.forwardedContent = function(original) {
 
 /**
  * Prepare Drafty doc for wrapping into QQ as a reply:
- *  - Replace forwarding mention with symbol '➦'.
+ *  - Replace forwarding mention with symbol '➦' and remove data (UID).
  *  - Remove quoted text completely.
  *  - Replace line breaks with spaces.
  *  - Strip entities of heavy content.
@@ -1182,6 +1182,7 @@ Drafty.replyContent = function(original, limit) {
       if ((!node.parent || !node.parent.type) && (node.text || '').startsWith('➦')) {
         node.text = '➦';
         delete node.children;
+        delete node.data;
       }
     } else if (node.type == 'BR') {
       node.text = ' ';
