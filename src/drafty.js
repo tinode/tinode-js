@@ -1067,60 +1067,21 @@ Drafty.appendLineBreak = function(content) {
  * @memberof Tinode.Drafty
  * @static
  *
- * @param {Drafty} content - document to convert.
+ * @param {Drafty} doc - document to convert.
  *
  * @returns {string} HTML-representation of content.
  */
-Drafty.UNSAFE_toHTML = function(content) {
-  const {
-    txt,
-    fmt,
-    ent
-  } = content;
-
-  const markup = [];
-  if (fmt) {
-    for (let i in fmt) {
-      const range = fmt[i];
-      const at = range.at | 0;
-      let tp = range.tp;
-      let data;
-      if (!tp) {
-        const entity = ent[range.key | 0];
-        if (entity) {
-          tp = entity.tp;
-          data = entity.data;
-        }
-      }
-
-      if (DECORATORS[tp]) {
-        // Because we later sort in descending order, closing markup must come first.
-        // Otherwise zero-length objects will not be represented correctly.
-        markup.push({
-          idx: at + range.len,
-          len: -range.len,
-          what: DECORATORS[tp].close(data)
-        });
-        markup.push({
-          idx: at,
-          len: range.len,
-          what: DECORATORS[tp].open(data)
-        });
-      }
+Drafty.UNSAFE_toHTML = function(doc) {
+  let tree = draftyToTree(doc);
+  const htmlFormatter = function(type, data, values) {
+    const tag = DECORATORS[type];
+    let result = values ? values.join('') : '';
+    if (tag) {
+      result = tag.open(data) + result + tag.close(data);
     }
-  }
-
-  markup.sort((a, b) => {
-    return b.idx == a.idx ? b.len - a.len : b.idx - a.idx; // in descending order
-  });
-
-  for (let i in markup) {
-    if (markup[i].what) {
-      txt = splice(txt, markup[i].idx, markup[i].what);
-    }
-  }
-
-  return txt;
+    return result;
+  };
+  return treeBottomUp(tree, htmlFormatter, 0);
 }
 
 /**
@@ -1131,7 +1092,7 @@ Drafty.UNSAFE_toHTML = function(content) {
  *
  * @callback Formatter
  * @param {string} style - style code such as "ST" or "IM".
- * @param {Object} data - entity's data
+ * @param {Object} data - entity's data.
  * @param {Object} values - possibly styled subspans contained in this style span.
  * @param {number} index - index of the element guaranteed to be unique.
  */
@@ -1144,17 +1105,13 @@ Drafty.UNSAFE_toHTML = function(content) {
  * @static
  *
  * @param {Drafty|Object} content - Drafty document to transform.
- * @param {Formatter} formatter - callback which formats individual elements
- * @param {Object} context - context provided to formatter as <code>this</code> and provide context formatter through <code>getFormatter(style)</code>.
+ * @param {Formatter} formatter - callback which formats individual elements.
+ * @param {Object} context - context provided to formatter as <code>this</code>.
  *
  * @return {Object} transformed object
  */
 Drafty.format = function(original, formatter, context) {
-  let index = 0;
-  const adapter = function(node) {
-    formatter.call(context, node.type, node.data, node.children, index++);
-  }
-  return transformTree(draftyToTree(original), adapter, context);
+  return treeBottomUp(draftyToTree(original), formatter, 0, context);
 }
 
 /**
@@ -1195,7 +1152,7 @@ Drafty.forwardedContent = function(original) {
     return node;
   }
   // Strip leading mention.
-  tree = transformTree(tree, rmMention);
+  tree = treeTopDown(tree, rmMention);
   // Remove leading whitespace.
   tree = lTrim(tree);
   // Convert back to Drafty.
@@ -1233,7 +1190,7 @@ Drafty.replyContent = function(original, limit) {
     return node;
   }
   // Strip leading mention.
-  tree = transformTree(tree, convMNnQQnBR);
+  tree = treeTopDown(tree, convMNnQQnBR);
   // Shorten the doc.
   tree = shortenTree(tree, limit, '…');
   tree = lightEntity(tree);
@@ -1306,7 +1263,7 @@ Drafty.preview = function(original, limit) {
     }
     return node;
   }
-  tree = transformTree(tree, convMNnQQnBR);
+  tree = treeTopDown(tree, convMNnQQnBR);
 
   tree = shortenTree(tree, limit, '…');
   tree = lightEntity(tree);
@@ -1720,6 +1677,10 @@ function toSpanTree(spans) {
 
 // Convert drafty document to a tree.
 function draftyToTree(doc) {
+  if (!doc) {
+    return null;
+  }
+
   doc = (typeof doc == 'string') ? {
     txt: doc
   } : doc;
@@ -1852,7 +1813,7 @@ function draftyToTree(doc) {
     }
     return node;
   }
-  tree = transformTree(tree, flatten);
+  tree = treeTopDown(tree, flatten);
 
   return tree;
 }
@@ -2011,8 +1972,8 @@ function treeToDrafty(doc, tree, keymap) {
   return doc;
 }
 
-// Transform drafty tree: recursively apply transformer to every tree node top-down.
-function transformTree(src, transformer, context) {
+// Traverse the tree top down transforming the nodes: apply transformer to every tree node.
+function treeTopDown(src, transformer, context) {
   if (!src) {
     return null;
   }
@@ -2026,7 +1987,7 @@ function transformTree(src, transformer, context) {
   for (let i in dst.children) {
     let n = dst.children[i];
     if (n) {
-      n = transformTree(n, transformer, context);
+      n = treeTopDown(n, transformer, context);
       if (n) {
         children.push(n);
       }
@@ -2040,6 +2001,27 @@ function transformTree(src, transformer, context) {
   }
 
   return dst;
+}
+
+// Traverse the tree bottom-up: apply formatter to every node.
+// The formatter must maintain its state through context.
+function treeBottomUp(src, formatter, index, context) {
+  if (!src) {
+    return null;
+  }
+
+  let values = [];
+  for (let i in src.children) {
+    const n = treeBottomUp(src.children[i], formatter, i, context);
+    if (n) {
+      values.push(n);
+    }
+  }
+  if (values.length == 0) {
+    values = [src.text];
+  }
+
+  return formatter.call(context, src.type, src.data, values, index);
 }
 
 // Clip tree to the provided limit.
@@ -2073,7 +2055,7 @@ function shortenTree(tree, limit, tail) {
     return node;
   }
 
-  return transformTree(tree, shortener);
+  return treeTopDown(tree, shortener);
 }
 
 // Strip heavy entities from a tree.
@@ -2087,7 +2069,7 @@ function lightEntity(tree) {
     }
     return node;
   }
-  return transformTree(tree, lightCopy);
+  return treeTopDown(tree, lightCopy);
 }
 
 // Remove spaces and breaks on the left.
@@ -2176,11 +2158,6 @@ function draftify(chunks, startAt) {
     txt: plain,
     fmt: ranges
   };
-}
-
-// Splice two strings: insert second string into the first one at the given index
-function splice(src, at, insert) {
-  return src.slice(0, at) + insert + src.slice(at);
 }
 
 // Create a copy of entity data with (light=false) or without (light=true) the large payload.

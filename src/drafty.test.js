@@ -372,3 +372,27 @@ const reply_this = [
 test.each(reply_this)('Drafty.replyContent %j', (src,exp) => {
   expect(Drafty.replyContent(src, 25)).toEqual(exp);
 });
+
+// Drafty docs for testing Drafty.replyContent.
+const format_this = [
+  [
+    {
+      "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
+      "fmt":[{"len":13},{"at":13,"len":1,"tp":"BR"},{"len":38,"tp":"QQ"}],
+      "txt":"Alice Johnson This is a reply to replyThis is a Reply -> Forward -> Reply."
+    },
+    "<div><a href=\"#usrCPvFc6lpAsw\">Alice Johnson</a><br/> This is a reply to reply</div>This is a Reply -> Forward -> Reply.",
+  ],
+  [
+    {
+      "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"},{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
+      "fmt":[{"len":15},{"at":15,"len":1,"tp":"BR"},{"at":16,"key":1,"len":13},{"at":29,"len":1,"tp":"BR"},{"at":16,"len":36,"tp":"QQ"}],
+      "txt":"➦ Alice Johnson Alice Johnson This is a simple replyThis is a reply to reply"
+    },
+    "<a href=\"#usrCPvFc6lpAsw\">➦ Alice Johnson</a><br/> <div><a href=\"#usrCPvFc6lpAsw\">Alice Johnson</a><br/> This is a simple reply</div>This is a reply to reply"
+  ],
+];
+
+test.each(format_this)('Drafty.UNSAFE_toHTML %j', (src,exp) => {
+  expect(Drafty.UNSAFE_toHTML(src)).toEqual(exp);
+});
