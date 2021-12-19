@@ -1111,7 +1111,7 @@ Drafty.UNSAFE_toHTML = function(doc) {
  * @return {Object} transformed object
  */
 Drafty.format = function(original, formatter, context) {
-  return treeBottomUp(draftyToTree(original), formatter, 0, context);
+  return treeBottomUp(draftyToTree(original), formatter, 0, [], context);
 }
 
 /**
@@ -1985,14 +1985,18 @@ function treeTopDown(src, transformer, context) {
 
 // Traverse the tree bottom-up: apply formatter to every node.
 // The formatter must maintain its state through context.
-function treeBottomUp(src, formatter, index, context) {
+function treeBottomUp(src, formatter, index, stack, context) {
   if (!src) {
     return null;
   }
 
+  if (stack && src.type) {
+    stack.push(src.type);
+  }
+
   let values = [];
   for (let i in src.children) {
-    const n = treeBottomUp(src.children[i], formatter, i, context);
+    const n = treeBottomUp(src.children[i], formatter, i, stack, context);
     if (n) {
       values.push(n);
     }
@@ -2005,7 +2009,11 @@ function treeBottomUp(src, formatter, index, context) {
     }
   }
 
-  return formatter.call(context, src.type, src.data, values, index);
+  if (stack && src.type) {
+    stack.pop();
+  }
+
+  return formatter.call(context, src.type, src.data, values, index, stack);
 }
 
 // Clip tree to the provided limit.
