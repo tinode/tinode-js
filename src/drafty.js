@@ -623,8 +623,8 @@ Drafty.append = function(first, second) {
     }
     second.fmt.forEach(src => {
       const fmt = {
-        at: src.at + len,
-        len: src.len
+        at: (src.at | 0) + len,
+        len: src.len | 0
       };
       // Special case for the outside of the normal rendering flow styles.
       if (src.at == -1) {
@@ -678,7 +678,7 @@ Drafty.insertImage = function(content, at, imageDesc) {
   content.fmt = content.fmt || [];
 
   content.fmt.push({
-    at: at,
+    at: at | 0,
     len: 1,
     key: content.ent.length
   });
@@ -963,7 +963,7 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue, 
   content.fmt = content.fmt || [];
 
   content.fmt.push({
-    at: at,
+    at: at | 0,
     len: len,
     key: content.ent.length
   });
