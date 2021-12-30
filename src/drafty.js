@@ -2023,7 +2023,7 @@ function shortenTree(tree, limit, tail) {
   }
 
   const shortener = function(node) {
-    if (limit == -1) {
+    if (limit <= -1) {
       // Limit -1 means the doc was already clipped.
       return null;
     }
@@ -2192,8 +2192,8 @@ function copyEntData(data, light) {
     const dc = {};
     const fields = ['act', 'height', 'mime', 'name', 'ref', 'size', 'url', 'val', 'width'];
     fields.forEach((key) => {
-      if (data.hasOwnProperty(key)) {
-        if ((typeof data[key] == 'string' || Array.isArray(data[key])) &&
+      if (data[key]) {
+        if (light && (typeof data[key] == 'string' || Array.isArray(data[key])) &&
           data[key].length > MAX_PREVIEW_DATA_SIZE) {
           return;
         }
