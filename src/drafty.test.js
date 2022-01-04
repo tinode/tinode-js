@@ -274,6 +274,24 @@ const shorten_this = [
       ]
     },
   ],
+  [
+    {
+      "txt": "a😀c😀d😀e😀f😀g😀h😀i😀j😀k😀l😀m"
+    },
+    {
+      "txt": "a😀c😀d😀e😀f😀g😀h😀…",
+    }
+  ],
+  [
+    {
+      "txt": "😀 b1👩🏽‍✈️b2 smile 123 123 123 123",
+      "fmt":[{"tp":"ST","at":2,"len":8},{"tp":"EM","at":0,"len":20}]
+    },
+    {
+      "txt": "😀 b1👩🏽‍✈️b2 smile 123 1…",
+      "fmt":[{"tp":"ST","at":2,"len":8},{"tp":"EM","at":0,"len":15}]
+    },
+  ]
 ];
 
 test.each(shorten_this)('Drafty.shorten %j', (src,exp) => {
