@@ -407,6 +407,18 @@ const reply_this = [
       "ent":[{"tp":"EX","data":{"height":80,"mime":"image/jpeg","name":"hello.jpg","width":100}}]
     },
   ],
+  [
+    {
+      "txt":" ",
+      "fmt":[{"len":1}],
+      "ent":[{"data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","val":"<38992, bytes: 123456789012345678901234567890123456789012345678901234567890>","width":638},"tp":"IM"}]
+    },
+    {
+      "txt":" ",
+      "fmt":[{"at":0,"len":1,"key":0}],
+      "ent":[{"tp":"IM","data":{"height":213,"mime":"image/jpeg","name":"roses.jpg","val":"<38992, bytes: 123456789012345678901234567890123456789012345678901234567890>","width":638}}]
+    },
+  ],
 ];
 
 test.each(reply_this)('Drafty.replyContent %j', (src,exp) => {

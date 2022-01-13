@@ -1197,7 +1197,16 @@ Drafty.replyContent = function(original, limit) {
   tree = attachmentsToEnd(tree, MAX_PREVIEW_ATTACHMENTS);
   // Shorten the doc.
   tree = shortenTree(tree, limit, '…');
-  tree = lightEntity(tree);
+  // Strip heavy elements except IM.data['val'] (have to keep them to generate previews later).
+  tree = treeTopDown(tree, (node) => {
+    const data = copyEntData(node.data, true, (node.type == 'IM' ? ['val'] : null));
+    if (data) {
+      node.data = data;
+    } else {
+      delete node.data;
+    }
+    return node;
+  });
   // Convert back to Drafty.
   return treeToDrafty({}, tree, []);
 }
@@ -2187,13 +2196,16 @@ function draftify(chunks, startAt) {
 }
 
 // Create a copy of entity data with (light=false) or without (light=true) the large payload.
-function copyEntData(data, light) {
+// The array 'allow' contains a list of fields exempt from stripping.
+function copyEntData(data, light, allow) {
   if (data && Object.entries(data).length > 0) {
+    allow = allow || [];
     const dc = {};
     const fields = ['act', 'height', 'mime', 'name', 'ref', 'size', 'url', 'val', 'width'];
     fields.forEach((key) => {
       if (data[key]) {
-        if (light && (typeof data[key] == 'string' || Array.isArray(data[key])) &&
+        if (light && !allow.includes(key) &&
+          (typeof data[key] == 'string' || Array.isArray(data[key])) &&
           data[key].length > MAX_PREVIEW_DATA_SIZE) {
           return;
         }
