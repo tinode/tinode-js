@@ -64,6 +64,7 @@ const MAX_PREVIEW_ATTACHMENTS = 3;
 const MAX_PREVIEW_DATA_SIZE = 64;
 const JSON_MIME_TYPE = 'application/json';
 const DRAFTY_MIME_TYPE = 'text/x-drafty';
+const ALLOWED_ENT_FIELDS = ['act', 'height', 'mime', 'name', 'ref', 'size', 'url', 'val', 'width'];
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
@@ -1414,6 +1415,31 @@ Drafty.entities = function(content, callback, context) {
 }
 
 /**
+ * Remove unrecognized fields from entity data
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document with entities to enumerate.
+ * @returns content.
+ */
+Drafty.sanitizeEntities = function(content) {
+  if (content && content.ent && content.ent.length > 0) {
+    for (let i in content.ent) {
+      const ent = content.ent[i];
+      if (ent && ent.data) {
+        const data = copyEntData(ent.data);
+        if (data) {
+          content.ent[i].data = data;
+        } else {
+          delete content.ent[i].data;
+        }
+      }
+    }
+  }
+  return content;
+}
+
+/**
  * Given the entity, get URL which can be used for downloading
  * entity data.
  * @memberof Drafty
@@ -2201,8 +2227,7 @@ function copyEntData(data, light, allow) {
   if (data && Object.entries(data).length > 0) {
     allow = allow || [];
     const dc = {};
-    const fields = ['act', 'height', 'mime', 'name', 'ref', 'size', 'url', 'val', 'width'];
-    fields.forEach((key) => {
+    ALLOWED_ENT_FIELDS.forEach((key) => {
       if (data[key]) {
         if (light && !allow.includes(key) &&
           (typeof data[key] == 'string' || Array.isArray(data[key])) &&
