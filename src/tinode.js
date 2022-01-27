@@ -1785,23 +1785,23 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {string} topic - Name of the topic to publish to.
-   * @param {Object} data - Payload to publish.
+   * @param {Object} content - Payload to publish.
    * @param {boolean=} noEcho - If <code>true</code>, tell the server not to echo the message to the original session.
    *
    * @returns {Object} new message which can be sent to the server or otherwise used.
    */
-  createMessage: function(topic, data, noEcho) {
+  createMessage: function(topic, content, noEcho) {
     const pkt = this.initPacket('pub', topic);
 
-    let dft = typeof data == 'string' ? Drafty.parse(data) : data;
+    let dft = typeof content == 'string' ? Drafty.parse(content) : content;
     if (dft && !Drafty.isPlainText(dft)) {
       pkt.pub.head = {
         mime: Drafty.getContentType()
       };
-      data = dft;
+      content = dft;
     }
     pkt.pub.noecho = noEcho;
-    pkt.pub.content = data;
+    pkt.pub.content = content;
 
     return pkt.pub;
   },
@@ -1811,14 +1811,14 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {string} topic - Name of the topic to publish to.
-   * @param {Object} data - Payload to publish.
+   * @param {Object} content - Payload to publish.
    * @param {boolean=} noEcho - If <code>true</code>, tell the server not to echo the message to the original session.
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publish: function(topic, data, noEcho) {
+  publish: function(topic, content, noEcho) {
     return this.publishMessage(
-      this.createMessage(topic, data, noEcho)
+      this.createMessage(topic, content, noEcho)
     );
   },
 
