@@ -769,7 +769,8 @@ const Tinode = function(config, onComplete) {
             'topic': topic,
             'desc': {},
             'sub': {},
-            'tags': []
+            'tags': [],
+            'ephemeral': {}
           }
         };
 
@@ -792,6 +793,17 @@ const Tinode = function(config, onComplete) {
             'topic': topic,
             'what': null, // one of "recv", "read", "kp"
             'seq': undefined // the server-side message id aknowledged as received or read
+          }
+        };
+
+      case 'call':
+        return {
+          'call': {
+            'id': getNextUniqueId(),
+            'topic': topic,
+            //'noecho': false,
+            //'head': null,
+            //'content': {}
           }
         };
 
@@ -974,6 +986,15 @@ const Tinode = function(config, onComplete) {
             // Secondary API - callback
             if (this.onInfoMessage) {
               this.onInfoMessage(pkt.info);
+            }
+          } else if (pkt.tele) {
+            //
+            const topic = cacheGet('topic', pkt.tele.topic);
+            if (topic) {
+              topic._routeTele(pkt.tele);
+            }
+            if (this.onTeleMessage) {
+              this.onTeleMessage(pkt.tele);
             }
           } else {
             this.logger("ERROR: Unknown packet received.");
@@ -1920,7 +1941,7 @@ Tinode.prototype = {
     const what = [];
 
     if (params) {
-      ['desc', 'sub', 'tags', 'cred'].forEach(function(key) {
+      ['desc', 'sub', 'tags', 'cred', 'ephemeral'].forEach(function(key) {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];
@@ -2068,6 +2089,15 @@ Tinode.prototype = {
     const pkt = this.initPacket('note', topicName);
     pkt.note.what = 'kp';
     this.send(pkt);
+  },
+
+  call: function(topicName, seq, what, payload, leaseexp) {
+    const pkt = this.initPacket('call', topicName);
+    pkt.call.seq = seq;
+    pkt.call.what = what;
+    pkt.call.payload = payload;
+    pkt.call.leaseexp = leaseexp;
+    return this.send(pkt, pkt.call.id);
   },
 
   /**
@@ -3067,6 +3097,14 @@ Topic.prototype = {
     }
   },
 
+  call: function(what, seq, payload, leaseexp) {
+    if (!this._subscribed && what != 'ringing' && what != 'hang-up' && what != 'extend-lease') {
+      // Cannot {call} on an inactive topic".
+      return;
+    }
+    return this._tinode.call(this.name, seq, what, payload, leaseexp);
+  },
+
   /**
    * Send a 'recv' receipt. Wrapper for {@link Tinode#noteRecv}.
    * @memberof Tinode.Topic#
@@ -3779,6 +3817,12 @@ Topic.prototype = {
     }
   },
 
+  _routeTele: function(tele) {
+    if (this.onTele) {
+      this.onTele(tele);
+    }
+  },
+
   // Called by Tinode when meta.desc packet is received.
   // Called by 'me' topic on contact update (desc._noForwarding is true).
   _processMetaDesc: function(desc) {
@@ -4264,6 +4308,16 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       }
       if (this.onCredsUpdated) {
         this.onCredsUpdated(this._credentials);
+      }
+    },
+    enumerable: true,
+    configurable: true
+  },
+
+  _routeTele: {
+    value: function(tele) {
+      if (this.onTele) {
+        this.onTele(tele);
       }
     },
     enumerable: true,
