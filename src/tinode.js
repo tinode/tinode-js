@@ -789,24 +789,12 @@ const Tinode = function(config, onComplete) {
       case 'note':
         return {
           'note': {
-            // no id by design
+            // no id by design  (except calls).
             'topic': topic,
-            'what': null, // one of "recv", "read", "kp"
-            'seq': undefined // the server-side message id aknowledged as received or read
+            'what': null, // one of "recv", "read", "kp", "call"
+            'seq': undefined // the server-side message id acknowledged as received or read
           }
         };
-
-      case 'call':
-        return {
-          'call': {
-            'id': getNextUniqueId(),
-            'topic': topic,
-            //'noecho': false,
-            //'head': null,
-            //'content': {}
-          }
-        };
-
       default:
         throw new Error(`Unknown packet type requested: ${type}`);
     }
@@ -2091,13 +2079,17 @@ Tinode.prototype = {
     this.send(pkt);
   },
 
-  call: function(topicName, seq, what, payload, leaseexp) {
-    const pkt = this.initPacket('call', topicName);
-    pkt.call.seq = seq;
-    pkt.call.what = what;
-    pkt.call.payload = payload;
-    pkt.call.leaseexp = leaseexp;
-    return this.send(pkt, pkt.call.id);
+  call: function(topicName, seq, evt, payload) {
+    const pkt = this.initPacket('note', topicName);
+    if (evt != 'hang-up') {
+      pkt.note.id = this.getNextUniqueId();
+    }
+    pkt.note.seq = seq;
+    pkt.note.what = 'call';
+    pkt.note.event = evt;
+    pkt.note.payload = payload;
+    //pkt.call.leaseexp = leaseexp;
+    return this.send(pkt, pkt.note.id);
   },
 
   /**
@@ -3097,12 +3089,12 @@ Topic.prototype = {
     }
   },
 
-  call: function(what, seq, payload, leaseexp) {
-    if (!this._subscribed && what != 'ringing' && what != 'hang-up' && what != 'extend-lease') {
+  call: function(evt, seq, payload) {
+    if (!this._subscribed && evt != 'ringing' && evt != 'hang-up' && evt != 'extend-lease') {
       // Cannot {call} on an inactive topic".
       return;
     }
-    return this._tinode.call(this.name, seq, what, payload, leaseexp);
+    return this._tinode.call(this.name, seq, evt, payload);
   },
 
   /**
