@@ -2,7 +2,7 @@
  * @copyright 2015-2021 Tinode
  * @summary Minimally rich text representation and formatting for Tinode.
  * @license Apache 2.0
- * @version 0.16
+ * @version 0.18
  *
  * @file Basic parser and formatter for very simple text markup. Mostly targeted at
  * mobile use cases similar to Telegram, WhatsApp, and FB Messenger.
@@ -60,7 +60,11 @@
 // non-localizable strings should be single quoted 'non-localized'.
 
 const MAX_FORM_ELEMENTS = 8;
+const MAX_PREVIEW_ATTACHMENTS = 3;
+const MAX_PREVIEW_DATA_SIZE = 64;
 const JSON_MIME_TYPE = 'application/json';
+const DRAFTY_MIME_TYPE = 'text/x-drafty';
+const ALLOWED_ENT_FIELDS = ['act', 'height', 'mime', 'name', 'ref', 'size', 'url', 'val', 'width'];
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
@@ -91,6 +95,9 @@ const INLINE_STYLES = [
   }
 ];
 
+// Relative weights of formatting spans. Greater index in array means greater weight.
+const FMT_WEIGHT = ['QQ'];
+
 // RegExps for entity extraction (RF = reference)
 const ENTITY_TYPES = [
   // URLs
@@ -117,7 +124,7 @@ const ENTITY_TYPES = [
         val: val.slice(1)
       };
     },
-    re: /\B@(\w\w+)/g
+    re: /\B@([\p{L}\p{N}][._\p{L}\p{N}]*[\p{L}\p{N}])/ug
   },
   // Hashtags #hashtag, like metion 2 or more characters.
   {
@@ -128,58 +135,38 @@ const ENTITY_TYPES = [
         val: val.slice(1)
       };
     },
-    re: /\B#(\w\w+)/g
+    re: /\B#([\p{L}\p{N}][._\p{L}\p{N}]*[\p{L}\p{N}])/ug
   }
 ];
 
 // HTML tag name suggestions
 const HTML_TAGS = {
-  ST: {
-    name: 'b',
-    isVoid: false
-  },
-  EM: {
-    name: 'i',
-    isVoid: false
-  },
-  DL: {
-    name: 'del',
-    isVoid: false
-  },
-  CO: {
-    name: 'tt',
+  BN: {
+    name: 'button',
     isVoid: false
   },
   BR: {
     name: 'br',
     isVoid: true
   },
-  LN: {
-    name: 'a',
+  CO: {
+    name: 'tt',
     isVoid: false
   },
-  MN: {
-    name: 'a',
+  DL: {
+    name: 'del',
     isVoid: false
   },
-  HT: {
-    name: 'a',
+  EM: {
+    name: 'i',
     isVoid: false
   },
-  IM: {
-    name: 'img',
+  EX: {
+    name: '',
     isVoid: true
   },
   FM: {
     name: 'div',
-    isVoid: false
-  },
-  RW: {
-    name: 'div',
-    isVoid: false,
-  },
-  BN: {
-    name: 'button',
     isVoid: false
   },
   HD: {
@@ -189,7 +176,35 @@ const HTML_TAGS = {
   HL: {
     name: 'span',
     isVoid: false
-  }
+  },
+  HT: {
+    name: 'a',
+    isVoid: false
+  },
+  IM: {
+    name: 'img',
+    isVoid: false
+  },
+  LN: {
+    name: 'a',
+    isVoid: false
+  },
+  MN: {
+    name: 'a',
+    isVoid: false
+  },
+  RW: {
+    name: 'div',
+    isVoid: false,
+  },
+  QQ: {
+    name: 'div',
+    isVoid: false
+  },
+  ST: {
+    name: 'b',
+    isVoid: false
+  },
 };
 
 // Convert base64-encoded string into Blob.
@@ -300,7 +315,7 @@ const DECORATORS = {
     props: function(data) {
       return data ? {
         href: data.url,
-        target: "_blank"
+        target: '_blank'
       } : null;
     },
   },
@@ -314,7 +329,7 @@ const DECORATORS = {
     },
     props: function(data) {
       return data ? {
-        name: data.val
+        id: data.val
       } : null;
     },
   },
@@ -328,7 +343,7 @@ const DECORATORS = {
     },
     props: function(data) {
       return data ? {
-        name: data.val
+        id: data.val
       } : null;
     },
   },
@@ -371,11 +386,12 @@ const DECORATORS = {
         src: base64toDataUrl(data._tempPreview, data.mime) ||
           data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
         title: data.name,
+        alt: data.name,
         'data-width': data.width,
         'data-height': data.height,
         'data-name': data.name,
         'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
-        'data-mime': data.mime
+        'data-mime': data.mime,
       };
     },
   },
@@ -396,6 +412,19 @@ const DECORATORS = {
     close: function(data) {
       return '</div>';
     }
+  },
+  // Quoted block.
+  QQ: {
+    open: function(data) {
+      return '<div>';
+    },
+    close: function(data) {
+      return '</div>';
+    },
+    props: function(data) {
+      if (!data) return null;
+      return {};
+    },
   }
 };
 
@@ -404,250 +433,29 @@ const DECORATORS = {
  * @class Drafty
  * @constructor
  */
-const Drafty = function() {}
-
-// Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
-// a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
-// ('hello ', (b: 'bold ', (i: 'italic')), ' and ', (s: 'more'), ' world');
-//
-// This is needed in order to clear markup, i.e. 'hello *world*' -> 'hello world' and convert
-// ranges from markup-ed offsets to plain text offsets.
-function chunkify(line, start, end, spans) {
-  const chunks = [];
-
-  if (spans.length == 0) {
-    return [];
-  }
-
-  for (let i in spans) {
-    // Get the next chunk from the queue
-    const span = spans[i];
-
-    // Grab the initial unstyled chunk
-    if (span.start > start) {
-      chunks.push({
-        text: line.slice(start, span.start)
-      });
-    }
-
-    // Grab the styled chunk. It may include subchunks.
-    const chunk = {
-      type: span.type
-    };
-    const chld = chunkify(line, span.start + 1, span.end, span.children);
-    if (chld.length > 0) {
-      chunk.children = chld;
-    } else {
-      chunk.text = span.text;
-    }
-    chunks.push(chunk);
-    start = span.end + 1; // '+1' is to skip the formatting character
-  }
-
-  // Grab the remaining unstyled chunk, after the last span
-  if (start < end) {
-    chunks.push({
-      text: line.slice(start, end)
-    });
-  }
-
-  return chunks;
+const Drafty = function() {
+  this.txt = '';
+  this.fmt = [];
+  this.ent = [];
 }
 
-// Inverse of chunkify. Returns a tree of formatted spans.
-function forEach(line, start, end, spans, formatter, context) {
-  const result = [];
-
-  // Process ranges calling formatter for each range.
-  for (let i = 0; i < spans.length; i++) {
-    const span = spans[i];
-    if (span.at < 0) {
-      // Ask formatter if it wants to do anything with the non-visual span.
-      const s = formatter.call(context, span.tp, span.data, undefined, result.length);
-      if (s) {
-        result.push(s);
-      }
-      continue;
-    }
-    // Add un-styled range before the styled span starts.
-    if (start < span.at) {
-      result.push(formatter.call(context, null, undefined, line.slice(start, span.at), result.length));
-      start = span.at;
-    }
-    // Get all spans which are within current span.
-    const subspans = [];
-    for (let si = i + 1; si < spans.length && spans[si].at < span.at + span.len; si++) {
-      subspans.push(spans[si]);
-      i = si;
-    }
-
-    const tag = HTML_TAGS[span.tp] || {}
-    result.push(formatter.call(context, span.tp, span.data,
-      tag.isVoid ? null : forEach(line, start, span.at + span.len, subspans, formatter, context),
-      result.length));
-
-    start = span.at + span.len;
+/**
+ * Initialize Drafty document to a plain text string.
+ *
+ * @param {String} plainText - string to use as Drafty content.
+ *
+ * @returns new Drafty document or null is plainText is not a string or undefined.
+ */
+Drafty.init = function(plainText) {
+  if (typeof plainText == 'undefined') {
+    plainText = '';
+  } else if (typeof plainText != 'string') {
+    return null;
   }
 
-  // Add the last unformatted range.
-  if (start < end) {
-    result.push(formatter.call(context, null, undefined, line.slice(start, end), result.length));
-  }
-
-  return result;
-}
-
-// Detect starts and ends of formatting spans. Unformatted spans are
-// ignored at this stage.
-function spannify(original, re_start, re_end, type) {
-  const result = [];
-  let index = 0;
-  let line = original.slice(0); // make a copy;
-
-  while (line.length > 0) {
-    // match[0]; // match, like '*abc*'
-    // match[1]; // match captured in parenthesis, like 'abc'
-    // match['index']; // offset where the match started.
-
-    // Find the opening token.
-    const start = re_start.exec(line);
-    if (start == null) {
-      break;
-    }
-
-    // Because javascript RegExp does not support lookbehind, the actual offset may not point
-    // at the markup character. Find it in the matched string.
-    let start_offset = start['index'] + start[0].lastIndexOf(start[1]);
-    // Clip the processed part of the string.
-    line = line.slice(start_offset + 1);
-    // start_offset is an offset within the clipped string. Convert to original index.
-    start_offset += index;
-    // Index now point to the beginning of 'line' within the 'original' string.
-    index = start_offset + 1;
-
-    // Find the matching closing token.
-    const end = re_end ? re_end.exec(line) : null;
-    if (end == null) {
-      break;
-    }
-    let end_offset = end['index'] + end[0].indexOf(end[1]);
-    // Clip the processed part of the string.
-    line = line.slice(end_offset + 1);
-    // Update offsets
-    end_offset += index;
-    // Index now point to the beginning of 'line' within the 'original' string.
-    index = end_offset + 1;
-
-    result.push({
-      text: original.slice(start_offset + 1, end_offset),
-      children: [],
-      start: start_offset,
-      end: end_offset,
-      type: type
-    });
-  }
-
-  return result;
-}
-
-// Convert linear array or spans into a tree representation.
-// Keep standalone and nested spans, throw away partially overlapping spans.
-function toTree(spans) {
-  if (spans.length == 0) {
-    return [];
-  }
-
-  const tree = [spans[0]];
-  let last = spans[0];
-  for (let i = 1; i < spans.length; i++) {
-    // Keep spans which start after the end of the previous span or those which
-    // are complete within the previous span.
-
-    if (spans[i].start > last.end) {
-      // Span is completely outside of the previous span.
-      tree.push(spans[i]);
-      last = spans[i];
-    } else if (spans[i].end < last.end) {
-      // Span is fully inside of the previous span. Push to subnode.
-      last.children.push(spans[i]);
-    }
-    // Span could partially overlap, ignoring it as invalid.
-  }
-
-  // Recursively rearrange the subnodes.
-  for (let i in tree) {
-    tree[i].children = toTree(tree[i].children);
-  }
-
-  return tree;
-}
-
-// Get a list of entities from a text.
-function extractEntities(line) {
-  let match;
-  let extracted = [];
-  ENTITY_TYPES.map(function(entity) {
-    while ((match = entity.re.exec(line)) !== null) {
-      extracted.push({
-        offset: match['index'],
-        len: match[0].length,
-        unique: match[0],
-        data: entity.pack(match[0]),
-        type: entity.name
-      });
-    }
-  });
-
-  if (extracted.length == 0) {
-    return extracted;
-  }
-
-  // Remove entities detected inside other entities, like #hashtag in a URL.
-  extracted.sort(function(a, b) {
-    return a.offset - b.offset;
-  });
-
-  let idx = -1;
-  extracted = extracted.filter(function(el) {
-    const result = (el.offset > idx);
-    idx = el.offset + el.len;
-    return result;
-  });
-
-  return extracted;
-}
-
-// Convert the chunks into format suitable for serialization.
-function draftify(chunks, startAt) {
-  let plain = "";
-  let ranges = [];
-  for (let i in chunks) {
-    const chunk = chunks[i];
-    if (!chunk.text) {
-      const drafty = draftify(chunk.children, plain.length + startAt);
-      chunk.text = drafty.txt;
-      ranges = ranges.concat(drafty.fmt);
-    }
-
-    if (chunk.type) {
-      ranges.push({
-        at: plain.length + startAt,
-        len: chunk.text.length,
-        tp: chunk.type
-      });
-    }
-
-    plain += chunk.text;
-  }
   return {
-    txt: plain,
-    fmt: ranges
+    txt: plainText
   };
-}
-
-// Splice two strings: insert second string into the first one at the given index
-function splice(src, at, insert) {
-  return src.slice(0, at) + insert + src.slice(at);
 }
 
 /**
@@ -673,15 +481,15 @@ Drafty.parse = function(content) {
 
   // Processing lines one by one, hold intermediate result in blx.
   const blx = [];
-  lines.map(function(line) {
+  lines.forEach((line) => {
     let spans = [];
     let entities;
 
     // Find formatted spans in the string.
     // Try to match each style.
-    INLINE_STYLES.map(function(style) {
+    INLINE_STYLES.forEach((tag) => {
       // Each style could be matched multiple times.
-      spans = spans.concat(spannify(line, style.start, style.end, style.name));
+      spans = spans.concat(spannify(line, tag.start, tag.end, tag.name));
     });
 
     let block;
@@ -690,13 +498,14 @@ Drafty.parse = function(content) {
         txt: line
       };
     } else {
-      // Sort spans by style occurence early -> late
-      spans.sort(function(a, b) {
-        return a.start - b.start;
+      // Sort spans by style occurence early -> late, then by length: first long then short.
+      spans.sort((a, b) => {
+        const diff = a.at - b.at;
+        return diff != 0 ? diff : b.end - a.end;
       });
 
-      // Convert an array of possibly overlapping spans into a tree
-      spans = toTree(spans);
+      // Convert an array of possibly overlapping spans into a tree.
+      spans = toSpanTree(spans);
 
       // Build a tree representation of the entire string, not
       // just the formatted parts.
@@ -739,7 +548,7 @@ Drafty.parse = function(content) {
   });
 
   const result = {
-    txt: ""
+    txt: ''
   };
 
   // Merge lines and save line breaks as BR inline formatting.
@@ -757,15 +566,15 @@ Drafty.parse = function(content) {
         at: offset - 1
       });
 
-      result.txt += " " + block.txt;
+      result.txt += ' ' + block.txt;
       if (block.fmt) {
-        result.fmt = result.fmt.concat(block.fmt.map(function(s) {
+        result.fmt = result.fmt.concat(block.fmt.map((s) => {
           s.at += offset;
           return s;
         }));
       }
       if (block.ent) {
-        result.fmt = result.fmt.concat(block.ent.map(function(s) {
+        result.fmt = result.fmt.concat(block.ent.map((s) => {
           s.at += offset;
           return s;
         }));
@@ -784,42 +593,30 @@ Drafty.parse = function(content) {
 }
 
 /**
- * Initialize Drafty document to a plain text string.
- *
- * @param {String} plainText - string to use as Drafty content.
- *
- * @returns new Drafty document or null is plainText is not a string.
- */
-Drafty.init = function(plainText) {
-  if (typeof plainText != 'string') {
-    return null;
-  }
-  return {
-    txt: plainText
-  };
-}
-
-/**
  * Append one Drafty document to another.
  *
  * @param {Drafty} first - Drafty document to append to.
- * @param {Drafty} second - Drafty document being appended.
+ * @param {Drafty|string} second - Drafty document or string being appended.
  *
  * @return {Drafty} first document with the second appended to it.
  */
 Drafty.append = function(first, second) {
-  if (first == null) {
+  if (!first) {
     return second;
   }
-  if (second == null) {
+  if (!second) {
     return first;
   }
 
   first.txt = first.txt || '';
-  second.txt = second.txt || '';
   const len = first.txt.length;
 
-  first.txt += second.txt;
+  if (typeof second == 'string') {
+    first.txt += second;
+  } else if (second.txt) {
+    first.txt += second.txt;
+  }
+
   if (Array.isArray(second.fmt)) {
     first.fmt = first.fmt || [];
     if (Array.isArray(second.ent)) {
@@ -827,9 +624,14 @@ Drafty.append = function(first, second) {
     }
     second.fmt.forEach(src => {
       const fmt = {
-        at: src.at + len,
-        len: src.len
+        at: (src.at | 0) + len,
+        len: src.len | 0
       };
+      // Special case for the outside of the normal rendering flow styles.
+      if (src.at == -1) {
+        fmt.at = -1;
+        fmt.len = 0;
+      }
       if (src.tp) {
         fmt.tp = src.tp;
       } else {
@@ -871,13 +673,13 @@ Drafty.append = function(first, second) {
  */
 Drafty.insertImage = function(content, at, imageDesc) {
   content = content || {
-    txt: " "
+    txt: ' '
   };
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
 
   content.fmt.push({
-    at: at,
+    at: at | 0,
     len: 1,
     key: content.ent.length
   });
@@ -917,6 +719,87 @@ Drafty.insertImage = function(content, at, imageDesc) {
 }
 
 /**
+ * Create a quote to Drafty document.
+ *
+ * @param {string} header - Quote header (title, etc.).
+ * @param {string} uid - UID of the author to mention.
+ * @param {Drafty} body - Body of the quoted message.
+ *
+ * @returns Reply quote Drafty doc with the quote formatting.
+ */
+Drafty.quote = function(header, uid, body) {
+  const quote = Drafty.append(Drafty.appendLineBreak(Drafty.mention(header, uid)), body);
+
+  // Wrap into a quote.
+  quote.fmt.push({
+    at: 0,
+    len: quote.txt.length,
+    tp: 'QQ'
+  });
+
+  return quote;
+}
+
+/**
+ * Create a Drafty document with a mention.
+ *
+ * @param {string} name - mentioned name.
+ * @param {string} uid - mentioned user ID.
+ *
+ * @returns {Drafty} document with the mention.
+ */
+Drafty.mention = function(name, uid) {
+  return {
+    txt: name || '',
+    fmt: [{
+      at: 0,
+      len: (name || '').length,
+      key: 0
+    }],
+    ent: [{
+      tp: 'MN',
+      data: {
+        val: uid
+      }
+    }]
+  };
+}
+
+/**
+ * Append a link to a Drafty document.
+ *
+ * @param {Drafty} content - Drafty document to append link to.
+ * @param {Object} linkData - Link info in format <code>{txt: 'ankor text', url: 'http://...'}</code>.
+ *
+ * @returns {Drafty} the same document as <code>content</code>.
+ */
+Drafty.appendLink = function(content, linkData) {
+  content = content || {
+    txt: ''
+  };
+
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: content.txt.length,
+    len: linkData.txt.length,
+    key: content.ent.length
+  });
+  content.txt += linkData.txt;
+
+  const ex = {
+    tp: 'LN',
+    data: {
+      url: linkData.url
+    }
+  }
+  content.ent.push(ex);
+
+  return content;
+}
+
+/**
  * Append inline image to Drafty document.
  * @memberof Drafty
  * @static
@@ -928,9 +811,9 @@ Drafty.insertImage = function(content, at, imageDesc) {
  */
 Drafty.appendImage = function(content, imageDesc) {
   content = content || {
-    txt: ""
+    txt: ''
   };
-  content.txt += " ";
+  content.txt += ' ';
   return Drafty.insertImage(content, content.txt.length - 1, imageDesc);
 }
 
@@ -958,8 +841,9 @@ Drafty.appendImage = function(content, imageDesc) {
  */
 Drafty.attachFile = function(content, attachmentDesc) {
   content = content || {
-    txt: ""
+    txt: ''
   };
+
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
 
@@ -998,6 +882,35 @@ Drafty.attachFile = function(content, attachmentDesc) {
 }
 
 /**
+ * Wraps drafty document into a simple formatting style.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} content - document or string to wrap into a style.
+ * @param {string} style - two-letter style to wrap into.
+ * @param {number} at - index where the style starts, default 0.
+ * @param {number} len - length of the form content, default all of it.
+ *
+ * @return {Drafty} updated document.
+ */
+Drafty.wrapInto = function(content, style, at, len) {
+  if (typeof content == 'string') {
+    content = {
+      txt: content
+    };
+  }
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: at || 0,
+    len: len || content.txt.length,
+    tp: style,
+  });
+
+  return content;
+}
+
+/**
  * Wraps content into an interactive form.
  * @memberof Drafty
  * @static
@@ -1009,20 +922,7 @@ Drafty.attachFile = function(content, attachmentDesc) {
  * @return {Drafty} updated document.
  */
 Drafty.wrapAsForm = function(content, at, len) {
-  if (typeof content == 'string') {
-    content = {
-      txt: content
-    };
-  }
-  content.fmt = content.fmt || [];
-
-  content.fmt.push({
-    at: at,
-    len: len,
-    tp: 'FM'
-  });
-
-  return content;
+  return Drafty.wrapInto(content, 'FM', at, len);
 }
 
 /**
@@ -1064,7 +964,7 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue, 
   content.fmt = content.fmt || [];
 
   content.fmt.push({
-    at: at,
+    at: at | 0,
     len: len,
     key: content.ent.length
   });
@@ -1097,7 +997,7 @@ Drafty.insertButton = function(content, at, len, name, actionType, actionValue, 
  */
 Drafty.appendButton = function(content, title, name, actionType, actionValue, refUrl) {
   content = content || {
-    txt: ""
+    txt: ''
   };
   const at = content.txt.length;
   content.txt += title;
@@ -1117,7 +1017,7 @@ Drafty.appendButton = function(content, title, name, actionType, actionValue, re
  */
 Drafty.attachJSON = function(content, data) {
   content = content || {
-    txt: ""
+    txt: ''
   };
   content.ent = content.ent || [];
   content.fmt = content.fmt || [];
@@ -1148,7 +1048,7 @@ Drafty.attachJSON = function(content, data) {
  */
 Drafty.appendLineBreak = function(content) {
   content = content || {
-    txt: ""
+    txt: ''
   };
   content.fmt = content.fmt || [];
   content.fmt.push({
@@ -1156,172 +1056,210 @@ Drafty.appendLineBreak = function(content) {
     len: 1,
     tp: 'BR'
   });
-  content.txt += " ";
+  content.txt += ' ';
 
   return content;
 }
 /**
  * Given Drafty document, convert it to HTML.
  * No attempt is made to strip pre-existing html markup.
- * This is potentially unsafe because <code>content.txt</code> may contain malicious
+ * This is potentially unsafe because <code>content.txt</code> may contain malicious HTML
  * markup.
  * @memberof Tinode.Drafty
  * @static
  *
- * @param {Drafy} content - document to convert.
+ * @param {Drafty} doc - document to convert.
  *
  * @returns {string} HTML-representation of content.
  */
-Drafty.UNSAFE_toHTML = function(content) {
-  let {
-    txt,
-    fmt,
-    ent
-  } = content;
-
-  const markup = [];
-  if (fmt) {
-    for (let i in fmt) {
-      const range = fmt[i];
-      const at = range.at | 0;
-      let tp = range.tp;
-      let data;
-      if (!tp) {
-        const entity = ent[range.key | 0];
-        if (entity) {
-          tp = entity.tp;
-          data = entity.data;
-        }
-      }
-
-      if (DECORATORS[tp]) {
-        // Because we later sort in descending order, closing markup must come first.
-        // Otherwise zero-length objects will not be represented correctly.
-        markup.push({
-          idx: at + range.len,
-          len: -range.len,
-          what: DECORATORS[tp].close(data)
-        });
-        markup.push({
-          idx: at,
-          len: range.len,
-          what: DECORATORS[tp].open(data)
-        });
-      }
+Drafty.UNSAFE_toHTML = function(doc) {
+  let tree = draftyToTree(doc);
+  const htmlFormatter = function(type, data, values) {
+    const tag = DECORATORS[type];
+    let result = values ? values.join('') : '';
+    if (tag) {
+      result = tag.open(data) + result + tag.close(data);
     }
-  }
-
-  markup.sort(function(a, b) {
-    return b.idx == a.idx ? b.len - a.len : b.idx - a.idx; // in descending order
-  });
-
-  for (let i in markup) {
-    if (markup[i].what) {
-      txt = splice(txt, markup[i].idx, markup[i].what);
-    }
-  }
-
-  return txt;
+    return result;
+  };
+  return treeBottomUp(tree, htmlFormatter, 0);
 }
 
 /**
- * Callback for applying custom formatting/transformation to a Drafty document.
- * Called once for each syle span.
+ * Callback for applying custom formatting to a Drafty document.
+ * Called once for each style span.
  * @memberof Drafty
  * @static
  *
  * @callback Formatter
  * @param {string} style - style code such as "ST" or "IM".
- * @param {Object} data - entity's data
+ * @param {Object} data - entity's data.
  * @param {Object} values - possibly styled subspans contained in this style span.
- * @param {number} index - of the current element among its siblings.
+ * @param {number} index - index of the element guaranteed to be unique.
  */
 
 /**
- * Transform Drafty document using custom formatting.
+ * Convert Drafty document to a representation suitable for display.
+ * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
+ * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
  * @memberof Drafty
  * @static
  *
- * @param {Drafty} content - content to transform.
- * @param {Formatter} formatter - callback which transforms individual elements
+ * @param {Drafty|Object} content - Drafty document to transform.
+ * @param {Formatter} formatter - callback which formats individual elements.
  * @param {Object} context - context provided to formatter as <code>this</code>.
  *
  * @return {Object} transformed object
  */
-Drafty.format = function(content, formatter, context) {
-  let {
-    txt,
-    fmt,
-    ent
-  } = content;
+Drafty.format = function(original, formatter, context) {
+  return treeBottomUp(draftyToTree(original), formatter, 0, [], context);
+}
 
-  // Assign default values.
-  txt = txt || "";
-  if (!Array.isArray(ent)) {
-    ent = [];
+/**
+ * Shorten Drafty document making the drafty text no longer than the limit.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @param {number} limit - length in characrets to shorten to.
+ * @param {boolean} light - remove heavy data from entities.
+ * @returns new shortened Drafty object leaving the original intact.
+ */
+Drafty.shorten = function(original, limit, light) {
+  let tree = draftyToTree(original);
+  tree = shortenTree(tree, limit, '…');
+  if (tree && light) {
+    tree = lightEntity(tree);
   }
+  return treeToDrafty({}, tree, []);
+}
 
-  if (!Array.isArray(fmt)) {
-    // Handle special case when all values in fmt are 0 and fmt is skipped.
-    if (ent.length == 1) {
-      fmt = [{
-        at: 0,
-        len: 0,
-        key: 0
-      }];
-    } else {
-      return [txt];
-    }
-  }
-
-  let spans = [].concat(fmt);
-
-  // Zero values may have been stripped. Restore them.
-  // Also ensure indexes and lengths are sane.
-  spans.map(function(s) {
-    s.at = s.at || 0;
-    s.len = s.len || 0;
-    if (s.len < 0) {
-      s.len = 0;
-    }
-    if (s.at < -1) {
-      s.at = -1;
-    }
-  });
-
-  // Sort spans first by start index (asc) then by length (desc).
-  spans.sort(function(a, b) {
-    if (a.at - b.at == 0) {
-      return b.len - a.len; // longer one comes first (<0)
-    }
-    return a.at - b.at;
-  });
-
-  // Denormalize entities into spans. Create a copy of the objects to leave
-  // original Drafty object unchanged.
-  spans = spans.map((s) => {
-    let data;
-    let tp = s.tp;
-    if (!tp) {
-      s.key = s.key || 0;
-      if (ent[s.key]) {
-        data = ent[s.key].data;
-        tp = ent[s.key].tp;
+/**
+ * Transform Drafty doc for forwarding: strip leading @mention and any leading line breaks or whitespace.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @returns converted Drafty object leaving the original intact.
+ */
+Drafty.forwardedContent = function(original) {
+  let tree = draftyToTree(original);
+  const rmMention = function(node) {
+    if (node.type == 'MN') {
+      if (!node.parent || !node.parent.type) {
+        return null;
       }
     }
+    return node;
+  }
+  // Strip leading mention.
+  tree = treeTopDown(tree, rmMention);
+  // Remove leading whitespace.
+  tree = lTrim(tree);
+  // Convert back to Drafty.
+  return treeToDrafty({}, tree, []);
+}
 
-    // Type still not defined? Hide invalid element.
-    tp = tp || 'HD';
-
-    return {
-      tp: tp,
-      data: data,
-      at: s.at,
-      len: s.len
-    };
+/**
+ * Prepare Drafty doc for wrapping into QQ as a reply:
+ *  - Replace forwarding mention with symbol '➦' and remove data (UID).
+ *  - Remove quoted text completely.
+ *  - Replace line breaks with spaces.
+ *  - Strip entities of heavy content.
+ *  - Move attachments to the end of the document.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @param {number} limit - length in characters to shorten to.
+ * @returns converted Drafty object leaving the original intact.
+ */
+Drafty.replyContent = function(original, limit) {
+  let tree = draftyToTree(original);
+  const convMNnQQnBR = function(node) {
+    if (node.type == 'QQ') {
+      return null;
+    } else if (node.type == 'MN') {
+      if ((!node.parent || !node.parent.type) && (node.text || '').startsWith('➦')) {
+        node.text = '➦';
+        delete node.children;
+        delete node.data;
+      }
+    } else if (node.type == 'BR') {
+      node.text = ' ';
+      delete node.type;
+      delete node.children;
+    }
+    return node;
+  }
+  // Strip leading mention.
+  tree = treeTopDown(tree, convMNnQQnBR);
+  // Move attachments to the end of the doc.
+  tree = attachmentsToEnd(tree, MAX_PREVIEW_ATTACHMENTS);
+  // Shorten the doc.
+  tree = shortenTree(tree, limit, '…');
+  // Strip heavy elements except IM.data['val'] (have to keep them to generate previews later).
+  tree = treeTopDown(tree, (node) => {
+    const data = copyEntData(node.data, true, (node.type == 'IM' ? ['val'] : null));
+    if (data) {
+      node.data = data;
+    } else {
+      delete node.data;
+    }
+    return node;
   });
+  // Convert back to Drafty.
+  return treeToDrafty({}, tree, []);
+}
 
-  return forEach(txt, 0, txt.length, spans, formatter, context);
+
+/**
+ * Generate drafty previe:
+ *  - Shorten the document.
+ *  - Strip all heavy entity data leaving just inline styles and entity references.
+ *  - Replace line breaks with spaces.
+ *  - Replace content of QQ with a space.
+ *  - Replace forwarding mention with symbol '➦'.
+ * move all attachments to the end of the document and make them visible.
+ * The <code>context</code> may expose a function <code>getFormatter(style)</code>. If it's available
+ * it will call it to obtain a <code>formatter</code> for a subtree of styles under the <code>style</code>.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty|string} original - Drafty object to shorten.
+ * @param {number} limit - length in characters to shorten to.
+ * @returns new shortened Drafty object leaving the original intact.
+ */
+Drafty.preview = function(original, limit) {
+  let tree = draftyToTree(original);
+
+  // Move attachments to the end.
+  tree = attachmentsToEnd(tree, MAX_PREVIEW_ATTACHMENTS);
+
+  // Convert leading mention to '➦' and replace QQ and BR with a space ' '.
+  const convMNnQQnBR = function(node) {
+    if (node.type == 'MN') {
+      if ((!node.parent || !node.parent.type) && (node.text || '').startsWith('➦')) {
+        node.text = '➦';
+        delete node.children;
+      }
+    } else if (node.type == 'QQ') {
+      node.text = ' ';
+      delete node.children;
+    } else if (node.type == 'BR') {
+      node.text = ' ';
+      delete node.children;
+      delete node.type;
+    }
+    return node;
+  }
+  tree = treeTopDown(tree, convMNnQQnBR);
+
+  tree = shortenTree(tree, limit, '…');
+  tree = lightEntity(tree);
+
+  // Convert back to Drafty.
+  return treeToDrafty({}, tree, []);
 }
 
 /**
@@ -1387,7 +1325,8 @@ Drafty.isValid = function(content) {
 }
 
 /**
- * Check if the drafty document has attachments.
+ * Check if the drafty document has attachments: style EX and outside of normal rendering flow,
+ * i.e. <code>at = -1</code>.
  * @memberof Drafty
  * @static
  *
@@ -1395,11 +1334,14 @@ Drafty.isValid = function(content) {
  * @returns <code>true</code> if there are attachments.
  */
 Drafty.hasAttachments = function(content) {
-  if (content.ent && content.ent.length > 0) {
-    for (let i in content.ent) {
-      if (content.ent[i] && content.ent[i].data && content.ent[i].tp == 'EX') {
-        return true;
-      }
+  if (!Array.isArray(content.fmt)) {
+    return false;
+  }
+  for (let i in content.fmt) {
+    const fmt = content.fmt[i];
+    if (fmt && fmt.at < 0) {
+      const ent = content.ent[fmt.key | 0];
+      return ent && ent.tp == 'EX' && ent.data;
     }
   }
   return false;
@@ -1418,7 +1360,7 @@ Drafty.hasAttachments = function(content) {
  */
 
 /**
- * Enumerate attachments.
+ * Enumerate attachments: style EX and outside of normal rendering flow, i.e. <code>at = -1</code>.
  * @memberof Drafty
  * @static
  *
@@ -1427,13 +1369,18 @@ Drafty.hasAttachments = function(content) {
  * @param {Object} context - value of "this" for callback.
  */
 Drafty.attachments = function(content, callback, context) {
-  if (content.ent && content.ent.length > 0) {
-    for (let i in content.ent) {
-      if (content.ent[i] && content.ent[i].tp == 'EX' && content.ent[i].data) {
-        callback.call(context, content.ent[i].data, i, 'EX');
+  if (!Array.isArray(content.fmt)) {
+    return;
+  }
+  let i = 0;
+  content.fmt.forEach(fmt => {
+    if (fmt && fmt.at < 0) {
+      const ent = content.ent[fmt.key | 0];
+      if (ent && ent.tp == 'EX' && ent.data) {
+        callback.call(context, ent.data, i++, 'EX');
       }
     }
-  }
+  });
 }
 
 /**
@@ -1465,6 +1412,31 @@ Drafty.entities = function(content, callback, context) {
       }
     }
   }
+}
+
+/**
+ * Remove unrecognized fields from entity data
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document with entities to enumerate.
+ * @returns content.
+ */
+Drafty.sanitizeEntities = function(content) {
+  if (content && content.ent && content.ent.length > 0) {
+    for (let i in content.ent) {
+      const ent = content.ent[i];
+      if (ent && ent.data) {
+        const data = copyEntData(ent.data);
+        if (data) {
+          content.ent[i].data = data;
+        } else {
+          delete content.ent[i].data;
+        }
+      }
+    }
+  }
+  return content;
 }
 
 /**
@@ -1576,113 +1548,704 @@ Drafty.attrValue = function(style, data) {
  * @memberof Drafty
  * @static
  *
- * @returns {string} HTTP Content-Type "text/x-drafty".
+ * @returns {string} content-Type "text/x-drafty".
  */
 Drafty.getContentType = function() {
-  return 'text/x-drafty';
+  return DRAFTY_MIME_TYPE;
 }
 
-/**
- * Shorten Drafty document and strip all entity data leaving just inline styles and entity references.
- * @memberof Drafty
- * @static
- *
- * @param {Drafty} original - Drafty object to shorten.
- * @param {number} length - length in characters to shorten to.
- * @returns new shortened Drafty object leaving the original intact.
- */
-Drafty.preview = function(original, length) {
-  if (!original || length <= 0 || typeof original != 'object') {
+// =================
+// Utility methods.
+// =================
+
+// Take a string and defined earlier style spans, re-compose them into a tree where each leaf is
+// a same-style (including unstyled) string. I.e. 'hello *bold _italic_* and ~more~ world' ->
+// ('hello ', (b: 'bold ', (i: 'italic')), ' and ', (s: 'more'), ' world');
+//
+// This is needed in order to clear markup, i.e. 'hello *world*' -> 'hello world' and convert
+// ranges from markup-ed offsets to plain text offsets.
+function chunkify(line, start, end, spans) {
+  const chunks = [];
+
+  if (spans.length == 0) {
+    return [];
+  }
+
+  for (let i in spans) {
+    // Get the next chunk from the queue
+    const span = spans[i];
+
+    // Grab the initial unstyled chunk
+    if (span.at > start) {
+      chunks.push({
+        txt: line.slice(start, span.at)
+      });
+    }
+
+    // Grab the styled chunk. It may include subchunks.
+    const chunk = {
+      tp: span.tp
+    };
+    const chld = chunkify(line, span.at + 1, span.end, span.children);
+    if (chld.length > 0) {
+      chunk.children = chld;
+    } else {
+      chunk.txt = span.txt;
+    }
+    chunks.push(chunk);
+    start = span.end + 1; // '+1' is to skip the formatting character
+  }
+
+  // Grab the remaining unstyled chunk, after the last span
+  if (start < end) {
+    chunks.push({
+      txt: line.slice(start, end)
+    });
+  }
+
+  return chunks;
+}
+
+// Detect starts and ends of formatting spans. Unformatted spans are
+// ignored at this stage.
+function spannify(original, re_start, re_end, type) {
+  const result = [];
+  let index = 0;
+  let line = original.slice(0); // make a copy;
+
+  while (line.length > 0) {
+    // match[0]; // match, like '*abc*'
+    // match[1]; // match captured in parenthesis, like 'abc'
+    // match['index']; // offset where the match started.
+
+    // Find the opening token.
+    const start = re_start.exec(line);
+    if (start == null) {
+      break;
+    }
+
+    // Because javascript RegExp does not support lookbehind, the actual offset may not point
+    // at the markup character. Find it in the matched string.
+    let start_offset = start['index'] + start[0].lastIndexOf(start[1]);
+    // Clip the processed part of the string.
+    line = line.slice(start_offset + 1);
+    // start_offset is an offset within the clipped string. Convert to original index.
+    start_offset += index;
+    // Index now point to the beginning of 'line' within the 'original' string.
+    index = start_offset + 1;
+
+    // Find the matching closing token.
+    const end = re_end ? re_end.exec(line) : null;
+    if (end == null) {
+      break;
+    }
+    let end_offset = end['index'] + end[0].indexOf(end[1]);
+    // Clip the processed part of the string.
+    line = line.slice(end_offset + 1);
+    // Update offsets
+    end_offset += index;
+    // Index now points to the beginning of 'line' within the 'original' string.
+    index = end_offset + 1;
+
+    result.push({
+      txt: original.slice(start_offset + 1, end_offset),
+      children: [],
+      at: start_offset,
+      end: end_offset,
+      tp: type
+    });
+  }
+
+  return result;
+}
+
+// Convert linear array or spans into a tree representation.
+// Keep standalone and nested spans, throw away partially overlapping spans.
+function toSpanTree(spans) {
+  if (spans.length == 0) {
+    return [];
+  }
+
+  const tree = [spans[0]];
+  let last = spans[0];
+  for (let i = 1; i < spans.length; i++) {
+    // Keep spans which start after the end of the previous span or those which
+    // are complete within the previous span.
+    if (spans[i].at > last.end) {
+      // Span is completely outside of the previous span.
+      tree.push(spans[i]);
+      last = spans[i];
+    } else if (spans[i].end <= last.end) {
+      // Span is fully inside of the previous span. Push to subnode.
+      last.children.push(spans[i]);
+    }
+    // Span could partially overlap, ignoring it as invalid.
+  }
+
+  // Recursively rearrange the subnodes.
+  for (let i in tree) {
+    tree[i].children = toSpanTree(tree[i].children);
+  }
+
+  return tree;
+}
+
+// Convert drafty document to a tree.
+function draftyToTree(doc) {
+  if (!doc) {
     return null;
   }
 
-  const {
+  doc = (typeof doc == 'string') ? {
+    txt: doc
+  } : doc;
+  let {
     txt,
     fmt,
     ent
-  } = original;
+  } = doc;
 
-  const preview = {
-    txt: ''
-  };
-
-  if (typeof txt == 'string') {
-    preview.txt = txt.substr(0, length);
-  }
-  let len = preview.txt.length;
-
-  if (Array.isArray(fmt) && fmt.length > 0) {
-    // Old key to new key entity mapping.
-    const ent_refs = [];
-    // Count styles which start within the new length of the text and save entity keys as a set.
-    let fmt_count = 0;
-    let ent_count = 0;
-    fmt.forEach((st) => {
-      st.at |= 0;
-      if (st.at < len) {
-        fmt_count++;
-        if (!st.tp) {
-          st.key |= 0;
-          if (!ent_refs[st.key]) {
-            ent_refs[st.key] = ent_count;
-            ent_count++;
-          }
-        }
-      }
-    });
-
-    if (fmt_count == 0) {
-      return preview;
-    }
-
-    // Allocate space for copying styles and entities.
-    preview.fmt = [];
-    if (Array.isArray(ent) && ent_refs.length > 0) {
-      preview.ent = [];
-    }
-
-    // Insertion point for styles.
-    let fmt_idx = 0;
-    fmt.forEach((st) => {
-      if (st.at < len) {
-        const style = {
-          at: st.at,
-          len: st.len | 0
-        };
-        if (st.tp) {
-          style.tp = '' + st.tp;
-        } else if (Array.isArray(ent) && ent.length > st.key && typeof ent_refs[st.key] == 'number') {
-          style.key = ent_refs[st.key];
-          preview.ent[style.key] = copyLight(ent[st.key]);
-        } else {
-          return;
-        }
-        preview.fmt[fmt_idx++] = style;
-      }
-    });
+  txt = txt || '';
+  if (!Array.isArray(ent)) {
+    ent = [];
   }
 
-  return preview;
+  if (!Array.isArray(fmt) || fmt.length == 0) {
+    if (ent.length == 0) {
+      return {
+        text: txt
+      };
+    }
+
+    // Handle special case when all values in fmt are 0 and fmt therefore is skipped.
+    fmt = [{
+      at: 0,
+      len: 0,
+      key: 0
+    }];
+  }
+
+  // Sanitize spans.
+  const spans = [];
+  const attachments = [];
+  fmt.forEach((span) => {
+    if (!['undefined', 'number'].includes(typeof span.at)) {
+      // Present, but non-numeric 'at'.
+      return;
+    }
+    if (!['undefined', 'number'].includes(typeof span.len)) {
+      // Present, but non-numeric 'len'.
+      return;
+    }
+    let at = span.at | 0;
+    let len = span.len | 0;
+    if (len < 0) {
+      // Invalid span length.
+      return;
+    }
+
+    let key = span.key || 0;
+    if (ent.length > 0 && (typeof key != 'number' || key < 0 || key >= ent.length)) {
+      // Invalid key value.
+      return;
+    }
+
+    if (at <= -1) {
+      // Attachment. Store attachments separately.
+      attachments.push({
+        start: -1,
+        end: 0,
+        key: key
+      });
+      return;
+    } else if (at + len > txt.length) {
+      // Span is out of bounds.
+      return;
+    }
+
+    if (!span.tp) {
+      if (ent.length > 0 && (typeof ent[key] == 'object')) {
+        spans.push({
+          start: at,
+          end: at + len,
+          key: key
+        });
+      }
+    } else {
+      spans.push({
+        type: span.tp,
+        start: at,
+        end: at + len
+      });
+    }
+  });
+
+  // Sort spans first by start index (asc) then by length (desc), then by weight.
+  spans.sort((a, b) => {
+    let diff = a.start - b.start;
+    if (diff != 0) {
+      return diff;
+    }
+    diff = b.end - a.end;
+    if (diff != 0) {
+      return diff;
+    }
+    return FMT_WEIGHT.indexOf(b.type) - FMT_WEIGHT.indexOf(a.type);
+  });
+
+  // Move attachments to the end of the list.
+  if (attachments.length > 0) {
+    spans.push(...attachments);
+  }
+
+  spans.forEach((span) => {
+    if (ent.length > 0 && !span.type) {
+      span.type = ent[span.key].tp;
+      span.data = ent[span.key].data;
+    }
+
+    // Is type still undefined? Hide the invalid element!
+    if (!span.type) {
+      span.type = 'HD';
+    }
+  });
+
+  let tree = spansToTree({}, txt, 0, txt.length, spans);
+
+  // Flatten tree nodes.
+  const flatten = function(node) {
+    if (Array.isArray(node.children) && node.children.length == 1) {
+      // Unwrap.
+      const child = node.children[0];
+      if (!node.type) {
+        const parent = node.parent;
+        node = child;
+        node.parent = parent;
+      } else if (!child.type && !child.children) {
+        node.text = child.text;
+        delete node.children;
+      }
+    }
+    return node;
+  }
+  tree = treeTopDown(tree, flatten);
+
+  return tree;
 }
 
-// Create a copy of an entity without large data.
-function copyLight(ent) {
-  let result = {
-    tp: ent.tp
-  };
-  if (ent.data && Object.entries(ent.data).length != 0) {
-    const dc = {};
-    ["mime", "name", "width", "height", "size"].forEach((key) => {
-      const val = ent.data[key];
-      if (val) {
-        dc[key] = val;
-      }
+// Add tree node to a parent tree.
+function addNode(parent, n) {
+  if (!n) {
+    return parent;
+  }
+
+  if (!parent.children) {
+    parent.children = [];
+  }
+
+  // If text is present, move it to a subnode.
+  if (parent.text) {
+    parent.children.push({
+      text: parent.text,
+      parent: parent
     });
-    if (Object.entries(dc).length != 0) {
-      result.data = dc;
+    delete parent.text;
+  }
+
+  n.parent = parent;
+  parent.children.push(n);
+
+  return parent;
+}
+
+// Returns a tree of nodes.
+function spansToTree(parent, text, start, end, spans) {
+  if (!spans || spans.length == 0) {
+    if (start < end) {
+      addNode(parent, {
+        text: text.substring(start, end)
+      });
+    }
+    return parent;
+  }
+
+  // Process subspans.
+  for (let i = 0; i < spans.length; i++) {
+    const span = spans[i];
+    if (span.start < 0 && span.type == 'EX') {
+      addNode(parent, {
+        type: span.type,
+        data: span.data,
+        key: span.key,
+        att: true
+      });
+      continue;
+    }
+
+    // Add un-styled range before the styled span starts.
+    if (start < span.start) {
+      addNode(parent, {
+        text: text.substring(start, span.start)
+      });
+      start = span.start;
+    }
+
+    // Get all spans which are within the current span.
+    const subspans = [];
+    while (i < spans.length - 1) {
+      const inner = spans[i + 1];
+      if (inner.start < 0) {
+        // Attachments are in the end. Stop.
+        break;
+      } else if (inner.start < span.end) {
+        if (inner.end <= span.end) {
+          const tag = HTML_TAGS[inner.tp] || {};
+          if (inner.start < inner.end || tag.isVoid) {
+            // Valid subspan: completely within the current span and
+            // either non-zero length or zero length is acceptable.
+            subspans.push(inner);
+          }
+        }
+        i++;
+        // Overlapping subspans are ignored.
+      } else {
+        // Past the end of the current span. Stop.
+        break;
+      }
+    }
+
+    addNode(parent, spansToTree({
+      type: span.type,
+      data: span.data,
+      key: span.key
+    }, text, start, span.end, subspans));
+    start = span.end;
+  }
+
+  // Add the last unformatted range.
+  if (start < end) {
+    addNode(parent, {
+      text: text.substring(start, end)
+    });
+  }
+
+  return parent;
+}
+
+// Append a tree to a Drafty doc.
+function treeToDrafty(doc, tree, keymap) {
+  if (!tree) {
+    return;
+  }
+
+  doc.txt = doc.txt || '';
+
+  // Checkpoint to measure length of the current tree node.
+  const start = doc.txt.length;
+
+  if (tree.text) {
+    doc.txt += tree.text;
+  } else if (Array.isArray(tree.children)) {
+    tree.children.forEach((c) => {
+      treeToDrafty(doc, c, keymap);
+    });
+  }
+
+  if (tree.type) {
+    const len = doc.txt.length - start;
+    doc.fmt = doc.fmt || [];
+    if (Object.keys(tree.data || {}).length > 0) {
+      doc.ent = doc.ent || [];
+      const newKey = (typeof keymap[tree.key] == 'undefined') ? doc.ent.length : keymap[tree.key];
+      keymap[tree.key] = newKey;
+      doc.ent[newKey] = {
+        tp: tree.type,
+        data: tree.data
+      };
+      if (tree.att) {
+        // Attachment.
+        doc.fmt.push({
+          at: -1,
+          len: 0,
+          key: newKey
+        });
+      } else {
+        doc.fmt.push({
+          at: start,
+          len: len,
+          key: newKey
+        });
+      }
+    } else {
+      doc.fmt.push({
+        tp: tree.type,
+        at: start,
+        len: len
+      });
     }
   }
-  return result;
+  return doc;
+}
+
+// Traverse the tree top down transforming the nodes: apply transformer to every tree node.
+function treeTopDown(src, transformer, context) {
+  if (!src) {
+    return null;
+  }
+
+  let dst = transformer.call(context, src);
+  if (!dst || !dst.children) {
+    return dst;
+  }
+
+  const children = [];
+  for (let i in dst.children) {
+    let n = dst.children[i];
+    if (n) {
+      n = treeTopDown(n, transformer, context);
+      if (n) {
+        children.push(n);
+      }
+    }
+  }
+
+  if (children.length == 0) {
+    dst.children = null;
+  } else {
+    dst.children = children;
+  }
+
+  return dst;
+}
+
+// Traverse the tree bottom-up: apply formatter to every node.
+// The formatter must maintain its state through context.
+function treeBottomUp(src, formatter, index, stack, context) {
+  if (!src) {
+    return null;
+  }
+
+  if (stack && src.type) {
+    stack.push(src.type);
+  }
+
+  let values = [];
+  for (let i in src.children) {
+    const n = treeBottomUp(src.children[i], formatter, i, stack, context);
+    if (n) {
+      values.push(n);
+    }
+  }
+  if (values.length == 0) {
+    if (src.text) {
+      values = [src.text];
+    } else {
+      values = null;
+    }
+  }
+
+  if (stack && src.type) {
+    stack.pop();
+  }
+
+  return formatter.call(context, src.type, src.data, values, index, stack);
+}
+
+// Clip tree to the provided limit.
+function shortenTree(tree, limit, tail) {
+  if (tail) {
+    limit -= tail.length;
+  }
+
+  const shortener = function(node) {
+    if (limit <= -1) {
+      // Limit -1 means the doc was already clipped.
+      return null;
+    }
+
+    if (node.att) {
+      // Attachments are unchanged.
+      return node;
+    }
+    if (limit == 0) {
+      node.text = tail;
+      limit = -1;
+    } else if (node.text) {
+      const len = node.text.length;
+      if (len > limit) {
+        node.text = node.text.substring(0, limit) + tail;
+        limit = -1;
+      } else {
+        limit -= len;
+      }
+    }
+    return node;
+  }
+
+  return treeTopDown(tree, shortener);
+}
+
+// Strip heavy entities from a tree.
+function lightEntity(tree) {
+  const lightCopy = function(node) {
+    const data = copyEntData(node.data, true);
+    if (data) {
+      node.data = data;
+    } else {
+      delete node.data;
+    }
+    return node;
+  }
+  return treeTopDown(tree, lightCopy);
+}
+
+// Remove spaces and breaks on the left.
+function lTrim(tree) {
+  if (tree.type == 'BR') {
+    tree = null;
+  } else if (tree.text) {
+    if (!tree.type) {
+      tree.text = tree.text.trimStart();
+      if (!tree.text) {
+        tree = null;
+      }
+    }
+  } else if (tree.children && tree.children.length > 0) {
+    const c = lTrim(tree.children[0]);
+    if (c) {
+      tree.children[0] = c;
+    } else {
+      tree.children.shift();
+      if (!tree.type && tree.children.length == 0) {
+        tree = null;
+      }
+    }
+  }
+  return tree;
+}
+
+// Move attachments to the end. Attachments must be at the top level, no need to traverse the tree.
+function attachmentsToEnd(tree, limit) {
+  if (tree.att) {
+    tree.text = ' ';
+    delete tree.att;
+    delete tree.children;
+  } else if (tree.children) {
+    const attachments = [];
+    const children = [];
+    for (let i in tree.children) {
+      const c = tree.children[i];
+      if (c.att) {
+        if (attachments.length == limit) {
+          // Too many attachments to preview;
+          continue;
+        }
+        if (c.data['mime'] == JSON_MIME_TYPE) {
+          // JSON attachments are not shown in preview.
+          continue;
+        }
+
+        delete c.att;
+        delete c.children;
+        c.text = ' ';
+        attachments.push(c);
+      } else {
+        children.push(c);
+      }
+    }
+    tree.children = children.concat(attachments);
+  }
+  return tree;
+}
+
+// Get a list of entities from a text.
+function extractEntities(line) {
+  let match;
+  let extracted = [];
+  ENTITY_TYPES.forEach((entity) => {
+    while ((match = entity.re.exec(line)) !== null) {
+      extracted.push({
+        offset: match['index'],
+        len: match[0].length,
+        unique: match[0],
+        data: entity.pack(match[0]),
+        type: entity.name
+      });
+    }
+  });
+
+  if (extracted.length == 0) {
+    return extracted;
+  }
+
+  // Remove entities detected inside other entities, like #hashtag in a URL.
+  extracted.sort((a, b) => {
+    return a.offset - b.offset;
+  });
+
+  let idx = -1;
+  extracted = extracted.filter((el) => {
+    const result = (el.offset > idx);
+    idx = el.offset + el.len;
+    return result;
+  });
+
+  return extracted;
+}
+
+// Convert the chunks into format suitable for serialization.
+function draftify(chunks, startAt) {
+  let plain = '';
+  let ranges = [];
+  for (let i in chunks) {
+    const chunk = chunks[i];
+    if (!chunk.txt) {
+      const drafty = draftify(chunk.children, plain.length + startAt);
+      chunk.txt = drafty.txt;
+      ranges = ranges.concat(drafty.fmt);
+    }
+
+    if (chunk.tp) {
+      ranges.push({
+        at: plain.length + startAt,
+        len: chunk.txt.length,
+        tp: chunk.tp
+      });
+    }
+
+    plain += chunk.txt;
+  }
+  return {
+    txt: plain,
+    fmt: ranges
+  };
+}
+
+// Create a copy of entity data with (light=false) or without (light=true) the large payload.
+// The array 'allow' contains a list of fields exempt from stripping.
+function copyEntData(data, light, allow) {
+  if (data && Object.entries(data).length > 0) {
+    allow = allow || [];
+    const dc = {};
+    ALLOWED_ENT_FIELDS.forEach((key) => {
+      if (data[key]) {
+        if (light && !allow.includes(key) &&
+          (typeof data[key] == 'string' || Array.isArray(data[key])) &&
+          data[key].length > MAX_PREVIEW_DATA_SIZE) {
+          return;
+        }
+        if (typeof data[key] == 'object') {
+          return;
+        }
+        dc[key] = data[key];
+      }
+    });
+
+    if (Object.entries(dc).length != 0) {
+      return dc;
+    }
+  }
+  return null;
 }
 
 if (typeof module != 'undefined') {

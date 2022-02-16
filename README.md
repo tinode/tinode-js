@@ -25,6 +25,7 @@ or while developing as
 * Read [client-side](http://tinode.github.io/js-api/) and [server-side](https://github.com/tinode/chat/blob/master/docs/API.md) API documentation.
 * For support, general questions, discussions post to [https://groups.google.com/d/forum/tinode](https://groups.google.com/d/forum/tinode).
 * For bugs and feature requests [open an issue](https://github.com/tinode/tinode-js/issues/new).
+* Use https://tinode.co/contact for commercial inquiries.
 
 ## Node JS compatibility
 

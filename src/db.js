@@ -5,7 +5,7 @@
  * @copyright 2015-2021 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.17
+ * @version 0.18
  */
 'use strict';
 
@@ -29,7 +29,7 @@ const DB = function(onError, logger) {
 
   // Serializable topic fields.
   const topic_fields = ['created', 'updated', 'deleted', 'read', 'recv', 'seq', 'clear', 'defacs',
-    'creds', 'public', 'private', 'touched'
+    'creds', 'public', 'trusted', 'private', 'touched'
   ];
 
   // Copy values from 'src' to 'dst'. Allocate dst if it's null or undefined.

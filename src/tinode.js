@@ -6,7 +6,7 @@
  * @copyright 2015-2021 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.17
+ * @version 0.18
  *
  * @example
  * <head>
@@ -17,12 +17,15 @@
  *  ...
  * <script>
  *  // Instantiate tinode.
- *  const tinode = new Tinode(APP_NAME, HOST, API_KEY, null, true);
+ *  const tinode = new Tinode(config, () => {
+ *    // Called on init completion.
+ *  });
  *  tinode.enableLogging(true);
- *  // Add logic to handle disconnects.
- *  tinode.onDisconnect = function(err) { ... };
+ *  tinode.onDisconnect = (err) => {
+ *    // Handle disconnect.
+ *  };
  *  // Connect to the server.
- *  tinode.connect().then(() => {
+ *  tinode.connect('https://example.com/').then(() => {
  *    // Connected. Login now.
  *    return tinode.loginBasic(login, password);
  *  }).then((ctrl) => {
@@ -57,8 +60,10 @@ const DBCache = require('./db.js');
 const Drafty = require('./drafty.js');
 const LargeFileHelper = require('./large-file.js');
 const MetaGetBuilder = require('./meta-builder.js');
+
 const {
-  jsonParseHelper
+  jsonParseHelper,
+  isUrlRelative
 } = require('./utils.js');
 
 const package_version = require('../version.json').version;
@@ -278,18 +283,6 @@ function mergeToCache(cache, key, newval, ignore) {
   return cache[key];
 }
 
-function stringToDate(obj) {
-  if (typeof obj.created == 'string') {
-    obj.created = new Date(obj.created);
-  }
-  if (typeof obj.updated == 'string') {
-    obj.updated = new Date(obj.updated);
-  }
-  if (typeof obj.touched == 'string') {
-    obj.touched = new Date(obj.touched);
-  }
-}
-
 // JSON stringify helper - pre-processor for JSON.stringify
 function jsonBuildHelper(key, val) {
   if (val instanceof Date) {
@@ -466,7 +459,7 @@ function getBrowserInfo(ua, product) {
  * @param {boolen} config.persist - Use IndexedDB persistent storage.
  * @param {function} onComplete - callback to call when initialization is completed.
  */
-var Tinode = function(config, onComplete) {
+const Tinode = function(config, onComplete) {
   this._host = config.host;
   this._secure = config.secure;
 
@@ -841,7 +834,7 @@ var Tinode = function(config, onComplete) {
     if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
       this._authToken = {
         token: ctrl.params.token,
-        expires: new Date(ctrl.params.expires)
+        expires: ctrl.params.expires
       };
     } else {
       this._authToken = null;
@@ -1052,14 +1045,6 @@ var Tinode = function(config, onComplete) {
 // Static methods.
 
 /**
- * @typedef Credential
- * @type {object}
- * @property {string} meth - validation method.
- * @property {string} val - value to validate (e.g. email or phone number).
- * @property {string} resp - validation response.
- * @property {Object} params - validation parameters.
- */
-/**
  * Helper method to package account credential.
  *
  * @memberof Tinode
@@ -1210,6 +1195,9 @@ Tinode.getVersion = function() {
 Tinode.setNetworkProviders = function(wsProvider, xhrProvider) {
   WebSocketProvider = wsProvider;
   XHRProvider = xhrProvider;
+
+  Connection.setNetworkProviders(WebSocketProvider, XHRProvider);
+  LargeFileHelper.setNetworkProvider(XHRProvider);
 };
 
 /**
@@ -1220,6 +1208,8 @@ Tinode.setNetworkProviders = function(wsProvider, xhrProvider) {
  */
 Tinode.setDatabaseProvider = function(idbProvider) {
   IndexedDBProvider = idbProvider;
+
+  DBCache.setDatabaseProvider(IndexedDBProvider);
 };
 
 /**
@@ -1379,7 +1369,7 @@ Tinode.prototype = {
    * @returns {string} URL with appended API key and token, if valid token is present.
    */
   authorizeURL: function(url) {
-    if (!url) {
+    if (typeof url != 'string') {
       return url;
     }
 
@@ -1390,7 +1380,7 @@ Tinode.prototype = {
       if (this._apiKey) {
         parsed.searchParams.append('apikey', this._apiKey);
       }
-      if (this._authToken.token) {
+      if (this._authToken && this._authToken.token) {
         parsed.searchParams.append('auth', 'token');
         parsed.searchParams.append('secret', this._authToken.token);
       }
@@ -1407,8 +1397,10 @@ Tinode.prototype = {
    * @property {Tinode.DefAcs=} defacs - Default access parameters for user's <code>me</code> topic.
    * @property {Object=} public - Public application-defined data exposed on <code>me</code> topic.
    * @property {Object=} private - Private application-defined data accessible on <code>me</code> topic.
-   * @property {Array} tags - array of string tags for user discovery.
+   * @property {Object=} trusted - Trusted user data which can be set by a root user only.
+   * @property {Array.<string>} tags - array of string tags for user discovery.
    * @property {string=} token - authentication token to use.
+   * @property {Array.<string>=} attachments - Array of references to out of band attachments used in account description.
    */
   /**
    * @typedef DefAcs
@@ -1442,11 +1434,18 @@ Tinode.prototype = {
       pkt.acc.desc.defacs = params.defacs;
       pkt.acc.desc.public = params.public;
       pkt.acc.desc.private = params.private;
+      pkt.acc.desc.trusted = params.trusted;
 
       pkt.acc.tags = params.tags;
       pkt.acc.cred = params.cred;
 
       pkt.acc.token = params.token;
+
+      if (Array.isArray(params.attachments) && params.attachments.length > 0) {
+        pkt.extra = {
+          attachments: params.attachments.filter(ref => Tinode.isRelativeURL(ref))
+        };
+      }
     }
 
     return this.send(pkt, pkt.acc.id);
@@ -1574,11 +1573,20 @@ Tinode.prototype = {
   },
 
   /**
+   * @typedef Credential
+   * @type {Object}
+   * @property {string} meth - validation method.
+   * @property {string} val - value to validate (e.g. email or phone number).
+   * @property {string} resp - validation response.
+   * @property {Object} params - validation parameters.
+   */
+  /**
    * Authenticate current session.
    * @memberof Tinode#
    *
    * @param {string} scheme - Authentication scheme; <code>"basic"</code> is the only currently supported scheme.
    * @param {string} secret - Authentication secret, assumed to be already base64 encoded.
+   * @param {Credential=} cred - credential confirmation, if required.
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
@@ -1600,6 +1608,8 @@ Tinode.prototype = {
    *
    * @param {string} uname - User name.
    * @param {string} password  - Password.
+   * @param {Credential=} cred - credential confirmation, if required.
+   *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   loginBasic: function(uname, password, cred) {
@@ -1615,6 +1625,8 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {string} token - Token received in response to earlier login.
+   * @param {Credential=} cred - credential confirmation, if required.
+   *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   loginToken: function(token, cred) {
@@ -1673,6 +1685,7 @@ Tinode.prototype = {
    * @memberof Tinode
    * @property {Tinode.SetDesc=} desc - Topic initialization parameters when creating a new topic or a new subscription.
    * @property {Tinode.SetSub=} sub - Subscription initialization parameters.
+   * @property {Array.<string>=} attachments - URLs of out of band attachments used in parameters.
    */
   /**
    * @typedef SetDesc
@@ -1680,7 +1693,8 @@ Tinode.prototype = {
    * @memberof Tinode
    * @property {Tinode.DefAcs=} defacs - Default access mode.
    * @property {Object=} public - Free-form topic description, publically accessible.
-   * @property {Object=} private - Free-form topic descriptionaccessible only to the owner.
+   * @property {Object=} private - Free-form topic description accessible only to the owner.
+   * @property {Object=} trusted - Trusted user data which can be set by a root user only.
    */
   /**
    * @typedef SetSub
@@ -1688,7 +1702,6 @@ Tinode.prototype = {
    * @memberof Tinode
    * @property {string=} user - UID of the user affected by the request. Default (empty) - current user.
    * @property {string=} mode - User access mode, either requested or assigned dependent on context.
-   * @property {Object=} info - Free-form payload to pass to the invited user or topic manager.
    */
   /**
    * Parameters passed to {@link Tinode#subscribe}.
@@ -1724,15 +1737,23 @@ Tinode.prototype = {
       }
 
       if (setParams.desc) {
+        const desc = setParams.desc;
         if (Tinode.isNewGroupTopicName(topicName)) {
           // Full set.desc params are used for new topics only
-          pkt.sub.set.desc = setParams.desc;
-        } else if (Tinode.isP2PTopicName(topicName) && setParams.desc.defacs) {
+          pkt.sub.set.desc = desc;
+        } else if (Tinode.isP2PTopicName(topicName) && desc.defacs) {
           // Use optional default permissions only.
           pkt.sub.set.desc = {
-            defacs: setParams.desc.defacs
+            defacs: desc.defacs
           };
         }
+      }
+
+      // See if external objects were used in topic description.
+      if (Array.isArray(setParams.attachments) && setParams.attachments.length > 0) {
+        pkt.extra = {
+          attachments: setParams.attachments.filter(ref => Tinode.isRelativeURL(ref))
+        };
       }
 
       if (setParams.tags) {
@@ -1764,23 +1785,23 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {string} topic - Name of the topic to publish to.
-   * @param {Object} data - Payload to publish.
+   * @param {Object} content - Payload to publish.
    * @param {boolean=} noEcho - If <code>true</code>, tell the server not to echo the message to the original session.
    *
    * @returns {Object} new message which can be sent to the server or otherwise used.
    */
-  createMessage: function(topic, data, noEcho) {
+  createMessage: function(topic, content, noEcho) {
     const pkt = this.initPacket('pub', topic);
 
-    let dft = typeof data == 'string' ? Drafty.parse(data) : data;
+    let dft = typeof content == 'string' ? Drafty.parse(content) : content;
     if (dft && !Drafty.isPlainText(dft)) {
       pkt.pub.head = {
         mime: Drafty.getContentType()
       };
-      data = dft;
+      content = dft;
     }
     pkt.pub.noecho = noEcho;
-    pkt.pub.content = data;
+    pkt.pub.content = content;
 
     return pkt.pub;
   },
@@ -1790,14 +1811,14 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {string} topic - Name of the topic to publish to.
-   * @param {Object} data - Payload to publish.
+   * @param {Object} content - Payload to publish.
    * @param {boolean=} noEcho - If <code>true</code>, tell the server not to echo the message to the original session.
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publish: function(topic, data, noEcho) {
+  publish: function(topic, content, noEcho) {
     return this.publishMessage(
-      this.createMessage(topic, data, noEcho)
+      this.createMessage(topic, content, noEcho)
     );
   },
 
@@ -1806,18 +1827,25 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {Object} pub - Message to publish.
+   * @param {Array.<string>=} attachments - array of URLs with attachments.
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publishMessage: function(pub) {
+  publishMessage: function(pub, attachments) {
     // Make a shallow copy. Needed in order to clear locally-assigned temp values;
     pub = Object.assign({}, pub);
     pub.seq = undefined;
     pub.from = undefined;
     pub.ts = undefined;
-    return this.send({
-      pub: pub
-    }, pub.id);
+    const msg = {
+      pub: pub,
+    };
+    if (attachments) {
+      msg.extra = {
+        attachments: attachments.filter(ref => Tinode.isRelativeURL(ref))
+      };
+    }
+    return this.send(msg, pub.id);
   },
 
   /**
@@ -1892,12 +1920,18 @@ Tinode.prototype = {
     const what = [];
 
     if (params) {
-      ['desc', 'sub', 'tags', 'cred'].map(function(key) {
+      ['desc', 'sub', 'tags', 'cred'].forEach(function(key) {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];
         }
       });
+
+      if (Array.isArray(params.attachments) && params.attachments.length > 0) {
+        pkt.extra = {
+          attachments: params.attachments.filter(ref => Tinode.isRelativeURL(ref))
+        };
+      }
     }
 
     if (what.length == 0) {
@@ -2067,7 +2101,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    *
    * @param {string} topicName - Name of the topic to check.
-   * @returns {boolean} true if topic is found in cache, false oterwise.
+   * @returns {boolean} true if topic is found in cache, false otherwise.
    */
   isTopicCached: function(topicName) {
     return !!this.cacheGet('topic', topicName);
@@ -2360,10 +2394,12 @@ const Topic = function(name, callbacks) {
   this.touched = new Date(0);
   // Access mode, see AccessMode
   this.acs = new AccessMode(null);
-  // per-topic private data
+  // Per-topic private data (accessible by current user only).
   this.private = null;
-  // per-topic public data
+  // Per-topic public data (accessible by all users).
   this.public = null;
+  // Per-topic system-provided data (accessible by all users).
+  this.trusted = null;
 
   // Locally cached data
   // Subscribed users, for tracking read/recv/msg notifications.
@@ -2524,23 +2560,24 @@ Topic.prototype = {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
     }
 
-    // Update header with attachment and out of band image records.
-    if (Drafty.hasEntities(pub.content) && !pub.head.attachments) {
-      const entities = [];
+    // Extract refereces to attachments and out of band image records.
+    let attachments = null;
+    if (Drafty.hasEntities(pub.content)) {
+      attachments = [];
       Drafty.entities(pub.content, (data) => {
         if (data && data.ref) {
-          entities.push(data.ref);
+          attachments.push(data.ref);
         }
       });
-      if (entities.length > 0) {
-        pub.head.attachments = entities;
+      if (attachments.length == 0) {
+        attachments = null;
       }
     }
 
     // Send data.
     pub._sending = true;
     pub._failed = false;
-    return this._tinode.publishMessage(pub).then((ctrl) => {
+    return this._tinode.publishMessage(pub, attachments).then((ctrl) => {
       pub._sending = false;
       pub.ts = ctrl.ts;
       this.swapMessageId(pub, ctrl.params.seq);
@@ -2876,7 +2913,7 @@ Topic.prototype = {
         this._maxDel = ctrl.params.del;
       }
 
-      ranges.map((r) => {
+      ranges.forEach((r) => {
         if (r.hi) {
           this.flushMessageRange(r.low, r.hi);
         } else {
@@ -3646,7 +3683,7 @@ Topic.prototype = {
 
   // Process presence change message
   _routePres: function(pres) {
-    let user;
+    let user, uid;
     switch (pres.what) {
       case 'del':
         // Delete cached messages.
@@ -3666,8 +3703,16 @@ Topic.prototype = {
         // Attachment to topic is terminated probably due to cluster rehashing.
         this._resetSub();
         break;
+      case 'upd':
+        // A topic subscriber has updated his description.
+        // Issue {get sub} only if the current user has no p2p topics with the updated user (p2p name is not in cache).
+        // Otherwise 'me' will issue a {get desc} request.
+        if (pres.src && !this._tinode.isTopicCached(pres.src)) {
+          this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
+        }
+        break;
       case 'acs':
-        const uid = pres.src || this._tinode.getCurrentUserID();
+        uid = pres.src || this._tinode.getCurrentUserID();
         user = this._users[uid];
         if (!user) {
           // Update for an unknown user: notification of a new subscription.
@@ -3748,8 +3793,6 @@ Topic.prototype = {
 
     // Copy parameters from desc object to this topic.
     mergeObj(this, desc);
-    // Make sure date fields are Date().
-    stringToDate(this);
     // Update persistent cache.
     this._tinode._db.updTopic(this);
 
@@ -3776,8 +3819,6 @@ Topic.prototype = {
       const sub = subs[idx];
 
       // Fill defaults.
-      sub.updated = new Date(sub.updated);
-      sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
       sub.online = !!sub.online;
       // Update timestamp of the most recent subscription update.
       this._lastSubsUpdate = new Date(Math.max(this._lastSubsUpdate, sub.updated));
@@ -3789,7 +3830,7 @@ Topic.prototype = {
         if (this._tinode.isMe(sub.user) && sub.acs) {
           this._processMetaDesc({
             updated: sub.updated,
-            touched: sub.updated,
+            touched: sub.touched,
             acs: sub.acs
           });
         }
@@ -3831,7 +3872,7 @@ Topic.prototype = {
     const topic = this;
     let count = 0;
     if (Array.isArray(delseq)) {
-      delseq.map(function(range) {
+      delseq.forEach(function(range) {
         if (!range.hi) {
           count++;
           topic.flushMessage(range.low);
@@ -3875,6 +3916,7 @@ Topic.prototype = {
     this.acs = new AccessMode(null);
     this.private = null;
     this.public = null;
+    this.trusted = null;
     this._maxSeq = 0;
     this._minSeq = 0;
     this._subscribed = false;
@@ -4014,7 +4056,7 @@ Topic.prototype = {
     }
 
     // Insert new gaps into cache.
-    ranges.map((gap) => {
+    ranges.forEach((gap) => {
       gap._status = MESSAGE_STATUS_DEL_RANGE;
       this._messages.put(gap);
     });
@@ -4071,7 +4113,7 @@ Topic.prototype = {
  *
  * @param {TopicMe.Callbacks} callbacks - Callbacks to receive various events.
  */
-var TopicMe = function(callbacks) {
+const TopicMe = function(callbacks) {
   Topic.call(this, TOPIC_ME, callbacks);
 
   // me-specific callbacks
@@ -4091,22 +4133,17 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       // Copy parameters from desc object to this topic.
       mergeObj(this, desc);
       this._tinode._db.updTopic(this);
-
-      // String datetime headers to Date() objects.
-      stringToDate(this);
+      // Update current user's record in the global cache.
+      this._updateCachedUser(this._tinode._myUID, desc);
 
       // 'P' permission was removed. All topics are offline now.
       if (turnOff) {
         this._tinode.cacheMap('topic', (cont) => {
           if (cont.online) {
             cont.online = false;
-            if (cont.seen) {
-              cont.seen.when = new Date();
-            } else {
-              cont.seen = {
-                when: new Date()
-              };
-            }
+            cont.seen = Object.assign(cont.seen || {}, {
+              when: new Date()
+            });
             this._refreshContact('off', cont);
           }
         });
@@ -4130,9 +4167,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         if (topicName == TOPIC_FND || topicName == TOPIC_ME) {
           return;
         }
-        sub.updated = new Date(sub.updated);
-        sub.touched = sub.touched ? new Date(sub.touched) : undefined;
-        sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
         sub.online = !!sub.online;
 
         let cont = null;
@@ -4147,10 +4181,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             sub.recv = sub.recv | 0;
             sub.read = sub.read | 0;
             sub.unread = sub.seq - sub.read;
-          }
-
-          if (sub.seen && sub.seen.when) {
-            sub.seen.when = new Date(sub.seen.when);
           }
 
           cont = mergeObj(this._tinode.getTopic(topicName), sub);
@@ -4196,7 +4226,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
         creds = [];
       }
       if (upd) {
-        creds.map((cr) => {
+        creds.forEach((cr) => {
           if (cr.val) {
             // Adding a credential.
             let idx = this._credentials.findIndex((el) => {
@@ -4264,13 +4294,9 @@ TopicMe.prototype = Object.create(Topic.prototype, {
           case 'off': // topic went offline
             if (cont.online) {
               cont.online = false;
-              if (cont.seen) {
-                cont.seen.when = new Date();
-              } else {
-                cont.seen = {
-                  when: new Date()
-                };
-              }
+              cont.seen = Object.assign(cont.seen || {}, {
+                when: new Date()
+              });
             }
             break;
           case 'msg': // new message received
@@ -4343,7 +4369,7 @@ TopicMe.prototype = Object.create(Topic.prototype, {
             dummy.acs = acs;
             this._tinode.attachCacheToTopic(dummy);
             dummy._cachePutSelf();
-            this._db.updTopic(dummy);
+            this._tinode._db.updTopic(dummy);
           }
         } else if (pres.what == 'tags') {
           this.getMeta(this.startMetaQuery().withTags().build());
@@ -4526,7 +4552,7 @@ TopicMe.prototype.constructor = TopicMe;
  *
  * @param {TopicFnd.Callbacks} callbacks - Callbacks to receive various events.
  */
-var TopicFnd = function(callbacks) {
+const TopicFnd = function(callbacks) {
   Topic.call(this, TOPIC_FND, callbacks);
   // List of users and topics uid or topic_name -> Contact object)
   this._contacts = {};
@@ -4543,11 +4569,6 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
       for (let idx in subs) {
         let sub = subs[idx];
         const indexBy = sub.topic ? sub.topic : sub.user;
-
-        sub.updated = new Date(sub.updated);
-        if (sub.seen && sub.seen.when) {
-          sub.seen.when = new Date(sub.seen.when);
-        }
 
         sub = mergeToCache(this._contacts, indexBy, sub);
         updateCount++;
@@ -4621,45 +4642,6 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
   }
 });
 TopicFnd.prototype.constructor = TopicFnd;
-
-/**
- * @class Message - definition a communication message.
- * Work in progress.
- * @memberof Tinode
- *
- * @param {string} topic_ - name of the topic the message belongs to.
- * @param {string | Drafty} content_ - message contant.
- */
-var Message = function(topic_, content_) {
-  this.status = Message.STATUS_NONE;
-  this.topic = topic_;
-  this.content = content_;
-}
-
-Message.STATUS_NONE = MESSAGE_STATUS_NONE;
-Message.STATUS_QUEUED = MESSAGE_STATUS_QUEUED;
-Message.STATUS_SENDING = MESSAGE_STATUS_SENDING;
-Message.STATUS_FAILED = MESSAGE_STATUS_FAILED;
-Message.STATUS_SENT = MESSAGE_STATUS_SENT;
-Message.STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED;
-Message.STATUS_READ = MESSAGE_STATUS_READ;
-Message.STATUS_TO_ME = MESSAGE_STATUS_TO_ME;
-
-Message.prototype = {
-  /**
-   * Convert message object to {pub} packet.
-   */
-  toJSON: function() {
-
-  },
-  /**
-   * Parse JSON into message.
-   */
-  fromJSON: function(json) {
-
-  }
-}
-Message.prototype.constructor = Message;
 
 if (typeof module != 'undefined') {
   module.exports = Tinode;
