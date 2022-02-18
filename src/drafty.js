@@ -1175,7 +1175,6 @@ Drafty.forwardedContent = function(original) {
  * @returns converted Drafty object leaving the original intact.
  */
 Drafty.replyContent = function(original, limit) {
-  let tree = draftyToTree(original);
   const convMNnQQnBR = function(node) {
     if (node.type == 'QQ') {
       return null;
@@ -1192,6 +1191,12 @@ Drafty.replyContent = function(original, limit) {
     }
     return node;
   }
+
+  let tree = draftyToTree(original);
+  if (!tree) {
+    return original;
+  }
+
   // Strip leading mention.
   tree = treeTopDown(tree, convMNnQQnBR);
   // Move attachments to the end of the doc.
@@ -1935,7 +1940,7 @@ function spansToTree(parent, text, start, end, spans) {
 // Append a tree to a Drafty doc.
 function treeToDrafty(doc, tree, keymap) {
   if (!tree) {
-    return;
+    return doc;
   }
 
   doc.txt = doc.txt || '';
@@ -2053,6 +2058,10 @@ function treeBottomUp(src, formatter, index, stack, context) {
 
 // Clip tree to the provided limit.
 function shortenTree(tree, limit, tail) {
+  if (!tree) {
+    return null;
+  }
+
   if (tail) {
     limit -= tail.length;
   }
@@ -2126,6 +2135,10 @@ function lTrim(tree) {
 
 // Move attachments to the end. Attachments must be at the top level, no need to traverse the tree.
 function attachmentsToEnd(tree, limit) {
+  if (!tree) {
+    return null;
+  }
+
   if (tree.att) {
     tree.text = ' ';
     delete tree.att;
