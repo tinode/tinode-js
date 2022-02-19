@@ -1,10 +1,7 @@
 /**
  * @file In-memory sorted cache of objects.
  *
- * @copyright 2015-2021 Tinode
- * @summary Javascript bindings for Tinode.
- * @license Apache 2.0
- * @version 0.18
+ * @copyright 2015-2022 Tinode LLC.
  */
 'use strict';
 
@@ -20,7 +17,7 @@
  * @param {boolean} unique enforce element uniqueness: when <code>true</code> replace existing element with a new
  *    one on conflict; when <code>false</code> keep both elements.
  */
-const CBuffer = function(compare, unique) {
+export const CBuffer = function(compare, unique) {
   let buffer = [];
 
   compare = compare || function(a, b) {
@@ -230,8 +227,4 @@ const CBuffer = function(compare, unique) {
       buffer.splice(count);
     }
   }
-}
-
-if (typeof module != 'undefined') {
-  module.exports = CBuffer;
 }

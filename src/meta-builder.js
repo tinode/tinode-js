@@ -1,7 +1,7 @@
 /**
  * @file Helper class for constructing {@link Tinode.GetQuery}.
  *
- * @copyright 2015-2021 Tinode
+ * @copyright 2015-2022 Tinode
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
  * @version 0.18
@@ -16,7 +16,7 @@
  *
  * @param {Tinode.Topic} parent topic which instantiated this builder.
  */
-const MetaGetBuilder = function(parent) {
+export default MetaGetBuilder = function(parent) {
   this.topic = parent;
   this.what = {};
 }
@@ -258,7 +258,3 @@ MetaGetBuilder.prototype = {
     return params;
   }
 };
-
-if (typeof module != 'undefined') {
-  module.exports = MetaGetBuilder;
-}

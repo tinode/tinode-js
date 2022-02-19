@@ -1,4 +1,4 @@
-const Drafty = require('./drafty');
+import * as Drafty from './drafty';
 
 // Drafty.parse test data.
 const parse_this = [
