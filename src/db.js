@@ -236,6 +236,42 @@ const DB = function(onError, logger) {
     },
 
     /**
+     * Mark or unmark topic as deleted.
+     * @memberOf DB
+     * @param {string} name - name of the topic to mark or unmark.
+     * @param {boolean} deleted - deletion mark.
+     * @return {Promise} promise resolved/rejected on operation completion.
+     */
+    markTopicAsDeleted: function(name, deleted) {
+      if (!this.isReady()) {
+        return disabled ?
+          Promise.resolve() :
+          Promise.reject(new Error("not initialized"));
+      }
+      return new Promise((resolve, reject) => {
+        const trx = db.transaction(['topic'], 'readwrite');
+        trx.oncomplete = (event) => {
+          resolve(event.target.result);
+        };
+        trx.onerror = (event) => {
+          logger("PCache", "markTopicAsDeleted", event.target.error);
+          reject(event.target.error);
+        };
+        const req = trx.objectStore('topic').get(name);
+        req.onsuccess = (event) => {
+          const topic = event.target.result;
+          if (deleted) {
+            topic.deleted = true;
+          } else {
+            delete topic.deleted;
+          }
+          trx.objectStore('topic').put(serializeTopic(req.result, topic));
+          trx.commit();
+        };
+      });
+    },
+
+    /**
      * Remove topic from persistent cache.
      * @memberOf DB
      * @param {string} name - name of the topic to remove from database.
