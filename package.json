@@ -6,7 +6,7 @@
     "format": "js-beautify -r src/tinode.js && js-beautify -r src/drafty.js && js-beautify -r src/db.js && js-beautify -r src/connection.js && js-beautify -r src/cbuffer.js",
     "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
     "build:prod": "browserify ./src/tinode.js --standalone Tinode -t [ babelify ] --plugin tinyify > ./umd/tinode.prod.js",
-    "build:dev": "browserify ./src/tinode.js --debug --standalone Tinode > ./umd/tinode.dev.js",
+    "build:dev": "browserify ./src/tinode.js --debug --standalone Tinode -t [ babelify ] > ./umd/tinode.dev.js",
     "build:docs": "jsdoc ./src -t ./node_modules/minami -d ../tinode.github.io/js-api",
     "vers": "echo \"{\\\"version\\\": \\\"`node -p -e \"require('./package.json').version\"`\\\"}\" > version.json",
     "test": "jest"
