@@ -5,7 +5,7 @@
  */
 'use strict';
 
-const AccessMode = require('./access-mode.js');
+import AccessMode from './access-mode.js';
 
 // Attempt to convert date strings to objects.
 export function jsonParseHelper(key, val) {
@@ -31,6 +31,28 @@ export function jsonParseHelper(key, val) {
 // ' ↲ https://example.com' - not ok. (↲ means carriage return)
 export function isUrlRelative(url) {
   return url && !/^\s*([a-z][a-z0-9+.-]*:|\/\/)/im.test(url);
+}
+
+// Checks if 'd' is a valid non-zero date;
+function isValidDate(d) {
+  return (d instanceof Date) && !isNaN(d) && (d.getTime() != 0);
+}
+
+// RFC3339 formater of Date
+export function rfc3339DateString(d) {
+  if (!isValidDate(d)) {
+    return undefined;
+  }
+
+  const pad = function(val, sp) {
+    sp = sp || 2;
+    return '0'.repeat(sp - ('' + val).length) + val;
+  };
+
+  const millis = d.getUTCMilliseconds();
+  return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
+    'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) +
+    (millis ? '.' + pad(millis, 3) : '') + 'Z';
 }
 
 // Recursively merge src's own properties to dst.

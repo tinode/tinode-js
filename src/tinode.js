@@ -2,7 +2,7 @@
  * @file SDK to connect to Tinode chat server.
  * See <a href="https://github.com/tinode/webapp">https://github.com/tinode/webapp</a> for real-life usage.
  *
- * @copyright 2015-2022 Tinode
+ * @copyright 2015-2022 Tinode LLC.
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
  * @version 0.18
@@ -48,24 +48,21 @@
 // non-localizable strings should be single quoted 'non-localized'.
 
 import AccessMode from './access-mode.js';
-import Connection, {
-  setNetworkProviders,
-  logger,
-  NETWORK_ERROR
-} from './connection.js';
-import DBCache, {
-  setDatabaseProvider
-} from './db.js';
-import Drafty, {
-  logger as _logger,
-} from './drafty.js';
-import LargeFileHelper, {
-  setNetworkProvider
-} from './large-file.js';
+import * as Const from './config.js';
+import Connection from './connection.js';
+import DBCache from './db.js';
+import Drafty from './drafty.js';
+import LargeFileHelper from './large-file.js';
+import {
+  Topic,
+  TopicMe,
+  TopicFnd
+} from './topic.js';
 
 import {
   jsonParseHelper,
   mergeObj,
+  rfc3339DateString,
   simplify
 } from './utils.js';
 
@@ -145,9 +142,9 @@ function initForNonBrowserApp() {
     }
   }
 
-  setNetworkProviders(WebSocketProvider, XHRProvider);
-  setNetworkProvider(XHRProvider);
-  setDatabaseProvider(IndexedDBProvider);
+  Connection.setNetworkProviders(WebSocketProvider, XHRProvider);
+  LargeFileHelper.setNetworkProvider(XHRProvider);
+  DBCache.setDatabaseProvider(IndexedDBProvider);
 }
 
 // Detect find most useful network transport.
@@ -161,28 +158,6 @@ function detectTransport() {
     }
   }
   return null;
-}
-
-// Checks if 'd' is a valid non-zero date;
-function isValidDate(d) {
-  return (d instanceof Date) && !isNaN(d) && (d.getTime() != 0);
-}
-
-// RFC3339 formater of Date
-function rfc3339DateString(d) {
-  if (!isValidDate(d)) {
-    return undefined;
-  }
-
-  const pad = function(val, sp) {
-    sp = sp || 2;
-    return '0'.repeat(sp - ('' + val).length) + val;
-  };
-
-  const millis = d.getUTCMilliseconds();
-  return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
-    'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) +
-    (millis ? '.' + pad(millis, 3) : '') + 'Z';
 }
 
 // btoa replacement. Stock btoa fails on on non-Latin1 strings.
@@ -376,14 +351,14 @@ export default class Tinode {
       }
     };
 
-    logger = this.logger;
-    _logger = this.logger;
+    Connection.logger = this.logger;
+    Drafty.logger = this.logger;
 
     // WebSocket or long polling network connection.
     if (config.transport != 'lp' && config.transport != 'ws') {
       config.transport = detectTransport();
     }
-    this._connection = new Connection(config, PROTOCOL_VERSION, /* autoreconnect */ true);
+    this._connection = new Connection(config, Const.PROTOCOL_VERSION, /* autoreconnect */ true);
 
     // Tinode's cache of objects
     this._cache = {};
@@ -444,7 +419,7 @@ export default class Tinode {
     // Use indexDB for caching topics and messages.
     this._persist = config.persist;
     // Initialize object regardless. It simplifies the code.
-    this._db = DBCache((err) => {
+    this._db = new DBCache((err) => {
       this.logger('DB', err);
     }, this.logger);
 
@@ -459,9 +434,9 @@ export default class Tinode {
           if (topic) {
             return;
           }
-          if (data.name == TOPIC_ME) {
+          if (data.name == Const.TOPIC_ME) {
             topic = new TopicMe();
-          } else if (data.name == TOPIC_FND) {
+          } else if (data.name == Const.TOPIC_FND) {
             topic = new TopicFnd();
           } else {
             topic = new Topic(data.name);
@@ -534,7 +509,7 @@ export default class Tinode {
 
     // Get User Agent string
     const getUserAgent = () => {
-      return this._appName + ' (' + (this._browser ? this._browser + '; ' : '') + this._hwos + '); ' + LIBRARY;
+      return this._appName + ' (' + (this._browser ? this._browser + '; ' : '') + this._hwos + '); ' + Const.LIBRARY;
     };
 
     // Generator of packets stubs
@@ -544,7 +519,7 @@ export default class Tinode {
           return {
             'hi': {
               'id': getNextUniqueId(),
-              'ver': VERSION,
+              'ver': Const.VERSION,
               'ua': getUserAgent(),
               'dev': this._deviceToken,
               'lang': this._humanLanguage,
@@ -669,7 +644,7 @@ export default class Tinode {
       } catch (err) {
         // If sendText throws, wrap the error in a promise or rethrow.
         if (id) {
-          execPromise(id, NETWORK_ERROR, null, err.message);
+          execPromise(id, Connection.NETWORK_ERROR, null, err.message);
         } else {
           throw err;
         }
@@ -841,7 +816,7 @@ export default class Tinode {
         // Reject promises which have not been resolved for too long.
         this._expirePromises = setInterval(() => {
           const err = new Error("Timeout (504)");
-          const expires = new Date(new Date().getTime() - EXPIRE_PROMISES_TIMEOUT);
+          const expires = new Date(new Date().getTime() - Const.EXPIRE_PROMISES_TIMEOUT);
           for (let id in this._pendingPromises) {
             let callbacks = this._pendingPromises[id];
             if (callbacks && callbacks.ts < expires) {
@@ -852,7 +827,7 @@ export default class Tinode {
               }
             }
           }
-        }, EXPIRE_PROMISES_PERIOD);
+        }, Const.EXPIRE_PROMISES_PERIOD);
       }
       this.hello();
     };
@@ -936,18 +911,9 @@ export default class Tinode {
    *    <code>"p2p"</code> or <code>undefined</code>.
    */
   static topicType(name) {
-    const types = {
-      'me': 'me',
-      'fnd': 'fnd',
-      'grp': 'grp',
-      'new': 'grp',
-      'nch': 'grp',
-      'chn': 'grp',
-      'usr': 'p2p',
-      'sys': 'sys'
-    };
-    return types[(typeof name == 'string') ? name.substring(0, 3) : 'xxx'];
+    return Topic.topicType(name);
   }
+
   /**
    * Check if the given topic name is a name of a 'me' topic.
    * @memberof Tinode
@@ -957,7 +923,7 @@ export default class Tinode {
    * @returns {boolean} <code>true</code> if the name is a name of a 'me' topic, <code>false</code> otherwise.
    */
   static isMeTopicName(name) {
-    return Tinode.topicType(name) == 'me';
+    return Topic.isMeTopicName(name);
   }
   /**
    * Check if the given topic name is a name of a group topic.
@@ -968,7 +934,7 @@ export default class Tinode {
    * @returns {boolean} <code>true</code> if the name is a name of a group topic, <code>false</code> otherwise.
    */
   static isGroupTopicName(name) {
-    return Tinode.topicType(name) == 'grp';
+    return Topic.isGroupTopicName(name);
   }
   /**
    * Check if the given topic name is a name of a p2p topic.
@@ -979,7 +945,7 @@ export default class Tinode {
    * @returns {boolean} <code>true</code> if the name is a name of a p2p topic, <code>false</code> otherwise.
    */
   static isP2PTopicName(name) {
-    return Tinode.topicType(name) == 'p2p';
+    return Topic.isP2PTopicName(name);
   }
   /**
    * Check if the given topic name is a name of a communication topic, i.e. P2P or group.
@@ -990,7 +956,7 @@ export default class Tinode {
    * @returns {boolean} <code>true</code> if the name is a name of a p2p or group topic, <code>false</code> otherwise.
    */
   static isCommTopicName(name) {
-    return Tinode.isP2PTopicName(name) || Tinode.isGroupTopicName(name);
+    return Topic.isCommTopicName(name);
   }
   /**
    * Check if the topic name is a name of a new topic.
@@ -1001,8 +967,7 @@ export default class Tinode {
    * @returns {boolean} <code>true</code> if the name is a name of a new topic, <code>false</code> otherwise.
    */
   static isNewGroupTopicName(name) {
-    return (typeof name == 'string') &&
-      (name.substring(0, 3) == TOPIC_NEW || name.substring(0, 3) == TOPIC_NEW_CHAN);
+    return Topic.isNewGroupTopicName(name);
   }
   /**
    * Check if the topic name is a name of a channel.
@@ -1013,8 +978,7 @@ export default class Tinode {
    * @returns {boolean} <code>true</code> if the name is a name of a channel, <code>false</code> otherwise.
    */
   static isChannelTopicName(name) {
-    return (typeof name == 'string') &&
-      (name.substring(0, 3) == TOPIC_CHAN || name.substring(0, 3) == TOPIC_NEW_CHAN);
+    return Topic.isChannelTopicName(name);
   }
   /**
    * Return information about the current version of this Tinode client library.
@@ -1024,7 +988,7 @@ export default class Tinode {
    * @returns {string} semantic version of the library, e.g. <code>"0.15.5-rc1"</code>.
    */
   static getVersion() {
-    return VERSION;
+    return Const.VERSION;
   }
   /**
    * To use Tinode in a non browser context, supply WebSocket and XMLHttpRequest providers.
@@ -1037,8 +1001,8 @@ export default class Tinode {
     WebSocketProvider = wsProvider;
     XHRProvider = xhrProvider;
 
-    setNetworkProviders(WebSocketProvider, XHRProvider);
-    setNetworkProvider(XHRProvider);
+    Connection.setNetworkProviders(WebSocketProvider, XHRProvider);
+    LargeFileHelper.setNetworkProvider(XHRProvider);
   }
   /**
    * To use Tinode in a non browser context, supply <code>indexedDB</code> provider.
@@ -1049,7 +1013,7 @@ export default class Tinode {
   static setDatabaseProvider(idbProvider) {
     IndexedDBProvider = idbProvider;
 
-    setDatabaseProvider(IndexedDBProvider);
+    DBCache.setDatabaseProvider(IndexedDBProvider);
   }
   /**
    * Return information about the current name and version of this Tinode library.
@@ -1059,7 +1023,7 @@ export default class Tinode {
    * @returns {string} the name of the library and it's version.
    */
   static getLibrary() {
-    return LIBRARY;
+    return Const.LIBRARY;
   }
   /**
    * Check if the given string represents <code>NULL</code> value as defined by Tinode (<code>'\u2421'</code>).
@@ -1071,7 +1035,7 @@ export default class Tinode {
    * @returns {boolean} <code>true</code> if string represents <code>NULL</code> value, <code>false</code> otherwise.
    */
   static isNullValue(str) {
-    return str === Tinode.DEL_CHAR;
+    return str === Const.DEL_CHAR;
   }
   /**
    * Check if the given URL string is a relative URL.
@@ -1091,40 +1055,6 @@ export default class Tinode {
   static isRelativeURL(url) {
     return !/^\s*([a-z][a-z0-9+.-]*:|\/\/)/im.test(url);
   }
-}
-
-
-
-
-
-
-
-
-
-// Exported constants
-Tinode.MESSAGE_STATUS_NONE = MESSAGE_STATUS_NONE;
-Tinode.MESSAGE_STATUS_QUEUED = MESSAGE_STATUS_QUEUED;
-Tinode.MESSAGE_STATUS_SENDING = MESSAGE_STATUS_SENDING;
-Tinode.MESSAGE_STATUS_FAILED = MESSAGE_STATUS_FAILED;
-Tinode.MESSAGE_STATUS_SENT = MESSAGE_STATUS_SENT;
-Tinode.MESSAGE_STATUS_RECEIVED = MESSAGE_STATUS_RECEIVED;
-Tinode.MESSAGE_STATUS_READ = MESSAGE_STATUS_READ;
-Tinode.MESSAGE_STATUS_TO_ME = MESSAGE_STATUS_TO_ME;
-Tinode.MESSAGE_STATUS_DEL_RANGE = MESSAGE_STATUS_DEL_RANGE;
-
-// Unicode [del] symbol.
-Tinode.DEL_CHAR = '\u2421';
-
-
-
-// Names of keys to server-provided configuration limits.
-Tinode.MAX_MESSAGE_SIZE = 'maxMessageSize';
-Tinode.MAX_SUBSCRIBER_COUNT = 'maxSubscriberCount';
-Tinode.MAX_TAG_COUNT = 'maxTagCount';
-Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
-
-// Public methods;
-Tinode.prototype = {
   /**
    * Connect to the server.
    * @memberof Tinode#
@@ -1135,9 +1065,9 @@ Tinode.prototype = {
    *    <code>resolve()</code> is called without parameters, <code>reject()</code> receives the
    *    <code>Error</code> as a single parameter.
    */
-  connect: function(host_) {
+  connect(host_) {
     return this._connection.connect(host_);
-  },
+  }
 
   /**
    * Attempt to reconnect to the server immediately.
@@ -1145,49 +1075,49 @@ Tinode.prototype = {
    *
    * @param {string} force - reconnect even if there is a connection already.
    */
-  reconnect: function(force) {
+  reconnect(force) {
     this._connection.reconnect(force);
-  },
+  }
 
   /**
    * Disconnect from the server.
    * @memberof Tinode#
    */
-  disconnect: function() {
+  disconnect() {
     this._connection.disconnect();
-  },
+  }
 
   /**
    * Clear persistent cache: remove IndexedDB.
    * @memberof Tinode#
    * @return {Promise} Promise resolved/rejected when the operation is completed.
    */
-  clearStorage: function() {
+  clearStorage() {
     if (this._db.isReady()) {
       return this._db.deleteDatabase();
     }
     return Promise.resolve();
-  },
+  }
 
   /**
    * Initialize persistent cache: create IndexedDB cache.
    * @memberof Tinode#
    * @return {Promise} Promise resolved/rejected when the operation is completed.
    */
-  initStorage: function() {
+  initStorage() {
     if (!this._db.isReady()) {
       return this._db.initDatabase();
     }
     return Promise.resolve();
-  },
+  }
 
   /**
    * Send a network probe message to make sure the connection is alive.
    * @memberof Tinode#
    */
-  networkProbe: function() {
+  networkProbe() {
     this._connection.probe();
-  },
+  }
 
   /**
    * Check for live connection to server.
@@ -1195,18 +1125,18 @@ Tinode.prototype = {
    *
    * @returns {boolean} <code>true</code> if there is a live connection, <code>false</code> otherwise.
    */
-  isConnected: function() {
+  isConnected() {
     return this._connection.isConnected();
-  },
+  }
 
   /**
    * Check if connection is authenticated (last login was successful).
    * @memberof Tinode#
    * @returns {boolean} <code>true</code> if authenticated, <code>false</code> otherwise.
    */
-  isAuthenticated: function() {
+  isAuthenticated() {
     return this._authenticated;
-  },
+  }
 
   /**
    * Add API key and auth token to the relative URL making it usable for getting data
@@ -1216,7 +1146,7 @@ Tinode.prototype = {
    * @param {string} URL - URL to wrap.
    * @returns {string} URL with appended API key and token, if valid token is present.
    */
-  authorizeURL: function(url) {
+  authorizeURL(url) {
     if (typeof url != 'string') {
       return url;
     }
@@ -1236,7 +1166,7 @@ Tinode.prototype = {
       url = parsed.toString().substring(base.length - 1);
     }
     return url;
-  },
+  }
 
   /**
    * @typedef AccountParams
@@ -1270,7 +1200,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  account: function(uid, scheme, secret, login, params) {
+  account(uid, scheme, secret, login, params) {
     const pkt = this.initPacket('acc');
     pkt.acc.user = uid;
     pkt.acc.scheme = scheme;
@@ -1297,7 +1227,7 @@ Tinode.prototype = {
     }
 
     return this.send(pkt, pkt.acc.id);
-  },
+  }
 
   /**
    * Create a new user. Wrapper for {@link Tinode#account}.
@@ -1310,7 +1240,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  createAccount: function(scheme, secret, login, params) {
+  createAccount(scheme, secret, login, params) {
     let promise = this.account(USER_NEW, scheme, secret, login, params);
     if (login) {
       promise = promise.then((ctrl) => {
@@ -1318,7 +1248,7 @@ Tinode.prototype = {
       });
     }
     return promise;
-  },
+  }
 
   /**
    * Create user with <code>'basic'</code> authentication scheme and immediately
@@ -1331,13 +1261,13 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  createAccountBasic: function(username, password, params) {
+  createAccountBasic(username, password, params) {
     // Make sure we are not using 'null' or 'undefined';
     username = username || '';
     password = password || '';
     return this.createAccount('basic',
       b64EncodeUnicode(username + ':' + password), true, params);
-  },
+  }
 
   /**
    * Update user's credentials for <code>'basic'</code> authentication scheme. Wrapper for {@link Tinode#account}.
@@ -1350,13 +1280,13 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  updateAccountBasic: function(uid, username, password, params) {
+  updateAccountBasic(uid, username, password, params) {
     // Make sure we are not using 'null' or 'undefined';
     username = username || '';
     password = password || '';
     return this.account(uid, 'basic',
       b64EncodeUnicode(username + ':' + password), false, params);
-  },
+  }
 
   /**
    * Send handshake to the server.
@@ -1364,7 +1294,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  hello: function() {
+  hello() {
     const pkt = this.initPacket('hi');
 
     return this.send(pkt, pkt.hi.id)
@@ -1390,7 +1320,7 @@ Tinode.prototype = {
           this.onDisconnect(err);
         }
       });
-  },
+  }
 
   /**
    * Set or refresh the push notifications/device token. If the client is connected,
@@ -1402,7 +1332,7 @@ Tinode.prototype = {
    *
    * @returns <code>true</code> if attempt was made to send the update to the server.
    */
-  setDeviceToken: function(dt) {
+  setDeviceToken(dt) {
     let sent = false;
     // Convert any falsish value to null.
     dt = dt || null;
@@ -1418,7 +1348,7 @@ Tinode.prototype = {
       }
     }
     return sent;
-  },
+  }
 
   /**
    * @typedef Credential
@@ -1438,7 +1368,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
-  login: function(scheme, secret, cred) {
+  login(scheme, secret, cred) {
     const pkt = this.initPacket('login');
     pkt.login.scheme = scheme;
     pkt.login.secret = secret;
@@ -1448,7 +1378,7 @@ Tinode.prototype = {
       .then((ctrl) => {
         return this.loginSuccessful(ctrl);
       });
-  },
+  }
 
   /**
    * Wrapper for {@link Tinode#login} with basic authentication
@@ -1460,13 +1390,13 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  loginBasic: function(uname, password, cred) {
+  loginBasic(uname, password, cred) {
     return this.login('basic', b64EncodeUnicode(uname + ':' + password), cred)
       .then((ctrl) => {
         this._login = uname;
         return ctrl;
       });
-  },
+  }
 
   /**
    * Wrapper for {@link Tinode#login} with token authentication
@@ -1477,9 +1407,9 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  loginToken: function(token, cred) {
+  loginToken(token, cred) {
     return this.login('token', token, cred);
-  },
+  }
 
   /**
    * Send a request for resetting an authentication secret.
@@ -1491,9 +1421,9 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving the server reply.
    */
-  requestResetAuthSecret: function(scheme, method, value) {
+  requestResetAuthSecret(scheme, method, value) {
     return this.login('reset', b64EncodeUnicode(scheme + ':' + method + ':' + value));
-  },
+  }
 
   /**
    * @typedef AuthToken
@@ -1508,14 +1438,14 @@ Tinode.prototype = {
    *
    * @returns {Tinode.AuthToken} authentication token.
    */
-  getAuthToken: function() {
+  getAuthToken() {
     if (this._authToken && (this._authToken.expires.getTime() > Date.now())) {
       return this._authToken;
     } else {
       this._authToken = null;
     }
     return null;
-  },
+  }
 
   /**
    * Application may provide a saved authentication token.
@@ -1523,9 +1453,9 @@ Tinode.prototype = {
    *
    * @param {Tinode.AuthToken} token - authentication token.
    */
-  setAuthToken: function(token) {
+  setAuthToken(token) {
     this._authToken = token;
-  },
+  }
 
   /**
    * @typedef SetParams
@@ -1571,10 +1501,10 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  subscribe: function(topicName, getParams, setParams) {
+  subscribe(topicName, getParams, setParams) {
     const pkt = this.initPacket('sub', topicName)
     if (!topicName) {
-      topicName = TOPIC_NEW;
+      topicName = Const.TOPIC_NEW;
     }
 
     pkt.sub.get = getParams;
@@ -1610,7 +1540,7 @@ Tinode.prototype = {
     }
 
     return this.send(pkt, pkt.sub.id);
-  },
+  }
 
   /**
    * Detach and optionally unsubscribe from the topic
@@ -1621,12 +1551,12 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  leave: function(topic, unsub) {
+  leave(topic, unsub) {
     const pkt = this.initPacket('leave', topic);
     pkt.leave.unsub = unsub;
 
     return this.send(pkt, pkt.leave.id);
-  },
+  }
 
   /**
    * Create message draft without sending it to the server.
@@ -1638,7 +1568,7 @@ Tinode.prototype = {
    *
    * @returns {Object} new message which can be sent to the server or otherwise used.
    */
-  createMessage: function(topic, content, noEcho) {
+  createMessage(topic, content, noEcho) {
     const pkt = this.initPacket('pub', topic);
 
     let dft = typeof content == 'string' ? Drafty.parse(content) : content;
@@ -1652,7 +1582,7 @@ Tinode.prototype = {
     pkt.pub.content = content;
 
     return pkt.pub;
-  },
+  }
 
   /**
    * Publish {data} message to topic.
@@ -1664,11 +1594,11 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publish: function(topic, content, noEcho) {
+  publish(topic, content, noEcho) {
     return this.publishMessage(
       this.createMessage(topic, content, noEcho)
     );
-  },
+  }
 
   /**
    * Publish message to topic. The message should be created by {@link Tinode#createMessage}.
@@ -1679,7 +1609,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publishMessage: function(pub, attachments) {
+  publishMessage(pub, attachments) {
     // Make a shallow copy. Needed in order to clear locally-assigned temp values;
     pub = Object.assign({}, pub);
     pub.seq = undefined;
@@ -1694,7 +1624,7 @@ Tinode.prototype = {
       };
     }
     return this.send(msg, pub.id);
-  },
+  }
 
   /**
    * Out of band notification: notify topic that an external (push) notification was recived by the client.
@@ -1704,13 +1634,13 @@ Tinode.prototype = {
    * @param {number} seq - seq ID of the new message.
    * @param {string=} act - UID of the sender; default is current.
    */
-  oobNotification: function(topicName, seq, act) {
+  oobNotification(topicName, seq, act) {
     const topic = this.cacheGet('topic', topicName);
     if (topic) {
       topic._updateReceived(seq, act);
       this.getMeTopic()._refreshContact('msg', topic);
     }
-  },
+  }
 
   /**
    * @typedef GetQuery
@@ -1747,13 +1677,13 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  getMeta: function(topic, params) {
+  getMeta(topic, params) {
     const pkt = this.initPacket('get', topic);
 
     pkt.get = mergeObj(pkt.get, params);
 
     return this.send(pkt, pkt.get.id);
-  },
+  }
 
   /**
    * Update topic's metadata: description, subscribtions.
@@ -1763,7 +1693,7 @@ Tinode.prototype = {
    * @param {Tinode.SetParams} params - topic metadata to update.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  setMeta: function(topic, params) {
+  setMeta(topic, params) {
     const pkt = this.initPacket('set', topic);
     const what = [];
 
@@ -1787,7 +1717,7 @@ Tinode.prototype = {
     }
 
     return this.send(pkt, pkt.set.id);
-  },
+  }
 
   /**
    * Range of message IDs to delete.
@@ -1808,7 +1738,7 @@ Tinode.prototype = {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delMessages: function(topic, ranges, hard) {
+  delMessages(topic, ranges, hard) {
     const pkt = this.initPacket('del', topic);
 
     pkt.del.what = 'msg';
@@ -1816,7 +1746,7 @@ Tinode.prototype = {
     pkt.del.hard = hard;
 
     return this.send(pkt, pkt.del.id);
-  },
+  }
 
   /**
    * Delete the topic alltogether. Requires Owner permission.
@@ -1826,13 +1756,13 @@ Tinode.prototype = {
    * @param {boolean} hard - hard-delete topic.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delTopic: function(topicName, hard) {
+  delTopic(topicName, hard) {
     const pkt = this.initPacket('del', topicName);
     pkt.del.what = 'topic';
     pkt.del.hard = hard;
 
     return this.send(pkt, pkt.del.id);
-  },
+  }
 
   /**
    * Delete subscription. Requires Share permission.
@@ -1842,13 +1772,13 @@ Tinode.prototype = {
    * @param {string} user - User ID to remove.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delSubscription: function(topicName, user) {
+  delSubscription(topicName, user) {
     const pkt = this.initPacket('del', topicName);
     pkt.del.what = 'sub';
     pkt.del.user = user;
 
     return this.send(pkt, pkt.del.id);
-  },
+  }
 
   /**
    * Delete credential. Always sent on <code>'me'</code> topic.
@@ -1858,8 +1788,8 @@ Tinode.prototype = {
    * @param {string} value - validation value, i.e. <code>'alice@example.com'</code>.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delCredential: function(method, value) {
-    const pkt = this.initPacket('del', TOPIC_ME);
+  delCredential(method, value) {
+    const pkt = this.initPacket('del', Const.TOPIC_ME);
     pkt.del.what = 'cred';
     pkt.del.cred = {
       meth: method,
@@ -1867,7 +1797,7 @@ Tinode.prototype = {
     };
 
     return this.send(pkt, pkt.del.id);
-  },
+  }
 
   /**
    * Request to delete account of the current user.
@@ -1876,7 +1806,7 @@ Tinode.prototype = {
    * @param {boolean} hard - hard-delete user.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  delCurrentUser: function(hard) {
+  delCurrentUser(hard) {
     const pkt = this.initPacket('del', null);
     pkt.del.what = 'user';
     pkt.del.hard = hard;
@@ -1884,7 +1814,7 @@ Tinode.prototype = {
     return this.send(pkt, pkt.del.id).then((ctrl) => {
       this._myUID = null;
     });
-  },
+  }
 
   /**
    * Notify server that a message or messages were read or received. Does NOT return promise.
@@ -1894,8 +1824,8 @@ Tinode.prototype = {
    * @param {string} what - Action being aknowledged, either <code>"read"</code> or <code>"recv"</code>.
    * @param {number} seq - Maximum id of the message being acknowledged.
    */
-  note: function(topicName, what, seq) {
-    if (seq <= 0 || seq >= LOCAL_SEQID) {
+  note(topicName, what, seq) {
+    if (seq <= 0 || seq >= Const.LOCAL_SEQID) {
       throw new Error(`Invalid message id ${seq}`);
     }
 
@@ -1903,7 +1833,7 @@ Tinode.prototype = {
     pkt.note.what = what;
     pkt.note.seq = seq;
     this.send(pkt);
-  },
+  }
 
   /**
    * Broadcast a key-press notification to topic subscribers. Used to show
@@ -1912,11 +1842,11 @@ Tinode.prototype = {
    *
    * @param {string} topicName - Name of the topic to broadcast to.
    */
-  noteKeyPress: function(topicName) {
+  noteKeyPress(topicName) {
     const pkt = this.initPacket('note', topicName);
     pkt.note.what = 'kp';
     this.send(pkt);
-  },
+  }
 
   /**
    * Get a named topic, either pull it from cache or create a new instance.
@@ -1926,12 +1856,12 @@ Tinode.prototype = {
    * @param {string} topicName - Name of the topic to get.
    * @returns {Tinode.Topic} Requested or newly created topic or <code>undefined</code> if topic name is invalid.
    */
-  getTopic: function(topicName) {
+  getTopic(topicName) {
     let topic = this.cacheGet('topic', topicName);
     if (!topic && topicName) {
-      if (topicName == TOPIC_ME) {
+      if (topicName == Const.TOPIC_ME) {
         topic = new TopicMe();
-      } else if (topicName == TOPIC_FND) {
+      } else if (topicName == Const.TOPIC_FND) {
         topic = new TopicFnd();
       } else {
         topic = new Topic(topicName);
@@ -1942,7 +1872,7 @@ Tinode.prototype = {
       // Don't save to DB here: a record will be added when the topic is subscribed.
     }
     return topic;
-  },
+  }
 
   /**
    * Check if named topic is already present in cache.
@@ -1951,9 +1881,9 @@ Tinode.prototype = {
    * @param {string} topicName - Name of the topic to check.
    * @returns {boolean} true if topic is found in cache, false otherwise.
    */
-  isTopicCached: function(topicName) {
+  isTopicCached(topicName) {
     return !!this.cacheGet('topic', topicName);
-  },
+  }
 
   /**
    * Generate unique name like <code>'new123456'</code> suitable for creating a new group topic.
@@ -1962,9 +1892,9 @@ Tinode.prototype = {
    * @param {boolean} isChan - if the topic is channel-enabled.
    * @returns {string} name which can be used for creating a new group topic.
    */
-  newGroupTopicName: function(isChan) {
-    return (isChan ? TOPIC_NEW_CHAN : TOPIC_NEW) + this.getNextUniqueId();
-  },
+  newGroupTopicName(isChan) {
+    return (isChan ? Const.TOPIC_NEW_CHAN : Const.TOPIC_NEW) + this.getNextUniqueId();
+  }
 
   /**
    * Instantiate <code>'me'</code> topic or get it from cache.
@@ -1972,9 +1902,9 @@ Tinode.prototype = {
    *
    * @returns {Tinode.TopicMe} Instance of <code>'me'</code> topic.
    */
-  getMeTopic: function() {
-    return this.getTopic(TOPIC_ME);
-  },
+  getMeTopic() {
+    return this.getTopic(Const.TOPIC_ME);
+  }
 
   /**
    * Instantiate <code>'fnd'</code> (find) topic or get it from cache.
@@ -1982,9 +1912,9 @@ Tinode.prototype = {
    *
    * @returns {Tinode.Topic} Instance of <code>'fnd'</code> topic.
    */
-  getFndTopic: function() {
-    return this.getTopic(TOPIC_FND);
-  },
+  getFndTopic() {
+    return this.getTopic(Const.TOPIC_FND);
+  }
 
   /**
    * Create a new {@link LargeFileHelper} instance
@@ -1992,18 +1922,18 @@ Tinode.prototype = {
    *
    * @returns {Tinode.LargeFileHelper} instance of a {@link Tinode.LargeFileHelper}.
    */
-  getLargeFileHelper: function() {
-    return new LargeFileHelper(this, PROTOCOL_VERSION);
-  },
+  getLargeFileHelper() {
+    return new LargeFileHelper(this, Const.PROTOCOL_VERSION);
+  }
 
   /**
    * Get the UID of the the current authenticated user.
    * @memberof Tinode#
    * @returns {string} UID of the current user or <code>undefined</code> if the session is not yet authenticated or if there is no session.
    */
-  getCurrentUserID: function() {
+  getCurrentUserID() {
     return this._myUID;
-  },
+  }
 
   /**
    * Check if the given user ID is equal to the current user's UID.
@@ -2011,27 +1941,27 @@ Tinode.prototype = {
    * @param {string} uid - UID to check.
    * @returns {boolean} true if the given UID belongs to the current logged in user.
    */
-  isMe: function(uid) {
+  isMe(uid) {
     return this._myUID === uid;
-  },
+  }
 
   /**
    * Get login used for last successful authentication.
    * @memberof Tinode#
    * @returns {string} login last used successfully or <code>undefined</code>.
    */
-  getCurrentLogin: function() {
+  getCurrentLogin() {
     return this._login;
-  },
+  }
 
   /**
    * Return information about the server: protocol version and build timestamp.
    * @memberof Tinode#
    * @returns {Object} build and version of the server or <code>null</code> if there is no connection or if the first server response has not been received yet.
    */
-  getServerInfo: function() {
+  getServerInfo() {
     return this._serverInfo;
-  },
+  }
 
   /**
    * Return server-provided configuration value (long integer).
@@ -2040,9 +1970,9 @@ Tinode.prototype = {
    * @param {Object} defaultValue to return in case server limit is not set or not found.
    * @returns {number} named value.
    */
-  getServerLimit: function(name, defaultValue) {
+  getServerLimit(name, defaultValue) {
     return (this._serverInfo ? this._serverInfo[name] : null) || defaultValue;
-  },
+  }
 
   /**
    * Toggle console logging. Logging is off by default.
@@ -2050,10 +1980,10 @@ Tinode.prototype = {
    * @param {boolean} enabled - Set to <code>true</code> to enable logging to console.
    * @param {boolean} trimLongStrings - Set to <code>true</code> to trim long strings.
    */
-  enableLogging: function(enabled, trimLongStrings) {
+  enableLogging(enabled, trimLongStrings) {
     this._loggingEnabled = enabled;
     this._trimLongStrings = enabled && trimLongStrings;
-  },
+  }
 
   /**
    * Set UI language to report to the server. Must be called before <code>'hi'</code> is sent, otherwise it will not be used.
@@ -2061,11 +1991,11 @@ Tinode.prototype = {
    *
    * @param {string} hl - human (UI) language, like <code>"en_US"</code> or <code>"zh-Hans"</code>.
    */
-  setHumanLanguage: function(hl) {
+  setHumanLanguage(hl) {
     if (hl) {
       this._humanLanguage = hl;
     }
-  },
+  }
 
   /**
    * Check if given topic is online.
@@ -2074,10 +2004,10 @@ Tinode.prototype = {
    * @param {string} name of the topic to test.
    * @returns {boolean} true if topic is online, false otherwise.
    */
-  isTopicOnline: function(name) {
+  isTopicOnline(name) {
     const topic = this.cacheGet('topic', name);
     return topic && topic.online;
-  },
+  }
 
   /**
    * Get access mode for the given contact.
@@ -2086,10 +2016,10 @@ Tinode.prototype = {
    * @param {string} name of the topic to query.
    * @returns {AccessMode} access mode if topic is found, null otherwise.
    */
-  getTopicAccessMode: function(name) {
+  getTopicAccessMode(name) {
     const topic = this.cacheGet('topic', name);
     return topic ? topic.acs : null;
-  },
+  }
 
   /**
    * Include message ID into all subsequest messages to server instructin it to send aknowledgemens.
@@ -2099,13 +2029,13 @@ Tinode.prototype = {
    * @param {boolean} status - Turn aknowledgemens on or off.
    * @deprecated
    */
-  wantAkn: function(status) {
+  wantAkn(status) {
     if (status) {
       this._messageId = Math.floor((Math.random() * 0xFFFFFF) + 0xFFFFFF);
     } else {
       this._messageId = 0;
     }
-  },
+  }
 
   // Callbacks:
   /**
@@ -2113,7 +2043,7 @@ Tinode.prototype = {
    * @memberof Tinode#
    * @type {Tinode.onWebsocketOpen}
    */
-  onWebsocketOpen: undefined,
+  onWebsocketOpen = undefined;
 
   /**
    * @typedef Tinode.ServerParams
@@ -2135,14 +2065,14 @@ Tinode.prototype = {
    * @memberof Tinode#
    * @type {Tinode.onConnect}
    */
-  onConnect: undefined,
+  onConnect = undefined;
 
   /**
    * Callback to report when connection is lost. The callback has no parameters.
    * @memberof Tinode#
    * @type {Tinode.onDisconnect}
    */
-  onDisconnect: undefined,
+  onDisconnect = undefined;
 
   /**
    * @callback Tinode.onLogin
@@ -2154,54 +2084,74 @@ Tinode.prototype = {
    * @memberof Tinode#
    * @type {Tinode.onLogin}
    */
-  onLogin: undefined,
+  onLogin = undefined;
 
   /**
    * Callback to receive <code>{ctrl}</code> (control) messages.
    * @memberof Tinode#
    * @type {Tinode.onCtrlMessage}
    */
-  onCtrlMessage: undefined,
+  onCtrlMessage = undefined;
 
   /**
    * Callback to recieve <code>{data}</code> (content) messages.
    * @memberof Tinode#
    * @type {Tinode.onDataMessage}
    */
-  onDataMessage: undefined,
+  onDataMessage = undefined;
 
   /**
    * Callback to receive <code>{pres}</code> (presence) messages.
    * @memberof Tinode#
    * @type {Tinode.onPresMessage}
    */
-  onPresMessage: undefined,
+  onPresMessage = undefined;
 
   /**
    * Callback to receive all messages as objects.
    * @memberof Tinode#
    * @type {Tinode.onMessage}
    */
-  onMessage: undefined,
+  onMessage = undefined;
 
   /**
    * Callback to receive all messages as unparsed text.
    * @memberof Tinode#
    * @type {Tinode.onRawMessage}
    */
-  onRawMessage: undefined,
+  onRawMessage = undefined;
 
   /**
    * Callback to receive server responses to network probes. See {@link Tinode#networkProbe}
    * @memberof Tinode#
    * @type {Tinode.onNetworkProbe}
    */
-  onNetworkProbe: undefined,
+  onNetworkProbe = undefined;
 
   /**
    * Callback to be notified when exponential backoff is iterating.
    * @memberof Tinode#
    * @type {Tinode.onAutoreconnectIteration}
    */
-  onAutoreconnectIteration: undefined,
+  onAutoreconnectIteration = undefined;
 };
+
+// Exported constants
+Tinode.MESSAGE_STATUS_NONE = Const.MESSAGE_STATUS_NONE;
+Tinode.MESSAGE_STATUS_QUEUED = Const.MESSAGE_STATUS_QUEUED;
+Tinode.MESSAGE_STATUS_SENDING = Const.MESSAGE_STATUS_SENDING;
+Tinode.MESSAGE_STATUS_FAILED = Const.MESSAGE_STATUS_FAILED;
+Tinode.MESSAGE_STATUS_SENT = Const.MESSAGE_STATUS_SENT;
+Tinode.MESSAGE_STATUS_RECEIVED = Const.MESSAGE_STATUS_RECEIVED;
+Tinode.MESSAGE_STATUS_READ = Const.MESSAGE_STATUS_READ;
+Tinode.MESSAGE_STATUS_TO_ME = Const.MESSAGE_STATUS_TO_ME;
+Tinode.MESSAGE_STATUS_DEL_RANGE = Const.MESSAGE_STATUS_DEL_RANGE;
+
+// Unicode [del] symbol.
+Tinode.DEL_CHAR = Const.DEL_CHAR;
+
+// Names of keys to server-provided configuration limits.
+Tinode.MAX_MESSAGE_SIZE = 'maxMessageSize';
+Tinode.MAX_SUBSCRIBER_COUNT = 'maxSubscriberCount';
+Tinode.MAX_TAG_COUNT = 'maxTagCount';
+Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';

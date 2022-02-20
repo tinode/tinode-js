@@ -19,6 +19,8 @@ export const TOPIC_ME = 'me';
 export const TOPIC_FND = 'fnd';
 export const TOPIC_SYS = 'sys';
 export const TOPIC_CHAN = 'chn';
+export const TOPIC_GRP = 'grp;'
+export const TOPIC_P2P = 'p2p';
 export const USER_NEW = 'new';
 
 // Starting value of a locally-generated seqId used for pending messages.

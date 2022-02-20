@@ -27,7 +27,7 @@ export default class AccessMode {
     }
   }
 
-  static _checkFlag(val, side, flag) {
+  static #checkFlag(val, side, flag) {
     side = side || 'mode';
     if (['given', 'want', 'mode'].includes(side)) {
       return ((val[side] & flag) != 0);
@@ -413,7 +413,7 @@ export default class AccessMode {
    * @returns {boolean} - <code>true</code> if flag is set.
    */
   isOwner(side) {
-    return AccessMode._checkFlag(this, side, AccessMode._OWNER);
+    return AccessMode.#checkFlag(this, side, AccessMode._OWNER);
   }
   /**
    * AccessMode is a class representing topic access mode.
@@ -428,7 +428,7 @@ export default class AccessMode {
    * @returns {boolean} - <code>true</code> if flag is set.
    */
   isPresencer(side) {
-    return AccessMode._checkFlag(this, side, AccessMode._PRES);
+    return AccessMode.#checkFlag(this, side, AccessMode._PRES);
   }
   /**
    * AccessMode is a class representing topic access mode.
@@ -458,7 +458,7 @@ export default class AccessMode {
    * @returns {boolean} - <code>true</code> if flag is set.
    */
   isJoiner(side) {
-    return AccessMode._checkFlag(this, side, AccessMode._JOIN);
+    return AccessMode.#checkFlag(this, side, AccessMode._JOIN);
   }
   /**
    * AccessMode is a class representing topic access mode.
@@ -473,7 +473,7 @@ export default class AccessMode {
    * @returns {boolean} - <code>true</code> if flag is set.
    */
   isReader(side) {
-    return AccessMode._checkFlag(this, side, AccessMode._READ);
+    return AccessMode.#checkFlag(this, side, AccessMode._READ);
   }
   /**
    * AccessMode is a class representing topic access mode.
@@ -488,7 +488,7 @@ export default class AccessMode {
    * @returns {boolean} - <code>true</code> if flag is set.
    */
   isWriter(side) {
-    return AccessMode._checkFlag(this, side, AccessMode._WRITE);
+    return AccessMode.#checkFlag(this, side, AccessMode._WRITE);
   }
   /**
    * AccessMode is a class representing topic access mode.
@@ -503,7 +503,7 @@ export default class AccessMode {
    * @returns {boolean} - <code>true</code> if flag is set.
    */
   isApprover(side) {
-    return AccessMode._checkFlag(this, side, AccessMode._APPROVE);
+    return AccessMode.#checkFlag(this, side, AccessMode._APPROVE);
   }
   /**
    * AccessMode is a class representing topic access mode.
@@ -533,7 +533,7 @@ export default class AccessMode {
    * @returns {boolean} - <code>true</code> if flag is set.
    */
   isSharer(side) {
-    return this.isAdmin(side) || AccessMode._checkFlag(this, side, AccessMode._SHARE);
+    return this.isAdmin(side) || AccessMode.#checkFlag(this, side, AccessMode._SHARE);
   }
   /**
    * AccessMode is a class representing topic access mode.
@@ -548,7 +548,7 @@ export default class AccessMode {
    * @returns {boolean} - <code>true</code> if flag is set.
    */
   isDeleter(side) {
-    return AccessMode._checkFlag(this, side, AccessMode._DELETE);
+    return AccessMode.#checkFlag(this, side, AccessMode._DELETE);
   }
 }
 
