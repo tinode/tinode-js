@@ -199,7 +199,7 @@ export default class CBuffer {
   find(elem, nearest) {
     const {
       idx
-    } = findNearest(elem, this.buffer, !nearest);
+    } = this.#findNearest(elem, this.buffer, !nearest);
     return idx;
   }
 

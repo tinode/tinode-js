@@ -563,5 +563,5 @@ AccessMode._DELETE = 0x40;
 AccessMode._OWNER = 0x80;
 
 AccessMode._BITMASK = AccessMode._JOIN | AccessMode._READ | AccessMode._WRITE | AccessMode._PRES |
-AccessMode._APPROVE | AccessMode._SHARE | AccessMode._DELETE | AccessMode._OWNER;
+  AccessMode._APPROVE | AccessMode._SHARE | AccessMode._DELETE | AccessMode._OWNER;
 AccessMode._INVALID = 0x100000;

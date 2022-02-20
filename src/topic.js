@@ -10,30 +10,34 @@ import CBuffer from './cbuffer.js';
 import * as Const from './config.js';
 import Drafty from './drafty.js';
 import MetaGetBuilder from './meta-builder.js';
-import { mergeObj, mergeToCache, normalizeArray } from './utils.js';
+import {
+  mergeObj,
+  mergeToCache,
+  normalizeArray
+} from './utils.js';
 
 export class Topic {
- /**
-  * @callback Tinode.Topic.onData
-  * @param {Data} data - Data packet
-  */
- /**
-  * Topic is a class representing a logical communication channel.
-  * @class Topic
-  * @memberof Tinode
-  *
-  * @param {string} name - Name of the topic to create.
-  * @param {Object=} callbacks - Object with various event callbacks.
-  * @param {Tinode.Topic.onData} callbacks.onData - Callback which receives a <code>{data}</code> message.
-  * @param {callback} callbacks.onMeta - Callback which receives a <code>{meta}</code> message.
-  * @param {callback} callbacks.onPres - Callback which receives a <code>{pres}</code> message.
-  * @param {callback} callbacks.onInfo - Callback which receives an <code>{info}</code> message.
-  * @param {callback} callbacks.onMetaDesc - Callback which receives changes to topic desctioption {@link desc}.
-  * @param {callback} callbacks.onMetaSub - Called for a single subscription record change.
-  * @param {callback} callbacks.onSubsUpdated - Called after a batch of subscription changes have been recieved and cached.
-  * @param {callback} callbacks.onDeleteTopic - Called after the topic is deleted.
-  * @param {callback} callbacls.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
-  */
+  /**
+   * @callback Tinode.Topic.onData
+   * @param {Data} data - Data packet
+   */
+  /**
+   * Topic is a class representing a logical communication channel.
+   * @class Topic
+   * @memberof Tinode
+   *
+   * @param {string} name - Name of the topic to create.
+   * @param {Object=} callbacks - Object with various event callbacks.
+   * @param {Tinode.Topic.onData} callbacks.onData - Callback which receives a <code>{data}</code> message.
+   * @param {callback} callbacks.onMeta - Callback which receives a <code>{meta}</code> message.
+   * @param {callback} callbacks.onPres - Callback which receives a <code>{pres}</code> message.
+   * @param {callback} callbacks.onInfo - Callback which receives an <code>{info}</code> message.
+   * @param {callback} callbacks.onMetaDesc - Callback which receives changes to topic desctioption {@link desc}.
+   * @param {callback} callbacks.onMetaSub - Called for a single subscription record change.
+   * @param {callback} callbacks.onSubsUpdated - Called after a batch of subscription changes have been recieved and cached.
+   * @param {callback} callbacks.onDeleteTopic - Called after the topic is deleted.
+   * @param {callback} callbacls.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
+   */
   constructor(name, callbacks) {
     // Parent Tinode object.
     this._tinode = null;
@@ -118,7 +122,7 @@ export class Topic {
    * @returns {string} One of <code>"me"</code>, <code>"fnd"</code>, <code>"sys"</code>, <code>"grp"</code>,
    *    <code>"p2p"</code> or <code>undefined</code>.
    */
-   static topicType(name) {
+  static topicType(name) {
     const types = {
       'me': Const.TOPIC_ME,
       'fnd': Const.TOPIC_FND,
@@ -132,14 +136,14 @@ export class Topic {
     return types[(typeof name == 'string') ? name.substring(0, 3) : 'xxx'];
   }
 
- /**
-  * Check if the given topic name is a name of a 'me' topic.
-  * @memberof Tinode.Topic#
-  * @static
-  *
-  * @param {string} name - Name of the topic to test.
-  * @returns {boolean} <code>true</code> if the name is a name of a 'me' topic, <code>false</code> otherwise.
-  */
+  /**
+   * Check if the given topic name is a name of a 'me' topic.
+   * @memberof Tinode.Topic#
+   * @static
+   *
+   * @param {string} name - Name of the topic to test.
+   * @returns {boolean} <code>true</code> if the name is a name of a 'me' topic, <code>false</code> otherwise.
+   */
   static isMeTopicName(name) {
     return Topic.topicType(name) == Const.TOPIC_ME;
   }
@@ -232,7 +236,7 @@ export class Topic {
     // Send subscribe message, handle async response.
     // If topic name is explicitly provided, use it. If no name, then it's a new group topic,
     // use "new".
-    return this._tinode.subscribe(this.name || TOPIC_NEW, getParams, setParams).then((ctrl) => {
+    return this._tinode.subscribe(this.name || Const.TOPIC_NEW, getParams, setParams).then((ctrl) => {
       if (ctrl.code >= 300) {
         // Do nothing if subscription status has not changed.
         return ctrl;
@@ -256,7 +260,7 @@ export class Topic {
         this.created = ctrl.ts;
         this.updated = ctrl.ts;
 
-        if (this.name != TOPIC_ME && this.name != TOPIC_FND) {
+        if (this.name != Const.TOPIC_ME && this.name != Const.TOPIC_FND) {
           // Add the new topic to the list of contacts maintained by the 'me' topic.
           const me = this._tinode.getMeTopic();
           if (me.onMetaSub) {
@@ -272,7 +276,6 @@ export class Topic {
           this._processMetaDesc(setParams.desc);
         }
       }
-
       return ctrl;
     });
   }
@@ -386,7 +389,7 @@ export class Topic {
     // If promise is provided, send the queued message when it's resolved.
     // If no promise is provided, create a resolved one and send immediately.
     prom = (prom || Promise.resolve()).then(
-      ( /* argument ignored */) => {
+      ( /* argument ignored */ ) => {
         if (pub._cancelled) {
           return {
             code: 300,
@@ -1562,7 +1565,7 @@ export class Topic {
     }
   }
   // Do nothing for topics other than 'me'
-  _processMetaCreds(creds) { }
+  _processMetaCreds(creds) {}
   // Delete cached messages and update cached transaction IDs
   _processDelMessages(clear, delseq) {
     this._maxDel = Math.max(clear, this._maxDel);
@@ -1570,7 +1573,7 @@ export class Topic {
     const topic = this;
     let count = 0;
     if (Array.isArray(delseq)) {
-      delseq.forEach(function (range) {
+      delseq.forEach(function(range) {
         if (!range.hi) {
           count++;
           topic.flushMessage(range.low);
@@ -1755,13 +1758,15 @@ export class Topic {
   // Load most recent messages from persistent cache.
   _loadMessages(db, params) {
     const {
-      since, before, limit
+      since,
+      before,
+      limit
     } = params || {};
     return db.readMessages(this.name, {
-      since: since,
-      before: before,
-      limit: limit || Const.DEFAULT_MESSAGES_PAGE
-    })
+        since: since,
+        before: before,
+        limit: limit || Const.DEFAULT_MESSAGES_PAGE
+      })
       .then((msgs) => {
         msgs.forEach((data) => {
           if (data.seq > this._maxSeq) {
@@ -1794,22 +1799,23 @@ export class Topic {
 
 
 /**
-* @class TopicMe - special case of {@link Tinode.Topic} for
-* managing data of the current user, including contact list.
-* @extends Tinode.Topic
-* @memberof Tinode
-*
-* @param {TopicMe.Callbacks} callbacks - Callbacks to receive various events.
-*/
+ * @class TopicMe - special case of {@link Tinode.Topic} for
+ * managing data of the current user, including contact list.
+ * @extends Tinode.Topic
+ * @memberof Tinode
+ *
+ * @param {TopicMe.Callbacks} callbacks - Callbacks to receive various events.
+ */
 /**
-* @class TopicMe - special case of {@link Tinode.Topic} for
-* managing data of the current user, including contact list.
-* @extends Tinode.Topic
-* @memberof Tinode
-*
-* @param {TopicMe.Callbacks} callbacks - Callbacks to receive various events.
-*/
+ * @class TopicMe - special case of {@link Tinode.Topic} for
+ * managing data of the current user, including contact list.
+ * @extends Tinode.Topic
+ * @memberof Tinode
+ *
+ * @param {TopicMe.Callbacks} callbacks - Callbacks to receive various events.
+ */
 export class TopicMe extends Topic {
+  onContactUpdate;
 
   constructor(callbacks) {
     super(Const.TOPIC_ME, callbacks);
@@ -1833,7 +1839,7 @@ export class TopicMe extends Topic {
 
     // 'P' permission was removed. All topics are offline now.
     if (turnOff) {
-      this._tinode.cacheMap('topic', (cont) => {
+      this._tinode.mapTopics((cont) => {
         if (cont.online) {
           cont.online = false;
           cont.seen = Object.assign(cont.seen || {}, {
@@ -1968,7 +1974,7 @@ export class TopicMe extends Topic {
       return;
     }
 
-    const cont = this._tinode.cacheGet('topic', pres.src);
+    const cont = this._tinode.getCachedTopic(pres.src);
     if (cont) {
       switch (pres.what) {
         case 'on': // topic came online
@@ -2125,7 +2131,7 @@ export class TopicMe extends Topic {
    * @param {Object=} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
    */
   contacts(callback, filter, context) {
-    this._tinode.cacheMap('topic', (c, idx) => {
+    this._tinode.mapTopics((c, idx) => {
       if (c.isCommType() && (!filter || filter(c))) {
         callback.call(context, c, idx);
       }
@@ -2140,7 +2146,7 @@ export class TopicMe extends Topic {
    * @returns {Tinode.Contact} - Contact or `undefined`.
    */
   getContact(name) {
-    return this._tinode.cacheGet('topic', name);
+    return this._tinode.getCachedTopic(name);
   }
 
   /**
@@ -2153,7 +2159,7 @@ export class TopicMe extends Topic {
    */
   getAccessMode(name) {
     if (name) {
-      const cont = this._tinode.cacheGet('topic', name);
+      const cont = this._tinode.getCachedTopic(name);
       return cont ? cont.acs : null;
     }
     return this.acs;
@@ -2167,7 +2173,7 @@ export class TopicMe extends Topic {
    * @returns {boolean} - true if contact is archived, false otherwise.
    */
   isArchived(name) {
-    const cont = this._tinode.cacheGet('topic', name);
+    const cont = this._tinode.getCachedTopic(name);
     return cont && cont.private && !!cont.private.arch;
   }
 
@@ -2186,7 +2192,7 @@ export class TopicMe extends Topic {
    * @returns {Tinode.Credential[]} - array of credentials.
    */
   getCredentials() {
-      return this._credentials;
+    return this._credentials;
   }
 }
 
@@ -2198,52 +2204,44 @@ export class TopicMe extends Topic {
  *
  * @param {TopicFnd.Callbacks} callbacks - Callbacks to receive various events.
  */
-export const TopicFnd = function(callbacks) {
-  Topic.call(this, Const.TOPIC_FND, callbacks);
+export class TopicFnd extends Topic {
   // List of users and topics uid or topic_name -> Contact object)
-  this._contacts = {};
-};
+  _contacts = {};
 
-// Inherit everyting from the generic Topic
-TopicFnd.prototype = Object.create(Topic.prototype, {
+  constructor(callbacks) {
+    super(Const.TOPIC_FND, callbacks);
+  }
+
   // Override the original Topic._processMetaSub
-  _processMetaSub: {
-    value: function(subs) {
-      let updateCount = Object.getOwnPropertyNames(this._contacts).length;
-      // Reset contact list.
-      this._contacts = {};
-      for (let idx in subs) {
-        let sub = subs[idx];
-        const indexBy = sub.topic ? sub.topic : sub.user;
+  _processMetaSub(subs) {
+    let updateCount = Object.getOwnPropertyNames(this._contacts).length;
+    // Reset contact list.
+    this._contacts = {};
+    for (let idx in subs) {
+      let sub = subs[idx];
+      const indexBy = sub.topic ? sub.topic : sub.user;
 
-        sub = mergeToCache(this._contacts, indexBy, sub);
-        updateCount++;
+      sub = mergeToCache(this._contacts, indexBy, sub);
+      updateCount++;
 
-        if (this.onMetaSub) {
-          this.onMetaSub(sub);
-        }
+      if (this.onMetaSub) {
+        this.onMetaSub(sub);
       }
+    }
 
-      if (updateCount > 0 && this.onSubsUpdated) {
-        this.onSubsUpdated(Object.keys(this._contacts));
-      }
-    },
-    enumerable: true,
-    configurable: true
-  },
+    if (updateCount > 0 && this.onSubsUpdated) {
+      this.onSubsUpdated(Object.keys(this._contacts));
+    }
+  }
 
   /**
    * Publishing to TopicFnd is not supported. {@link Topic#publish} is overriden and thows an {Error} if called.
    * @memberof Tinode.TopicFnd#
    * @throws {Error} Always throws an error.
    */
-  publish: {
-    value: function() {
-      return Promise.reject(new Error("Publishing to 'fnd' is not supported"));
-    },
-    enumerable: true,
-    configurable: true
-  },
+  publish() {
+    return Promise.reject(new Error("Publishing to 'fnd' is not supported"));
+  }
 
   /**
    * setMeta to TopicFnd resets contact list in addition to sending the message.
@@ -2251,21 +2249,16 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
    * @param {Tinode.SetParams} params parameters to update.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
-  setMeta: {
-    value: function(params) {
-      const instance = this;
-      return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(() => {
-        if (Object.keys(instance._contacts).length > 0) {
-          instance._contacts = {};
-          if (instance.onSubsUpdated) {
-            instance.onSubsUpdated([]);
-          }
+  setMeta(params) {
+    return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(() => {
+      if (Object.keys(this._contacts).length > 0) {
+        this._contacts = {};
+        if (this.onSubsUpdated) {
+          this.onSubsUpdated([]);
         }
-      });
-    },
-    enumerable: true,
-    configurable: true
-  },
+      }
+    });
+  }
 
   /**
    * Iterate over found contacts. If callback is undefined, use {@link this.onMetaSub}.
@@ -2274,17 +2267,12 @@ TopicFnd.prototype = Object.create(Topic.prototype, {
    * @param {TopicFnd.ContactCallback} callback - Callback to call for each contact.
    * @param {Object} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
    */
-  contacts: {
-    value: function(callback, context) {
-      const cb = (callback || this.onMetaSub);
-      if (cb) {
-        for (let idx in this._contacts) {
-          cb.call(context, this._contacts[idx], idx, this._contacts);
-        }
+  contacts(callback, context) {
+    const cb = (callback || this.onMetaSub);
+    if (cb) {
+      for (let idx in this._contacts) {
+        cb.call(context, this._contacts[idx], idx, this._contacts);
       }
-    },
-    enumerable: true,
-    configurable: true
+    }
   }
-});
-TopicFnd.prototype.constructor = TopicFnd;
+}

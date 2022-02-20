@@ -11,8 +11,7 @@ import AccessMode from './access-mode.js';
 export function jsonParseHelper(key, val) {
   // Try to convert string timestamps with optional milliseconds to Date,
   // e.g. 2015-09-02T01:45:43[.123]Z
-  if (typeof val == 'string' && val.length >= 20 && val.length <= 24 &&
-    ['ts', 'touched', 'updated', 'created', 'when', 'deleted', 'expires'].includes(key)) {
+  if (typeof val == 'string' && val.length >= 20 && val.length <= 24 && ['ts', 'touched', 'updated', 'created', 'when', 'deleted', 'expires'].includes(key)) {
     const date = new Date(val);
     if (!isNaN(date)) {
       return date;
@@ -33,9 +32,8 @@ export function isUrlRelative(url) {
   return url && !/^\s*([a-z][a-z0-9+.-]*:|\/\/)/im.test(url);
 }
 
-// Checks if 'd' is a valid non-zero date;
 function isValidDate(d) {
-  return (d instanceof Date) && !isNaN(d) && (d.getTime() != 0);
+  return d instanceof Date && !isNaN(d) && d.getTime() != 0;
 }
 
 // RFC3339 formater of Date

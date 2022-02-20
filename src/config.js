@@ -3,9 +3,11 @@
  *
  * @copyright 2015-2022 Tinode LLC
  */
- 'use strict';
+'use strict';
 
-import { version as package_version } from '../version.json';
+import {
+  version as package_version
+} from '../version.json';
 
 // Global constants
 export const PROTOCOL_VERSION = '0'; // Major component of the version, e.g. '0' in '0.17.1'.

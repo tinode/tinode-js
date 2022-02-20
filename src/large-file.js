@@ -5,7 +5,9 @@
  */
 'use strict';
 
-import { jsonParseHelper } from './utils.js';
+import {
+  jsonParseHelper
+} from './utils.js';
 
 let XHRProvider;
 
@@ -88,7 +90,7 @@ export default class LargeFileHelper {
       }
     };
 
-    this.xhr.onload = function () {
+    this.xhr.onload = function() {
       let pkt;
       try {
         pkt = JSON.parse(this.response, jsonParseHelper);
@@ -121,7 +123,7 @@ export default class LargeFileHelper {
       }
     };
 
-    this.xhr.onerror = function (e) {
+    this.xhr.onerror = function(e) {
       if (instance.toReject) {
         instance.toReject(new Error("failed"));
       }
@@ -130,7 +132,7 @@ export default class LargeFileHelper {
       }
     };
 
-    this.xhr.onabort = function (e) {
+    this.xhr.onabort = function(e) {
       if (instance.toReject) {
         instance.toReject(new Error("upload cancelled by user"));
       }
@@ -207,7 +209,7 @@ export default class LargeFileHelper {
     this.xhr.responseType = 'blob';
 
     this.onProgress = onProgress;
-    this.xhr.onprogress = function (e) {
+    this.xhr.onprogress = function(e) {
       if (instance.onProgress) {
         // Passing e.loaded instead of e.loaded/e.total because e.total
         // is always 0 with gzip compression enabled by the server.
@@ -222,7 +224,7 @@ export default class LargeFileHelper {
 
     // The blob needs to be saved as file. There is no known way to
     // save the blob as file other than to fake a click on an <a href... download=...>.
-    this.xhr.onload = function () {
+    this.xhr.onload = function() {
       if (this.status == 200) {
         const link = document.createElement('a');
         // URL.createObjectURL is not available in non-browser environment. This call will fail.
@@ -243,7 +245,7 @@ export default class LargeFileHelper {
         // Need to convert this.response to JSON. The blob can only be accessed by the
         // FileReader.
         const reader = new FileReader();
-        reader.onload = function () {
+        reader.onload = function() {
           try {
             const pkt = JSON.parse(this.result, jsonParseHelper);
             instance.toReject(new Error(`${pkt.ctrl.text} (${pkt.ctrl.code})`));
@@ -256,13 +258,13 @@ export default class LargeFileHelper {
       }
     };
 
-    this.xhr.onerror = function (e) {
+    this.xhr.onerror = function(e) {
       if (instance.toReject) {
         instance.toReject(new Error("failed"));
       }
     };
 
-    this.xhr.onabort = function () {
+    this.xhr.onabort = function() {
       if (instance.toReject) {
         instance.toReject(null);
       }

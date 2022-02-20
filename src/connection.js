@@ -66,12 +66,17 @@ export default class Connection {
   #boffIteration = 0;
   #boffClosed = false; // Indicator if the socket was manually closed - don't autoreconnect if true.
 
+  // Websocket.
+  #socket = null;
+
   host;
   secure;
   apiKey;
 
   version;
   autoreconnect;
+
+  initialized;
 
   // (config.host, config.apiKey, config.transport, config.secure), PROTOCOL_VERSION, true
   constructor(config, version_, autoreconnect_) {
@@ -82,24 +87,103 @@ export default class Connection {
     this.version = version_;
     this.autoreconnect = autoreconnect_;
 
-    let initialized = false;
-
     if (config.transport === 'lp') {
       // explicit request to use long polling
       this.#init_lp();
-      initialized = true;
+      this.initialized = 'lp';
     } else if (config.transport === 'ws') {
       // explicit request to use web socket
       // if websockets are not available, horrible things will happen
       this.#init_ws();
-      initialized = true;
+      this.initialized = 'ws';
     }
 
-    if (!initialized) {
+    if (!this.initialized) {
       // Invalid or undefined network transport.
       this.#log("Unknown or invalid network transport. Running under Node? Call 'Tinode.setNetworkProviders()'.");
       throw new Error("Unknown or invalid network transport. Running under Node? Call 'Tinode.setNetworkProviders()'.");
     }
+  }
+
+  /**
+   * To use Connection in a non browser context, supply WebSocket and XMLHttpRequest providers.
+   * @static
+   * @memberof Connection
+   * @param wsProvider WebSocket provider, e.g. for nodeJS , <code>require('ws')</code>.
+   * @param xhrProvider XMLHttpRequest provider, e.g. for node <code>require('xhr')</code>.
+   */
+  static setNetworkProviders(wsProvider, xhrProvider) {
+    WebSocketProvider = wsProvider;
+    XHRProvider = xhrProvider;
+  }
+
+  /**
+   * Initiate a new connection
+   * @memberof Tinode.Connection#
+   * @param {string} host_ Host name to connect to; if <code>null</code> the old host name will be used.
+   * @param {boolean} force Force new connection even if one already exists.
+   * @return {Promise} Promise resolved/rejected when the connection call completes, resolution is called without
+   *  parameters, rejection passes the {Error} as parameter.
+   */
+  connect(host_, force) {
+    return Promise.reject(null);
+  }
+
+  /**
+   * Try to restore a network connection, also reset backoff.
+   * @memberof Tinode.Connection#
+   *
+   * @param {boolean} force - reconnect even if there is a live connection already.
+   */
+  reconnect(force) {}
+
+  /**
+   * Terminate the network connection
+   * @memberof Tinode.Connection#
+   */
+  disconnect() {}
+
+  /**
+   * Send a string to the server.
+   * @memberof Tinode.Connection#
+   *
+   * @param {string} msg - String to send.
+   * @throws Throws an exception if the underlying connection is not live.
+   */
+  sendText(msg) {}
+
+  /**
+   * Check if connection is alive.
+   * @memberof Tinode.Connection#
+   * @returns {boolean} <code>true</code> if connection is live, <code>false</code> otherwise.
+   */
+  isConnected() {
+    return false;
+  }
+
+  /**
+   * Get the name of the current network transport.
+   * @memberof Tinode.Connection#
+   * @returns {string} name of the transport such as <code>"ws"</code> or <code>"lp"</code>.
+   */
+  transport() {
+    return this.initialized;
+  }
+
+  /**
+   * Send network probe to check if connection is indeed live.
+   * @memberof Tinode.Connection#
+   */
+  probe() {
+    this.sendText('1');
+  }
+
+  /**
+   * Reset autoreconnect counter to zero.
+   * @memberof Tinode.Connection#
+   */
+  backoffReset() {
+    this.#boffReset();
   }
 
   #log(text, ...args) {
@@ -150,142 +234,6 @@ export default class Connection {
     this.#boffIteration = 0;
   }
 
-  // Initialization for Websocket
-  #init_ws() {
-    let _socket = null;
-
-    /**
-     * Initiate a new connection
-     * @memberof Tinode.Connection#
-     * @param {string} host_ Host name to connect to; if <code>null</code> the old host name will be used.
-     * @param {boolean} force Force new connection even if one already exists.
-     * @return {Promise} Promise resolved/rejected when the connection call completes, resolution is called without
-     *  parameters, rejection passes the {Error} as parameter.
-     */
-    this.connect = (host_, force) => {
-      this.#boffClosed = false;
-
-      if (_socket) {
-        if (!force && _socket.readyState == _socket.OPEN) {
-          return Promise.resolve();
-        }
-        _socket.close();
-        _socket = null;
-      }
-
-      if (host_) {
-        this.host = host_;
-      }
-
-      return new Promise((resolve, reject) => {
-        const url = makeBaseUrl(this.host, this.secure ? 'wss' : 'ws', this.version, this.apiKey);
-
-        this.#log("Connecting to: ", url);
-
-        // It throws when the server is not accessible but the exception cannot be caught:
-        // https://stackoverflow.com/questions/31002592/javascript-doesnt-catch-error-in-websocket-instantiation/31003057
-        const conn = new WebSocketProvider(url);
-
-        conn.onerror = (err) => {
-          reject(err);
-        };
-
-        conn.onopen = (evt) => {
-          if (this.autoreconnect) {
-            this.#boffStop();
-          }
-
-          if (this.onOpen) {
-            this.onOpen();
-          }
-
-          resolve();
-        };
-
-        conn.onclose = (evt) => {
-          _socket = null;
-
-          if (this.onDisconnect) {
-            const code = this.#boffClosed ? NETWORK_USER : NETWORK_ERROR;
-            this.onDisconnect(new Error(this.#boffClosed ? NETWORK_USER_TEXT : NETWORK_ERROR_TEXT +
-              ' (' + code + ')'), code);
-          }
-
-          if (!this.#boffClosed && this.autoreconnect) {
-            this.#boffReconnect.call(instance);
-          }
-        };
-
-        conn.onmessage = (evt) => {
-          if (this.onMessage) {
-            this.onMessage(evt.data);
-          }
-        };
-
-        _socket = conn;
-      });
-    };
-
-    /**
-     * Try to restore a network connection, also reset backoff.
-     * @memberof Tinode.Connection#
-     *
-     * @param {boolean} force - reconnect even if there is a live connection already.
-     */
-    this.reconnect = (force) => {
-      this.#boffStop();
-      this.connect(null, force);
-    };
-
-    /**
-     * Terminate the network connection
-     * @memberof Tinode.Connection#
-     */
-    this.disconnect = () => {
-      this.#boffClosed = true;
-      this.#boffStop();
-
-      if (!_socket) {
-        return;
-      }
-      _socket.close();
-      _socket = null;
-    };
-
-    /**
-     * Send a string to the server.
-     * @memberof Tinode.Connection#
-     *
-     * @param {string} msg - String to send.
-     * @throws Throws an exception if the underlying connection is not live.
-     */
-    this.sendText = (msg) => {
-      if (_socket && (_socket.readyState == _socket.OPEN)) {
-        _socket.send(msg);
-      } else {
-        throw new Error("Websocket is not connected");
-      }
-    };
-
-    /**
-     * Check if socket is alive.
-     * @memberof Tinode.Connection#
-     * @returns {boolean} <code>true</code> if connection is live, <code>false</code> otherwise.
-     */
-    this.isConnected = () => {
-      return (_socket && (_socket.readyState == _socket.OPEN));
-    };
-
-    /**
-     * Get the name of the current network transport.
-     * @memberof Tinode.Connection#
-     * @returns {string} name of the transport such as <code>"ws"</code> or <code>"lp"</code>.
-     */
-    this.transport = () => {
-      return 'ws';
-    };
-  }
-
   // Initialization for long polling.
   #init_lp() {
     const XDR_UNSENT = 0; // Client has been created. open() not called yet.
@@ -300,7 +248,7 @@ export default class Connection {
     let _poller = null;
     let _sender = null;
 
-    function lp_sender(url_) {
+    let lp_sender = (url_) => {
       const sender = new XHRProvider();
       sender.onreadystatechange = (evt) => {
         if (sender.readyState == XDR_DONE && sender.status >= 400) {
@@ -313,12 +261,11 @@ export default class Connection {
       return sender;
     }
 
-    function lp_poller(url_, resolve, reject) {
+    let lp_poller = (url_, resolve, reject) => {
       let poller = new XHRProvider();
       let promiseCompleted = false;
 
       poller.onreadystatechange = (evt) => {
-
         if (poller.readyState == XDR_DONE) {
           if (poller.status == 201) { // 201 == HTTP.Created, get SID
             let pkt = JSON.parse(poller.responseText, jsonParseHelper);
@@ -435,26 +382,101 @@ export default class Connection {
     this.isConnected = () => {
       return (_poller && true);
     };
+  }
 
-    this.transport = () => {
-      return 'lp';
+  // Initialization for Websocket
+  #init_ws() {
+    this.connect = (host_, force) => {
+      this.#boffClosed = false;
+
+      if (this.#socket) {
+        if (!force && this.#socket.readyState == this.#socket.OPEN) {
+          return Promise.resolve();
+        }
+        this.#socket.close();
+        this.#socket = null;
+      }
+
+      if (host_) {
+        this.host = host_;
+      }
+
+      return new Promise((resolve, reject) => {
+        const url = makeBaseUrl(this.host, this.secure ? 'wss' : 'ws', this.version, this.apiKey);
+
+        this.#log("Connecting to: ", url);
+
+        // It throws when the server is not accessible but the exception cannot be caught:
+        // https://stackoverflow.com/questions/31002592/javascript-doesnt-catch-error-in-websocket-instantiation/31003057
+        const conn = new WebSocketProvider(url);
+
+        conn.onerror = (err) => {
+          reject(err);
+        };
+
+        conn.onopen = (evt) => {
+          if (this.autoreconnect) {
+            this.#boffStop();
+          }
+
+          if (this.onOpen) {
+            this.onOpen();
+          }
+
+          resolve();
+        };
+
+        conn.onclose = (evt) => {
+          this.#socket = null;
+
+          if (this.onDisconnect) {
+            const code = this.#boffClosed ? NETWORK_USER : NETWORK_ERROR;
+            this.onDisconnect(new Error(this.#boffClosed ? NETWORK_USER_TEXT : NETWORK_ERROR_TEXT +
+              ' (' + code + ')'), code);
+          }
+
+          if (!this.#boffClosed && this.autoreconnect) {
+            this.#boffReconnect();
+          }
+        };
+
+        conn.onmessage = (evt) => {
+          if (this.onMessage) {
+            this.onMessage(evt.data);
+          }
+        };
+
+        this.#socket = conn;
+      });
+    }
+
+    this.reconnect = (force) => {
+      this.#boffStop();
+      this.connect(null, force);
     };
-  }
 
-  /**
-   * Send network probe to check if connection is indeed live.
-   * @memberof Tinode.Connection#
-   */
-  probe() {
-    this.sendText('1');
-  }
+    this.disconnect = () => {
+      this.#boffClosed = true;
+      this.#boffStop();
 
-  /**
-   * Reset autoreconnect counter to zero.
-   * @memberof Tinode.Connection#
-   */
-  backoffReset() {
-    this.#boffReset();
+      if (!this.#socket) {
+        return;
+      }
+      this.#socket.close();
+      this.#socket = null;
+    };
+
+    this.sendText = (msg) => {
+      if (this.#socket && (this.#socket.readyState == this.#socket.OPEN)) {
+        this.#socket.send(msg);
+      } else {
+        throw new Error("Websocket is not connected");
+      }
+    };
+
+    this.isConnected = () => {
+      return (this.#socket && (this.#socket.readyState == this.#socket.OPEN));
+    };
   }
 
   // Callbacks:
@@ -509,18 +531,6 @@ export default class Connection {
    * @type {Tinode.Connection.LoggerCallbackType}
    */
   logger = undefined;
-
-  /**
-   * To use Connection in a non browser context, supply WebSocket and XMLHttpRequest providers.
-   * @static
-   * @memberof Connection
-   * @param wsProvider WebSocket provider, e.g. for nodeJS , <code>require('ws')</code>.
-   * @param xhrProvider XMLHttpRequest provider, e.g. for node <code>require('xhr')</code>.
-   */
-  static setNetworkProviders(wsProvider, xhrProvider) {
-    WebSocketProvider = wsProvider;
-    XHRProvider = xhrProvider;
-  }
 }
 
 Connection.NETWORK_ERROR = NETWORK_ERROR;
