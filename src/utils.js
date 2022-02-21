@@ -6,12 +6,14 @@
 'use strict';
 
 import AccessMode from './access-mode.js';
+import DEL_CHAR from './config.js';
 
-// Attempt to convert date strings to objects.
+// Attempt to convert date and AccessMode strings to objects.
 export function jsonParseHelper(key, val) {
   // Try to convert string timestamps with optional milliseconds to Date,
   // e.g. 2015-09-02T01:45:43[.123]Z
   if (typeof val == 'string' && val.length >= 20 && val.length <= 24 && ['ts', 'touched', 'updated', 'created', 'when', 'deleted', 'expires'].includes(key)) {
+
     const date = new Date(val);
     if (!isNaN(date)) {
       return date;
@@ -33,7 +35,7 @@ export function isUrlRelative(url) {
 }
 
 function isValidDate(d) {
-  return d instanceof Date && !isNaN(d) && d.getTime() != 0;
+  return (d instanceof Date) && !isNaN(d) && (d.getTime() != 0);
 }
 
 // RFC3339 formater of Date
@@ -58,11 +60,11 @@ export function rfc3339DateString(d) {
 // Array and Date objects are shallow-copied.
 export function mergeObj(dst, src, ignore) {
   if (typeof src != 'object') {
-    if (src === Tinode.DEL_CHAR) {
-      return undefined;
-    }
     if (src === undefined) {
       return dst;
+    }
+    if (src === DEL_CHAR) {
+      return undefined;
     }
     return src;
   }
@@ -86,15 +88,12 @@ export function mergeObj(dst, src, ignore) {
     return src;
   }
 
-  if (!dst || dst === Tinode.DEL_CHAR) {
+  if (!dst || dst === DEL_CHAR) {
     dst = src.constructor();
   }
 
   for (let prop in src) {
-    if (src.hasOwnProperty(prop) &&
-      (!ignore || !ignore[prop]) &&
-      (prop != '_noForwarding')) {
-
+    if (src.hasOwnProperty(prop) && (!ignore || !ignore[prop]) && (prop != '_noForwarding')) {
       dst[prop] = mergeObj(dst[prop], src[prop]);
     }
   }
@@ -162,7 +161,7 @@ export function normalizeArray(arr) {
   if (out.length == 0) {
     // Add single tag with a Unicode Del character, otherwise an ampty array
     // is ambiguos. The Del tag will be stripped by the server.
-    out.push(Tinode.DEL_CHAR);
+    out.push(DEL_CHAR);
   }
   return out;
 }
