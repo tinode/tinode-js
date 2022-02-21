@@ -1869,7 +1869,7 @@ export class TopicMe extends Topic {
       let cont = null;
       if (sub.deleted) {
         cont = sub;
-        this._tinode.cacheDel('topic', topicName);
+        this._tinode.cacheRemTopic(topicName);
         this._tinode._db.remTopic(topicName);
       } else {
         // Ensure the values are defined and are integers.
@@ -1974,7 +1974,7 @@ export class TopicMe extends Topic {
       return;
     }
 
-    const cont = this._tinode.getCachedTopic(pres.src);
+    const cont = this._tinode.cacheGetTopic(pres.src);
     if (cont) {
       switch (pres.what) {
         case 'on': // topic came online
@@ -2024,7 +2024,7 @@ export class TopicMe extends Topic {
           break;
         case 'gone':
           // topic deleted or unsubscribed from.
-          this._tinode.cacheDel('topic', pres.src);
+          this._tinode.cacheRemTopic(pres.src);
           this._tinode._db.remTopic(pres.src);
           break;
         case 'del':
@@ -2146,7 +2146,7 @@ export class TopicMe extends Topic {
    * @returns {Tinode.Contact} - Contact or `undefined`.
    */
   getContact(name) {
-    return this._tinode.getCachedTopic(name);
+    return this._tinode.cacheGetTopic(name);
   }
 
   /**
@@ -2159,7 +2159,7 @@ export class TopicMe extends Topic {
    */
   getAccessMode(name) {
     if (name) {
-      const cont = this._tinode.getCachedTopic(name);
+      const cont = this._tinode.cacheGetTopic(name);
       return cont ? cont.acs : null;
     }
     return this.acs;
@@ -2173,7 +2173,7 @@ export class TopicMe extends Topic {
    * @returns {boolean} - true if contact is archived, false otherwise.
    */
   isArchived(name) {
-    const cont = this._tinode.getCachedTopic(name);
+    const cont = this._tinode.cacheGetTopic(name);
     return cont && cont.private && !!cont.private.arch;
   }
 

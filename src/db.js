@@ -106,12 +106,20 @@ export default class DB {
    * Delete persistent cache.
    */
   deleteDatabase() {
+    // Close connection, otherwise operations will fail with 'onblocked'.
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
     return new Promise((resolve, reject) => {
       const req = IDBProvider.deleteDatabase(DB_NAME);
       req.onblocked = function(event) {
         if (this.db) {
           this.db.close();
         }
+        const err = new Error("blocked");
+        this.#logger('PCache', 'deleteDatabase', err);
+        reject(err);
       };
       req.onsuccess = (event) => {
         this.db = null;
@@ -119,7 +127,7 @@ export default class DB {
         resolve(true);
       };
       req.onerror = (event) => {
-        this.#logger('PCache', "deleteDatabase", event.target.error);
+        this.#logger('PCache', 'deleteDatabase', event.target.error);
         reject(event.target.error);
       };
     });

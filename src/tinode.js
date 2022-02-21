@@ -430,7 +430,7 @@ export default class Tinode {
       }).then(() => {
         // Then load users.
         return this._db.mapUsers((data) => {
-          return this.#cachePut('user', data.uid, mergeObj({}, data.public));
+          this.#cachePut('user', data.uid, mergeObj({}, data.public));
         });
       }).then(() => {
         // Now wait for all messages to finish loading.
@@ -440,6 +440,11 @@ export default class Tinode {
           onComplete();
         }
         this.#logger("Persistent cache initialized.");
+      }).catch((err) => {
+        if (onComplete) {
+          onComplete(err);
+        }
+        this.#logger("Failed to initialize persistent cache:", err);
       });
     } else {
       this._db.deleteDatabase().then(() => {
@@ -866,16 +871,16 @@ export default class Tinode {
       return undefined;
     };
     topic._cachePutUser = (uid, user) => {
-      return this.#cachePut('user', uid, mergeObj({}, user.public));
+      this.#cachePut('user', uid, mergeObj({}, user.public));
     };
     topic._cacheDelUser = (uid) => {
-      return this.#cacheDel('user', uid);
+      this.#cacheDel('user', uid);
     };
     topic._cachePutSelf = () => {
-      return this.#cachePut('topic', topic.name, topic);
+      this.#cachePut('topic', topic.name, topic);
     };
     topic._cacheDelSelf = () => {
-      return this.#cacheDel('topic', topic.name);
+      this.#cacheDel('topic', topic.name);
     };
   }
 
@@ -1925,8 +1930,18 @@ export default class Tinode {
    * @param {string} topicName - Name of the topic to get.
    * @returns {Tinode.Topic} Requested topic or <code>undefined</code> if topic is not found in cache.
    */
-  getCachedTopic(topicName) {
+  cacheGetTopic(topicName) {
     return this.#cacheGet('topic', topicName);
+  }
+
+  /**
+   * Remove named topic from cache.
+   * @memberof Tinode#
+   *
+   * @param {string} topicName - Name of the topic to remove from cache.
+   */
+  cacheRemTopic(topicName) {
+    this.#cacheDel('topic', topicName);
   }
 
   /**
