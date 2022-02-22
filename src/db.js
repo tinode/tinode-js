@@ -200,7 +200,7 @@ export default class DB {
         const topic = event.target.result;
         if (topic._deleted != deleted) {
           topic._deleted = true;
-          trx.objectStore('topic').put(DB.#serializeTopic(req.result, topic));
+          trx.objectStore('topic').put(topic);
         }
         trx.commit();
       };
@@ -576,7 +576,7 @@ export default class DB {
 
   // Serializable topic fields.
   static #topic_fields = ['created', 'updated', 'deleted', 'read', 'recv', 'seq', 'clear', 'defacs',
-    'creds', 'public', 'trusted', 'private', 'touched'
+    'creds', 'public', 'trusted', 'private', 'touched', '_deleted'
   ];
 
   // Copy data from src to Topic object.

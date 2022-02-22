@@ -84,7 +84,7 @@ export class Topic {
       return a.seq - b.seq;
     }, true);
     // Boolean, true if the topic is currently live
-    this._subscribed = false;
+    this._attached = false;
     // Timestap of the most recently updated subscription.
     this._lastSubsUpdate = new Date(0);
     // Topic created but not yet synced with the server. Used only during initialization.
@@ -216,7 +216,7 @@ export class Topic {
    * @returns {boolean} True is topic is attached/subscribed, false otherwise.
    */
   isSubscribed() {
-    return this._subscribed;
+    return this._attached;
   }
 
   /**
@@ -229,8 +229,13 @@ export class Topic {
    */
   subscribe(getParams, setParams) {
     // If the topic is already subscribed, return resolved promise
-    if (this._subscribed) {
+    if (this._attached) {
       return Promise.resolve(this);
+    }
+
+    // If the topic is deleted, reject subscription requests.
+    if (this._deleted) {
+      return Promise.reject(new Error("Conversation deleted"));
     }
 
     // Send subscribe message, handle async response.
@@ -242,7 +247,7 @@ export class Topic {
         return ctrl;
       }
 
-      this._subscribed = true;
+      this._attached = true;
       this._deleted = false;
       this.acs = (ctrl.params && ctrl.params.acs) ? ctrl.params.acs : this.acs;
 
@@ -313,7 +318,7 @@ export class Topic {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
   publishMessage(pub) {
-    if (!this._subscribed) {
+    if (!this._attached) {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
     }
 
@@ -363,7 +368,7 @@ export class Topic {
    * @returns {Promise} derived promise.
    */
   publishDraft(pub, prom) {
-    if (!prom && !this._subscribed) {
+    if (!prom && !this._attached) {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
     }
 
@@ -421,7 +426,7 @@ export class Topic {
    */
   leave(unsub) {
     // It's possible to unsubscribe (unsub==true) from inactive topic.
-    if (!this._subscribed && !unsub) {
+    if (!this._attached && !unsub) {
       return Promise.reject(new Error("Cannot leave inactive topic"));
     }
 
@@ -612,7 +617,7 @@ export class Topic {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   delMessages(ranges, hard) {
-    if (!this._subscribed) {
+    if (!this._attached) {
       return Promise.reject(new Error("Cannot delete messages in inactive topic"));
     }
 
@@ -760,7 +765,7 @@ export class Topic {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   delSubscription(user) {
-    if (!this._subscribed) {
+    if (!this._attached) {
       return Promise.reject(new Error("Cannot delete subscription in inactive topic"));
     }
     // Send {del} message, return promise
@@ -782,7 +787,7 @@ export class Topic {
    * @param {number} seq - ID or the message read or received.
    */
   note(what, seq) {
-    if (!this._subscribed) {
+    if (!this._attached) {
       // Cannot sending {note} on an inactive topic".
       return;
     }
@@ -840,7 +845,7 @@ export class Topic {
    * @memberof Tinode.Topic#
    */
   noteKeyPress() {
-    if (this._subscribed) {
+    if (this._attached) {
       this._tinode.noteKeyPress(this.name);
     } else {
       this._tinode.logger("INFO: Cannot send notification in inactive topic");
@@ -1604,7 +1609,7 @@ export class Topic {
   }
   // Reset subscribed state
   _resetSub() {
-    this._subscribed = false;
+    this._attached = false;
   }
   // This topic is either deleted or unsubscribed from.
   _gone() {
@@ -1617,7 +1622,7 @@ export class Topic {
     this.trusted = null;
     this._maxSeq = 0;
     this._minSeq = 0;
-    this._subscribed = false;
+    this._attached = false;
 
     const me = this._tinode.getMeTopic();
     if (me) {
@@ -2023,9 +2028,13 @@ export class TopicMe extends Topic {
           cont.unread = cont.seq - cont.read;
           break;
         case 'gone':
+          console.log("pres received", pres);
           // topic deleted or unsubscribed from.
-          this._tinode.cacheRemTopic(pres.src);
-          this._tinode._db.remTopic(pres.src);
+          if (!cont._deleted) {
+            cont._deleted = true;
+            cont._attached = false;
+            this._tinode._db.markTopicAsDeleted(pres.src, true);
+          }
           break;
         case 'del':
           // Update topic.del value.
@@ -2056,8 +2065,6 @@ export class TopicMe extends Topic {
           dummy.topic = pres.src;
           dummy.online = false;
           dummy.acs = acs;
-          this._tinode.attachCacheToTopic(dummy);
-          dummy._cachePutSelf();
           this._tinode._db.updTopic(dummy);
         }
       } else if (pres.what == 'tags') {
@@ -2095,7 +2102,7 @@ export class TopicMe extends Topic {
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   delCredential(method, value) {
-    if (!this._subscribed) {
+    if (!this._attached) {
       return Promise.reject(new Error("Cannot delete credential in inactive 'me' topic"));
     }
     // Send {del} message, return promise
