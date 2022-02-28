@@ -2028,7 +2028,6 @@ export class TopicMe extends Topic {
           cont.unread = cont.seq - cont.read;
           break;
         case 'gone':
-          console.log("pres received", pres);
           // topic deleted or unsubscribed from.
           if (!cont._deleted) {
             cont._deleted = true;
