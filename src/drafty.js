@@ -1733,6 +1733,10 @@ function draftyToTree(doc) {
   const spans = [];
   const attachments = [];
   fmt.forEach((span) => {
+    if (!span || typeof span != 'object') {
+      return;
+    }
+
     if (!['undefined', 'number'].includes(typeof span.at)) {
       // Present, but non-numeric 'at'.
       return;
@@ -1803,7 +1807,7 @@ function draftyToTree(doc) {
   }
 
   spans.forEach((span) => {
-    if (ent.length > 0 && !span.type) {
+    if (ent.length > 0 && !span.type && ent[span.key] && typeof ent[span.key] == 'object') {
       span.type = ent[span.key].tp;
       span.data = ent[span.key].data;
     }
