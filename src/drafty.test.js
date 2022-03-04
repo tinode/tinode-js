@@ -448,3 +448,26 @@ const format_this = [
 test.each(format_this)('Drafty.UNSAFE_toHTML %j', (src,exp) => {
   expect(Drafty.UNSAFE_toHTML(src)).toEqual(exp);
 });
+
+// Test for handling invalid Drafty.
+const invalid_this = [
+  [
+    {
+      "fmt":[null,{"at": 5,"len":5,"tp":"EM"}],
+      "txt":"Null style in the middle"
+    },
+    "Null <i>style</i> in the middle",
+  ],
+  [
+    {
+      "ent":[null,{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
+      "fmt":[{"len":4},{"at":5,"key":1,"len":6}],
+      "txt":"Null entity with reference"
+    },
+    "Null <a href=\"#usrCPvFc6lpAsw\">entity</a> with reference"
+  ],
+];
+
+test.each(invalid_this)('Invalid Drafty %j', (src,exp) => {
+  expect(Drafty.UNSAFE_toHTML(src)).toEqual(exp);
+});

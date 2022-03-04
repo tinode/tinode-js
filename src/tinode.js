@@ -33,7 +33,7 @@
  *    const me = tinode.getMeTopic();
  *    me.onMetaDesc = function(meta) { ... };
  *    // Subscribe, fetch topic description and the list of contacts.
- *    me.subscribe({get: {desc: {}, sub: {}});
+ *    me.subscribe({get: {desc: {}, sub: {}}});
  *  }).catch((err) => {
  *    // Login or subscription failed, do something.
  *    ...
