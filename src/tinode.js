@@ -1679,11 +1679,12 @@ export default class Tinode {
    * Out of band notification: notify topic that an external (push) notification was recived by the client.
    * @memberof Tinode#
    *
+   * @param {string} what - notification type, 'msg' or 'read'.
    * @param {string} topicName - name of the updated topic.
-   * @param {number} seq - seq ID of the new message.
+   * @param {number} seq - seq ID of the affected message.
    * @param {string=} act - UID of the sender; default is current.
    */
-  oobNotification(topicName, seq, act) {
+  oobNotification(what, topicName, seq, act) {
     const topic = this.#cacheGet('topic', topicName);
     if (topic) {
       topic._updateReceived(seq, act);
