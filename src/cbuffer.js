@@ -19,12 +19,22 @@
  *    returns <code>-1</code> if <code>a < b</code>, <code>0</code> if <code>a == b</code>, <code>1</code> otherwise.
  * @param {boolean} unique enforce element uniqueness: when <code>true</code> replace existing element with a new
  *    one on conflict; when <code>false</code> keep both elements.
+ * @param {function} isSub returns <code>true</code> if <code>the argument</code> is meant to replace another object.
+ * @param {function} finalizeMsg returns the final (finalize) representation of <code>object/argument</code>.
  */
-const CBuffer = function(compare, unique) {
+const CBuffer = function(compare, unique, isSub, finalizeMsg) {
   let buffer = [];
 
   compare = compare || function(a, b) {
     return a === b ? 0 : a < b ? -1 : 1;
+  };
+
+  isSub = isSub || function(msg) {
+    return false;
+  };
+
+  finalizeMsg = finalizeMsg || function(msg) {
+    return msg;
   };
 
   function findNearest(elem, arr, exact) {
@@ -180,10 +190,28 @@ const CBuffer = function(compare, unique) {
     forEach: function(callback, startIdx, beforeIdx, context) {
       startIdx = startIdx | 0;
       beforeIdx = beforeIdx || buffer.length;
-      for (let i = startIdx; i < beforeIdx; i++) {
-        callback.call(context, buffer[i],
-          (i > startIdx ? buffer[i - 1] : undefined),
-          (i < beforeIdx - 1 ? buffer[i + 1] : undefined), i);
+      let prevIdx = startIdx - 1;
+      let curIdx = startIdx;
+      while (curIdx < beforeIdx && isSub(buffer[curIdx])) {
+        curIdx++;
+      }
+      let nextIdx = curIdx + 1;
+      while (nextIdx < beforeIdx && isSub(buffer[nextIdx])) {
+        nextIdx++;
+      }
+
+      let prev = undefined;
+      let cur = curIdx < beforeIdx ? finalizeMsg(buffer[curIdx]) : undefined;
+      let next = nextIdx < beforeIdx ? finalizeMsg(buffer[nextIdx]) : undefined;
+      while (curIdx < beforeIdx) {
+        callback.call(context, cur, prev, next, curIdx);
+        prevIdx = curIdx;
+        curIdx = nextIdx;
+        do nextIdx++; while (nextIdx < beforeIdx && isSub(buffer[nextIdx]));
+        // Update finalize messages.
+        prev = cur;
+        cur = next;
+        next = nextIdx < beforeIdx ? finalizeMsg(buffer[nextIdx]) : undefined;
       }
     },
 

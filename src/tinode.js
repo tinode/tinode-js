@@ -2081,7 +2081,7 @@ Tinode.prototype = {
 
   call: function(topicName, seq, evt, payload) {
     const pkt = this.initPacket('note', topicName);
-    if (evt != 'hang-up') {
+    if (evt != 'hang-up' && evt != 'ringing') {
       pkt.note.id = this.getNextUniqueId();
     }
     pkt.note.seq = seq;
@@ -2442,10 +2442,25 @@ const Topic = function(name, callbacks) {
   this._tags = [];
   // Credentials such as email or phone number.
   this._credentials = [];
+  this._replacements = {};
   // Message cache, sorted by message seq values, from old to new.
   this._messages = CBuffer(function(a, b) {
-    return a.seq - b.seq;
-  }, true);
+      return a.seq - b.seq;
+    }, true,
+    function(msg) {
+      return typeof msg.head != 'undefined' && msg.head && typeof msg.head['replace-seq'] != 'undefined';
+    },
+    (msg) => {
+      const subSeq = this._replacements[msg.seq];
+      if (typeof subSeq == 'undefined') {
+        return msg;
+      }
+      const r = this.findMessage(subSeq);
+      let result = Object.assign({}, r);
+      result.seq = msg.seq;
+      result.edited = true;
+      return result;
+    });
   // Boolean, true if the topic is currently live
   this._subscribed = false;
   // Timestap of the most recently updated subscription.
@@ -3656,6 +3671,15 @@ Topic.prototype = {
     return status;
   },
 
+  // Returns true if pub is meant to replace another message (e.g. original message was edited).
+  _isReplacementMsg: function(pub) {
+    if (typeof pub.head == 'undefined' || pub.head == null ||
+      typeof pub.head['replace-seq'] == 'undefined') {
+      return false;
+    }
+    return true;
+  },
+
   // Process data message
   _routeData: function(data) {
     if (data.content) {
@@ -3676,6 +3700,13 @@ Topic.prototype = {
       this._messages.put(data);
       this._tinode._db.addMessage(data);
       this._updateDeletedRanges();
+      if (this._isReplacementMsg(data)) {
+        const target = data.head['replace-seq'];
+        const orig = this._replacements[target];
+        if (typeof orig == 'undefined' || orig < data.seq) {
+          this._replacements[target] = data.seq;
+        }
+      }
     }
 
     if (this.onData) {
@@ -4119,6 +4150,13 @@ Topic.prototype = {
             this._minSeq = data.seq;
           }
           this._messages.put(data);
+          if (this._isReplacementMsg(data)) {
+            const target = data.head['replace-seq'];
+            const orig = this._replacements[target];
+            if (typeof orig == 'undefined' || orig < data.seq) {
+              this._replacements[target] = data.seq;
+            }
+          }
         });
         if (msgs.length > 0) {
           this._updateDeletedRanges();
