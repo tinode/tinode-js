@@ -225,7 +225,7 @@ export default class MetaGetBuilder {
   build() {
     const what = [];
     let params = {};
-    ['data', 'sub', 'desc', 'tags', 'cred', 'del'].map((key) => {
+    ['data', 'sub', 'desc', 'tags', 'cred', 'del'].forEach((key) => {
       if (this.what.hasOwnProperty(key)) {
         what.push(key);
         if (Object.getOwnPropertyNames(this.what[key]).length > 0) {

@@ -140,6 +140,10 @@ const ENTITY_TYPES = [
 
 // HTML tag name suggestions
 const HTML_TAGS = {
+  AU: {
+    name: 'audio',
+    isVoid: false
+  },
   BN: {
     name: 'button',
     isVoid: false
@@ -245,73 +249,43 @@ function base64toDataUrl(b64, contentType) {
 const DECORATORS = {
   // Visial styles
   ST: {
-    open: function() {
-      return '<b>';
-    },
-    close: function() {
-      return '</b>';
-    }
+    open: _ => '<b>',
+    close: _ => '</b>'
   },
   EM: {
-    open: function() {
-      return '<i>';
-    },
-    close: function() {
-      return '</i>'
-    }
+    open: _ => '<i>',
+    close: _ => '</i>'
   },
   DL: {
-    open: function() {
-      return '<del>';
-    },
-    close: function() {
-      return '</del>'
-    }
+    open: _ => '<del>',
+    close: _ => '</del>'
   },
   CO: {
-    open: function() {
-      return '<tt>';
-    },
-    close: function() {
-      return '</tt>'
-    }
+    open: _ => '<tt>',
+    close: _ => '</tt>'
   },
   // Line break
   BR: {
-    open: function() {
-      return '<br/>';
-    },
-    close: function() {
-      return ''
-    }
+    open: _ => '<br/>',
+    close: _ => ''
   },
   // Hidden element
   HD: {
-    open: function() {
-      return '';
-    },
-    close: function() {
-      return '';
-    }
+    open: _ => '',
+    close: _ => ''
   },
   // Highlighted element.
   HL: {
-    open: function() {
-      return '<span style="color:teal">';
-    },
-    close: function() {
-      return '</span>';
-    }
+    open: _ => '<span style="color:teal">',
+    close: _ => '</span>'
   },
   // Link (URL)
   LN: {
-    open: function(data) {
+    open: (data) => {
       return '<a href="' + data.url + '">';
     },
-    close: function(data) {
-      return '</a>';
-    },
-    props: function(data) {
+    close: _ => '</a>',
+    props: (data) => {
       return data ? {
         href: data.url,
         target: '_blank'
@@ -320,13 +294,11 @@ const DECORATORS = {
   },
   // Mention
   MN: {
-    open: function(data) {
+    open: (data) => {
       return '<a href="#' + data.val + '">';
     },
-    close: function(data) {
-      return '</a>';
-    },
-    props: function(data) {
+    close: _ => '</a>',
+    props: (data) => {
       return data ? {
         id: data.val
       } : null;
@@ -334,13 +306,11 @@ const DECORATORS = {
   },
   // Hashtag
   HT: {
-    open: function(data) {
+    open: (data) => {
       return '<a href="#' + data.val + '">';
     },
-    close: function(data) {
-      return '</a>';
-    },
-    props: function(data) {
+    close: _ => '</a>',
+    props: (data) => {
       return data ? {
         id: data.val
       } : null;
@@ -348,13 +318,9 @@ const DECORATORS = {
   },
   // Button
   BN: {
-    open: function(data) {
-      return '<button>';
-    },
-    close: function(data) {
-      return '</button>';
-    },
-    props: function(data) {
+    open: _ => '<button>',
+    close: _ => '</button>',
+    props: (data) => {
       return data ? {
         'data-act': data.act,
         'data-val': data.val,
@@ -363,9 +329,29 @@ const DECORATORS = {
       } : null;
     },
   },
+  // Audio recording
+  AU: {
+    open: (data) => {
+      const url = data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger);
+      return '<audio controls src="' + url + '">';
+    },
+    close: _ => '</audio>',
+    props: (data) => {
+      if (!data) return null;
+      return {
+        // Embedded data or external link.
+        src: data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
+        'data-preload': data.ref ? 'metadata' : 'auto',
+        'data-duration': data.duration,
+        'data-name': data.name,
+        'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
+        'data-mime': data.mime,
+      };
+    }
+  },
   // Image
   IM: {
-    open: function(data) {
+    open: (data) => {
       // Don't use data.ref for preview: it's a security risk.
       const tmpPreviewUrl = base64toDataUrl(data._tempPreview, data.mime);
       const previewUrl = base64toObjectUrl(data.val, data.mime, Drafty.logger);
@@ -375,10 +361,10 @@ const DECORATORS = {
         (data.width ? ' width="' + data.width + '"' : '') +
         (data.height ? ' height="' + data.height + '"' : '') + ' border="0" />';
     },
-    close: function(data) {
+    close: (data) => {
       return (data.name ? '</a>' : '');
     },
-    props: function(data) {
+    props: (data) => {
       if (!data) return null;
       return {
         // Temporary preview, or permanent preview, or external link.
@@ -396,33 +382,20 @@ const DECORATORS = {
   },
   // Form - structured layout of elements.
   FM: {
-    open: function(data) {
-      return '<div>';
-    },
-    close: function(data) {
-      return '</div>';
-    }
+    open: _ => '<div>',
+    close: _ => '</div>'
   },
   // Row: logic grouping of elements
   RW: {
-    open: function(data) {
-      return '<div>';
-    },
-    close: function(data) {
-      return '</div>';
-    }
+    open: _ => '<div>',
+    close: _ => '</div>'
   },
   // Quoted block.
   QQ: {
-    open: function(data) {
-      return '<div>';
-    },
-    close: function(data) {
-      return '</div>';
-    },
-    props: function(data) {
-      if (!data) return null;
-      return {};
+    open: _ => '<div>',
+    close: _ => '</div>',
+    props: (data) => {
+      return data ? {} : null;
     },
   }
 };
@@ -700,13 +673,81 @@ Drafty.insertImage = function(content, at, imageDesc) {
     ex.data._tempPreview = imageDesc._tempPreview;
     ex.data._processing = true;
     imageDesc.urlPromise.then(
-      (url) => {
+      url => {
         ex.data.ref = url;
         ex.data._tempPreview = undefined;
         ex.data._processing = undefined;
       },
-      (err) => {
-        /* catch the error, otherwise it will appear in the console. */
+      _ => {
+        // Catch the error, otherwise it will appear in the console.
+        ex.data._processing = undefined;
+      }
+    );
+  }
+
+  content.ent.push(ex);
+
+  return content;
+}
+
+/**
+ * @typedef Drafty.AudioDesc
+ * @memberof Drafty
+ * @type Object
+ * @param {string} mime - mime-type of the audio, e.g. "audio/ogg".
+ * @param {string} bits - base64-encoded audio content. Could be null/undefined.
+ * @param {integer} duration - duration of the record in milliseconds.
+ * @param {string} filename - file name suggestion for downloading the audio.
+ * @param {integer} size - size of the recording in bytes. Treat is as an untrusted hint.
+ * @param {string} refurl - reference to the content. Could be null/undefined.
+ * @param {Promise} urlPromise - Promise which returns content URL when resolved.
+ */
+
+/**
+ * Insert audio recording into Drafty document.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document to add audio record to.
+ * @param {integer} at - index where the object is inserted. The length of the record is always 1.
+ * @param {AudioDesc} audioDesc - object with the audio paramenets and data.
+ *
+ * @return {Drafty} updated document.
+ */
+Drafty.insertAudio = function(content, at, audioDesc) {
+  content = content || {
+    txt: ' '
+  };
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: at | 0,
+    len: 1,
+    key: content.ent.length
+  });
+
+  const ex = {
+    tp: 'AU',
+    data: {
+      mime: audioDesc.mime,
+      val: audioDesc.bits,
+      duration: audioDesc.duration | 0,
+      name: audioDesc.filename,
+      size: audioDesc.size | 0,
+      ref: audioDesc.refurl
+    }
+  };
+
+  if (audioDesc.urlPromise) {
+    ex.data._processing = true;
+    audioDesc.urlPromise.then(
+      url => {
+        ex.data.ref = url;
+        ex.data._processing = undefined;
+      },
+      _ => {
+        // Catch the error, otherwise it will appear in the console.
         ex.data._processing = undefined;
       }
     );
@@ -799,7 +840,7 @@ Drafty.appendLink = function(content, linkData) {
 }
 
 /**
- * Append inline image to Drafty document.
+ * Append image to Drafty document.
  * @memberof Drafty
  * @static
  *
@@ -817,10 +858,28 @@ Drafty.appendImage = function(content, imageDesc) {
 }
 
 /**
+ * Append audio recodring to Drafty document.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document to add recording to.
+ * @param {AudioDesc} audioDesc - object with audio data.
+ *
+ * @return {Drafty} updated document.
+ */
+Drafty.appendImage = function(content, audioDesc) {
+  content = content || {
+    txt: ''
+  };
+  content.txt += ' ';
+  return Drafty.insertAudio(content, content.txt.length - 1, audioDesc);
+}
+
+/**
  * @typedef Drafty.AttachmentDesc
  * @memberof Drafty
  * @type Object
- * @param {string} mime - mime-type of the image, e.g. "image/png"
+ * @param {string} mime - mime-type of the attachment, e.g. "application/octet-stream"
  * @param {string} data - base64-encoded in-band content of small attachments. Could be null/undefined.
  * @param {string} filename - file name suggestion for downloading the attachment.
  * @param {integer} size - size of the file in bytes. Treat is as an untrusted hint.
