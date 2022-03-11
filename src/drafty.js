@@ -695,7 +695,7 @@ Drafty.insertImage = function(content, at, imageDesc) {
  * @memberof Drafty
  * @type Object
  * @param {string} mime - mime-type of the audio, e.g. "audio/ogg".
- * @param {string} bits - base64-encoded audio content. Could be null/undefined.
+ * @param {string} data - base64-encoded audio content. Could be null/undefined.
  * @param {integer} duration - duration of the record in milliseconds.
  * @param {string} filename - file name suggestion for downloading the audio.
  * @param {integer} size - size of the recording in bytes. Treat is as an untrusted hint.
@@ -731,7 +731,7 @@ Drafty.insertAudio = function(content, at, audioDesc) {
     tp: 'AU',
     data: {
       mime: audioDesc.mime,
-      val: audioDesc.bits,
+      val: audioDesc.data,
       duration: audioDesc.duration | 0,
       name: audioDesc.filename,
       size: audioDesc.size | 0,
@@ -867,7 +867,7 @@ Drafty.appendImage = function(content, imageDesc) {
  *
  * @return {Drafty} updated document.
  */
-Drafty.appendImage = function(content, audioDesc) {
+Drafty.appendAudio = function(content, audioDesc) {
   content = content || {
     txt: ''
   };

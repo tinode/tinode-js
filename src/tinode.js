@@ -293,7 +293,7 @@ function getBrowserInfo(ua, product) {
  * @param {boolen} config.persist - Use IndexedDB persistent storage.
  * @param {function} onComplete - callback to call when initialization is completed.
  */
-export default class Tinode {
+export class Tinode {
   _host;
   _secure;
 
