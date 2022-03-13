@@ -63,7 +63,7 @@ const MAX_PREVIEW_ATTACHMENTS = 3;
 const MAX_PREVIEW_DATA_SIZE = 64;
 const JSON_MIME_TYPE = 'application/json';
 const DRAFTY_MIME_TYPE = 'text/x-drafty';
-const ALLOWED_ENT_FIELDS = ['act', 'height', 'mime', 'name', 'ref', 'size', 'url', 'val', 'width'];
+const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'mime', 'name', 'ref', 'size', 'url', 'val', 'width'];
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
