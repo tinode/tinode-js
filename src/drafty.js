@@ -63,7 +63,7 @@ const MAX_PREVIEW_ATTACHMENTS = 3;
 const MAX_PREVIEW_DATA_SIZE = 64;
 const JSON_MIME_TYPE = 'application/json';
 const DRAFTY_MIME_TYPE = 'text/x-drafty';
-const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'mime', 'name', 'ref', 'size', 'url', 'val', 'width'];
+const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'mime', 'name', 'preview', 'ref', 'size', 'url', 'val', 'width'];
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
@@ -697,6 +697,7 @@ Drafty.insertImage = function(content, at, imageDesc) {
  * @param {string} mime - mime-type of the audio, e.g. "audio/ogg".
  * @param {string} data - base64-encoded audio content. Could be null/undefined.
  * @param {integer} duration - duration of the record in milliseconds.
+ * @param {string} preview - base64 encoded short array of amplitude values 0..100.
  * @param {string} filename - file name suggestion for downloading the audio.
  * @param {integer} size - size of the recording in bytes. Treat is as an untrusted hint.
  * @param {string} refurl - reference to the content. Could be null/undefined.
@@ -733,6 +734,7 @@ Drafty.insertAudio = function(content, at, audioDesc) {
       mime: audioDesc.mime,
       val: audioDesc.data,
       duration: audioDesc.duration | 0,
+      preview: audioDesc.preview,
       name: audioDesc.filename,
       size: audioDesc.size | 0,
       ref: audioDesc.refurl
