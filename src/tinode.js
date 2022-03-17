@@ -420,7 +420,8 @@ export class Tinode {
           } else {
             topic = new Topic(data.name);
           }
-
+          // This is not a new topic.
+          delete this._new;
           this._db.deserializeTopic(topic, data);
           this.#attachCacheToTopic(topic);
           topic._cachePutSelf();

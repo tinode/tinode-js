@@ -253,7 +253,7 @@ export class Topic {
 
       // Set topic name for new topics and add it to cache.
       if (this._new) {
-        this._new = false;
+        delete this._new;
 
         if (this.name != ctrl.topic) {
           // Name may change new123456 -> grpAbCdEf. Remove from cache under the old name.
