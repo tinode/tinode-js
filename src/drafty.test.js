@@ -300,11 +300,59 @@ test.each(shorten_this)('Drafty.shorten %j', (src,exp) => {
 
 // Drafty docs for testing Drafty.forwardedContent.
 const forward_this = [
-  [
+  [{
+      "txt": " ",
+      "fmt": [{
+        "len": 1
+      }],
+      "ent": [{
+        "data": {
+          "height": 213,
+          "mime": "image/jpeg",
+          "name": "roses.jpg",
+          "val": "<38992, bytes: 123456789012345678901234567890123456789012345678901234567890>",
+          "width": 638
+        },
+        "tp": "IM"
+      }]
+    },
     {
-      "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],
-      "fmt":[{"len":13},{"at":13,"len":1,"tp":"BR"},{"len":38,"tp":"QQ"}],
-      "txt":"Alice Johnson This is a reply to replyThis is a Reply -> Forward -> Reply."
+      "txt": " ",
+      "fmt": [{
+        "at": 0,
+        "len": 1,
+        "key": 0
+      }],
+      "ent": [{
+        "tp": "IM",
+        "data": {
+          "height": 213,
+          "mime": "image/jpeg",
+          "name": "roses.jpg",
+          "val": "<38992, bytes: 123456789012345678901234567890123456789012345678901234567890>",
+          "width": 638
+        }
+      }]
+    },
+  ],
+  [{
+      "ent": [{
+        "data": {
+          "val": "usrCPvFc6lpAsw"
+        },
+        "tp": "MN"
+      }],
+      "fmt": [{
+        "len": 13
+      }, {
+        "at": 13,
+        "len": 1,
+        "tp": "BR"
+      }, {
+        "len": 38,
+        "tp": "QQ"
+      }],
+      "txt": "Alice Johnson This is a reply to replyThis is a Reply -> Forward -> Reply."
     },
     {
       "ent":[{"data":{"val":"usrCPvFc6lpAsw"},"tp":"MN"}],

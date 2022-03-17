@@ -2123,7 +2123,7 @@ function lTrim(tree) {
         tree = null;
       }
     }
-  } else if (tree.children && tree.children.length > 0) {
+  } else if (!tree.type && tree.children && tree.children.length > 0) {
     const c = lTrim(tree.children[0]);
     if (c) {
       tree.children[0] = c;
