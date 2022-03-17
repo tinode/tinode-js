@@ -1264,22 +1264,14 @@ Drafty.replyContent = function(original, limit) {
   // Shorten the doc.
   tree = shortenTree(tree, limit, '…');
   // Strip heavy elements except IM.data['val'] (have to keep them to generate previews later).
-  tree = treeTopDown(tree, (node) => {
-    const data = copyEntData(node.data, true, (node.type == 'IM' ? ['val'] : null));
-    if (data) {
-      node.data = data;
-    } else {
-      delete node.data;
-    }
-    return node;
-  });
+  tree = lightEntity(tree, node => (node.type == 'IM' ? ['val'] : null));
   // Convert back to Drafty.
   return treeToDrafty({}, tree, []);
 }
 
 
 /**
- * Generate drafty previe:
+ * Generate drafty preview:
  *  - Shorten the document.
  *  - Strip all heavy entity data leaving just inline styles and entity references.
  *  - Replace line breaks with spaces.
@@ -1293,9 +1285,10 @@ Drafty.replyContent = function(original, limit) {
  *
  * @param {Drafty|string} original - Drafty object to shorten.
  * @param {number} limit - length in characters to shorten to.
+ * @param {boolean} forwarding - this a forwarding message preview.
  * @returns new shortened Drafty object leaving the original intact.
  */
-Drafty.preview = function(original, limit) {
+Drafty.preview = function(original, limit, forwarding) {
   let tree = draftyToTree(original);
 
   // Move attachments to the end.
@@ -1321,7 +1314,12 @@ Drafty.preview = function(original, limit) {
   tree = treeTopDown(tree, convMNnQQnBR);
 
   tree = shortenTree(tree, limit, '…');
-  tree = lightEntity(tree);
+  if (forwarding) {
+    // Keep IM data for preview.
+    tree = lightEntity(tree, node => (node.type == 'IM' ? ['val'] : null));
+  } else {
+    tree = lightEntity(tree);
+  }
 
   // Convert back to Drafty.
   return treeToDrafty({}, tree, []);
@@ -2159,9 +2157,9 @@ function shortenTree(tree, limit, tail) {
 }
 
 // Strip heavy entities from a tree.
-function lightEntity(tree) {
-  const lightCopy = function(node) {
-    const data = copyEntData(node.data, true);
+function lightEntity(tree, allow) {
+  const lightCopy = (node) => {
+    const data = copyEntData(node.data, true, allow ? allow(node) : null);
     if (data) {
       node.data = data;
     } else {
