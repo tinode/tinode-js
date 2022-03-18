@@ -321,6 +321,13 @@ export class Topic {
     if (!this._attached) {
       return Promise.reject(new Error("Cannot publish on inactive topic"));
     }
+    if (this._sending) {
+      return Promise.reject(new Error("The message is already being sent"));
+    }
+
+    // Send data.
+    pub._sending = true;
+    pub._failed = false;
 
     // Extract refereces to attachments and out of band image records.
     let attachments = null;
@@ -336,9 +343,6 @@ export class Topic {
       }
     }
 
-    // Send data.
-    pub._sending = true;
-    pub._failed = false;
     return this._tinode.publishMessage(pub, attachments).then((ctrl) => {
       pub._sending = false;
       pub.ts = ctrl.ts;
