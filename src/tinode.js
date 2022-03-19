@@ -420,11 +420,11 @@ export class Tinode {
           } else {
             topic = new Topic(data.name);
           }
-          // This is not a new topic.
-          delete this._new;
           this._db.deserializeTopic(topic, data);
           this.#attachCacheToTopic(topic);
           topic._cachePutSelf();
+          // Topic loaded from DB is not new.
+          delete topic._new;
           // Request to load messages and save the promise.
           prom.push(topic._loadMessages(this._db));
         });

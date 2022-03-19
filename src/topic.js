@@ -372,10 +372,6 @@ export class Topic {
    * @returns {Promise} derived promise.
    */
   publishDraft(pub, prom) {
-    if (!prom && !this._attached) {
-      return Promise.reject(new Error("Cannot publish on inactive topic"));
-    }
-
     const seq = pub.seq || this._getQueuedSeqId();
     if (!pub._noForwarding) {
       // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
@@ -397,8 +393,8 @@ export class Topic {
     }
     // If promise is provided, send the queued message when it's resolved.
     // If no promise is provided, create a resolved one and send immediately.
-    prom = (prom || Promise.resolve()).then(
-      ( /* argument ignored */ ) => {
+    return (prom || Promise.resolve())
+      .then(_ => {
         if (pub._cancelled) {
           return {
             code: 300,
@@ -406,19 +402,18 @@ export class Topic {
           };
         }
         return this.publishMessage(pub);
-      },
-      (err) => {
+      }).catch(err => {
         this._tinode.logger("WARNING: Message draft rejected", err);
         pub._sending = false;
         pub._failed = true;
-        this._messages.delAt(this._messages.find(pub));
-        this._tinode._db.remMessages(this.name, pub.seq);
         if (this.onData) {
           this.onData();
         }
+        // Rethrow to let caller know that the operation failed.
+        throw err;
       });
-    return prom;
   }
+
   /**
    * Leave the topic, optionally unsibscribe. Leaving the topic means the topic will stop
    * receiving updates from the server. Unsubscribing will terminate user's relationship with the topic.
@@ -443,6 +438,7 @@ export class Topic {
       return ctrl;
     });
   }
+
   /**
    * Request topic metadata from the server.
    * @memberof Tinode.Topic#
@@ -455,6 +451,7 @@ export class Topic {
     // Send {get} message, return promise.
     return this._tinode.getMeta(this.name, params);
   }
+
   /**
    * Request more messages from the server
    * @memberof Tinode.Topic#
@@ -1889,7 +1886,8 @@ export class TopicMe extends Topic {
           sub.unread = sub.seq - sub.read;
         }
 
-        cont = mergeObj(this._tinode.getTopic(topicName), sub);
+        const topic = this._tinode.getTopic(topicName);
+        cont = mergeObj(topic, sub);
         this._tinode._db.updTopic(cont);
 
         if (Topic.isP2PTopicName(topicName)) {
@@ -1897,12 +1895,9 @@ export class TopicMe extends Topic {
           this._tinode._db.updUser(topicName, cont.public);
         }
         // Notify topic of the update if it's an external update.
-        if (!sub._noForwarding) {
-          const topic = this._tinode.getTopic(topicName);
-          if (topic) {
-            sub._noForwarding = true;
-            topic._processMetaDesc(sub);
-          }
+        if (!sub._noForwarding && topic) {
+          sub._noForwarding = true;
+          topic._processMetaDesc(sub);
         }
       }
 
