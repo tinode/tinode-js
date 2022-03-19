@@ -1865,6 +1865,22 @@ Tinode.prototype = {
   },
 
   /**
+   * Report a topic for abuse. Wrapper for {@link Tinode#publish}.
+   * @memberof Tinode#
+   *
+   * @param {string} action - the only supported action is 'report'.
+   * @param {string} target - name of the topic being reported.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+   */
+  report: function(action, target) {
+    return this.publish(TOPIC_SYS, Drafty.attachJSON(null, {
+      'action': action,
+      'target': target
+    }), true);
+  },
+
+  /**
    * @typedef GetQuery
    * @type {Object}
    * @memberof Tinode
@@ -2700,6 +2716,8 @@ Topic.prototype = {
    *
    * @param {number} limit number of messages to get.
    * @param {boolean} forward if true, request newer messages.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the request is completed.
    */
   getMessagesPage: function(limit, forward) {
     let query = forward ?
@@ -2853,22 +2871,6 @@ Topic.prototype = {
         }
       }
     });
-  },
-
-  /**
-   * Report a topic for abuse. Wrapper for {@link Tinode#publish}.
-   * @memberof Tinode.Topic#
-   *
-   * @param {string} action - the only supported action is 'report'.
-   * @param {string} target - name of the topic being reported.
-   *
-   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
-   */
-  report: function(action, target) {
-    return this.publish(TOPIC_SYS, Drafty.attachJSON(null, {
-      'action': action,
-      'target': target
-    }));
   },
 
   /**
