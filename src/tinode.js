@@ -2047,6 +2047,22 @@ export class Tinode {
   }
 
   /**
+   * Report a topic for abuse. Wrapper for {@link Tinode#publish}.
+   * @memberof Tinode.Topic#
+   *
+   * @param {string} action - the only supported action is 'report'.
+   * @param {string} target - name of the topic being reported.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+   */
+  report(action, target) {
+    return this.publish(Const.TOPIC_SYS, Drafty.attachJSON(null, {
+      'action': action,
+      'target': target
+    }));
+  }
+
+  /**
    * Return server-provided configuration value (long integer).
    * @memberof Tinode#
    * @param {string} name of the value to return
