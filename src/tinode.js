@@ -1819,15 +1819,15 @@ Tinode.prototype = {
    * Publish {data} message to topic.
    * @memberof Tinode#
    *
-   * @param {string} topic - Name of the topic to publish to.
+   * @param {string} topicName - Name of the topic to publish to.
    * @param {Object} content - Payload to publish.
    * @param {boolean=} noEcho - If <code>true</code>, tell the server not to echo the message to the original session.
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publish: function(topic, content, noEcho) {
+  publish: function(topicName, content, noEcho) {
     return this.publishMessage(
-      this.createMessage(topic, content, noEcho)
+      this.createMessage(topicName, content, noEcho)
     );
   },
 
@@ -1871,6 +1871,22 @@ Tinode.prototype = {
       topic._updateReceived(seq, act);
       this.getMeTopic()._refreshContact('msg', topic);
     }
+  },
+
+  /**
+   * Report a topic for abuse. Wrapper for {@link Tinode#publish}.
+   * @memberof Tinode#
+   *
+   * @param {string} action - the only supported action is 'report'.
+   * @param {string} target - name of the topic being reported.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+   */
+  report: function(action, target) {
+    return this.publish(TOPIC_SYS, Drafty.attachJSON(null, {
+      'action': action,
+      'target': target
+    }), true);
   },
 
   /**
@@ -2737,6 +2753,8 @@ Topic.prototype = {
    *
    * @param {number} limit number of messages to get.
    * @param {boolean} forward if true, request newer messages.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the request is completed.
    */
   getMessagesPage: function(limit, forward) {
     let query = forward ?
