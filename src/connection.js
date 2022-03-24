@@ -313,7 +313,7 @@ export default class Connection {
           }
         }
       };
-      poller.open('GET', url_, true);
+      poller.open('POST', url_, true);
       return poller;
     }
 
@@ -335,7 +335,7 @@ export default class Connection {
 
       return new Promise((resolve, reject) => {
         const url = makeBaseUrl(this.host, this.secure ? 'https' : 'http', this.version, this.apiKey);
-        this.#log("Connecting to:", url);
+        this.#log("LP connecting to:", url);
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null);
       }).catch((err) => {
@@ -404,7 +404,7 @@ export default class Connection {
       return new Promise((resolve, reject) => {
         const url = makeBaseUrl(this.host, this.secure ? 'wss' : 'ws', this.version, this.apiKey);
 
-        this.#log("Connecting to: ", url);
+        this.#log("WS connecting to: ", url);
 
         // It throws when the server is not accessible but the exception cannot be caught:
         // https://stackoverflow.com/questions/31002592/javascript-doesnt-catch-error-in-websocket-instantiation/31003057
