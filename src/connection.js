@@ -41,7 +41,6 @@ function makeBaseUrl(host, protocol, version, apiKey) {
     }
     url += '?apikey=' + apiKey;
   }
-
   return url;
 }
 
@@ -156,7 +155,7 @@ const Connection = function(config, version_, autoreconnect_) {
       return new Promise(function(resolve, reject) {
         const url = makeBaseUrl(host, secure ? 'wss' : 'ws', version, apiKey);
 
-        log("Connecting to: ", url);
+        log("WS connecting to: ", url);
 
         // It throws when the server is not accessible but the exception cannot be caught:
         // https://stackoverflow.com/questions/31002592/javascript-doesnt-catch-error-in-websocket-instantiation/31003057
@@ -348,7 +347,8 @@ const Connection = function(config, version_, autoreconnect_) {
           }
         }
       }
-      poller.open('GET', url_, true);
+      // Using POST to avoid caching response by service worker.
+      poller.open('POST', url_, true);
       return poller;
     }
 
@@ -368,9 +368,9 @@ const Connection = function(config, version_, autoreconnect_) {
         host = host_;
       }
 
-      return new Promise(function(resolve, reject) {
+      return new Promise((resolve, reject) => {
         const url = makeBaseUrl(host, secure ? 'https' : 'http', version, apiKey);
-        log("Connecting to:", url);
+        log("LP Connecting to:", url);
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null)
       }).catch((err) => {
