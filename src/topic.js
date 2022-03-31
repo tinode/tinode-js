@@ -749,10 +749,11 @@ export class Topic {
     if (this._deleted) {
       // The topic is already deleted at the server, just remove from DB.
       this._gone();
-      return new Promise.resolve(null);
+      return Promise.resolve(null);
     }
 
     return this._tinode.delTopic(this.name, hard).then((ctrl) => {
+      this._deleted = true;
       this._resetSub();
       this._gone();
       return ctrl;
@@ -2032,6 +2033,8 @@ export class TopicMe extends Topic {
             cont._deleted = true;
             cont._attached = false;
             this._tinode._db.markTopicAsDeleted(pres.src, true);
+          } else {
+            this._tinode._db.remTopic(pres.src);
           }
           break;
         case 'del':
