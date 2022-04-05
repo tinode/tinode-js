@@ -1888,6 +1888,10 @@ export class TopicMe extends Topic {
         }
 
         const topic = this._tinode.getTopic(topicName);
+        if (topic._new) {
+          delete topic._new;
+        }
+
         cont = mergeObj(topic, sub);
         this._tinode._db.updTopic(cont);
 
