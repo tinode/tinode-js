@@ -975,15 +975,6 @@ const Tinode = function(config, onComplete) {
             if (this.onInfoMessage) {
               this.onInfoMessage(pkt.info);
             }
-          } else if (pkt.tele) {
-            //
-            const topic = cacheGet('topic', pkt.tele.topic);
-            if (topic) {
-              topic._routeTele(pkt.tele);
-            }
-            if (this.onTeleMessage) {
-              this.onTeleMessage(pkt.tele);
-            }
           } else {
             this.logger("ERROR: Unknown packet received.");
           }
@@ -3858,12 +3849,6 @@ Topic.prototype = {
     }
   },
 
-  _routeTele: function(tele) {
-    if (this.onTele) {
-      this.onTele(tele);
-    }
-  },
-
   // Called by Tinode when meta.desc packet is received.
   // Called by 'me' topic on contact update (desc._noForwarding is true).
   _processMetaDesc: function(desc) {
@@ -4356,16 +4341,6 @@ TopicMe.prototype = Object.create(Topic.prototype, {
       }
       if (this.onCredsUpdated) {
         this.onCredsUpdated(this._credentials);
-      }
-    },
-    enumerable: true,
-    configurable: true
-  },
-
-  _routeTele: {
-    value: function(tele) {
-      if (this.onTele) {
-        this.onTele(tele);
       }
     },
     enumerable: true,
