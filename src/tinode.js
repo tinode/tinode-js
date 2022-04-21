@@ -2466,6 +2466,7 @@ const Topic = function(name, callbacks) {
       let result = Object.assign({}, r);
       result.seq = msg.seq;
       result.edited = true;
+      result.origTs = msg.ts;
       return result;
     });
   // Boolean, true if the topic is currently live
