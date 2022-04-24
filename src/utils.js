@@ -94,7 +94,11 @@ export function mergeObj(dst, src, ignore) {
 
   for (let prop in src) {
     if (src.hasOwnProperty(prop) && (!ignore || !ignore[prop]) && (prop != '_noForwarding')) {
-      dst[prop] = mergeObj(dst[prop], src[prop]);
+      try {
+        dst[prop] = mergeObj(dst[prop], src[prop]);
+      } catch (err) {
+        // FIXME: probably need to log something here.
+      }
     }
   }
   return dst;
