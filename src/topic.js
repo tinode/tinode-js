@@ -84,12 +84,10 @@ export class Topic {
     this._messages = new CBuffer((a, b) => {
         return a.seq - b.seq;
       }, true,
-      function(msg) {
-        return typeof msg.head != 'undefined' && msg.head && typeof msg.head['replace-seq'] != 'undefined';
-      },
-      (msg) => {
+      msg => (msg.head && msg.head.replace),
+      msg => {
         const subSeq = this._replacements[msg.seq];
-        if (typeof subSeq == 'undefined') {
+        if (!subSeq) {
           return msg;
         }
         const r = this.findMessage(subSeq);
@@ -838,12 +836,23 @@ export class Topic {
     }
   }
 
-  call(evt, seq, payload) {
-    if (!this._attached && evt != 'ringing' && evt != 'hang-up' && evt != 'extend-lease') {
+  /**
+   * Send a {note what='call'}. Wrapper for {@link Tinode#videoCall}.
+   * @memberof Tinode#
+   *
+   * @param {string} evt - Call event.
+   * @param {int} seq - ID of the call message the event pertains to.
+   * @param {string} payload - Payload associated with this event (e.g. SDP string).
+   *
+   * @returns {Promise} Promise (for some call events) which will
+   *                    be resolved/rejected on receiving server reply
+   */
+  videoCall(evt, seq, payload) {
+    if (!this._attached && !['ringing', 'hang-up'].includes(evt)) {
       // Cannot {call} on an inactive topic".
       return;
     }
-    return this._tinode.call(this.name, seq, evt, payload);
+    return this._tinode.videoCall(this.name, seq, evt, payload);
   }
 
   /**
@@ -1370,11 +1379,7 @@ export class Topic {
 
   // Returns true if pub is meant to replace another message (e.g. original message was edited).
   _isReplacementMsg(pub) {
-    if (typeof pub.head == 'undefined' || pub.head == null ||
-      typeof pub.head['replace-seq'] == 'undefined') {
-      return false;
-    }
-    return true;
+    return pub.head && pub.head.replace;
   }
 
   // Process data message
@@ -1398,9 +1403,9 @@ export class Topic {
       this._tinode._db.addMessage(data);
       this._updateDeletedRanges();
       if (this._isReplacementMsg(data)) {
-        const target = data.head['replace-seq'];
+        const target = data.head.replace;
         const orig = this._replacements[target];
-        if (typeof orig == 'undefined' || orig < data.seq) {
+        if (!orig || orig < data.seq) {
           this._replacements[target] = data.seq;
         }
       }
@@ -1826,9 +1831,9 @@ export class Topic {
           }
           this._messages.put(data);
           if (this._isReplacementMsg(data)) {
-            const target = data.head['replace-seq'];
+            const target = data.head.replace;
             const orig = this._replacements[target];
-            if (typeof orig == 'undefined' || orig < data.seq) {
+            if (!orig || orig < data.seq) {
               this._replacements[target] = data.seq;
             }
           }

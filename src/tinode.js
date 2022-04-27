@@ -1900,7 +1900,20 @@ export class Tinode {
     this.#send(pkt);
   }
 
-  call(topicName, seq, evt, payload) {
+  /**
+   * Send a video call notification to topic subscribers (including dialing,
+   * hangup, etc.).
+   * @memberof Tinode#
+   *
+   * @param {string} topicName - Name of the topic to broadcast to.
+   * @param {int} seq - ID of the call message the event pertains to.
+   * @param {string} evt - Call event.
+   * @param {string} payload - Payload associated with this event (e.g. SDP string).
+   *
+   * @returns {Promise} Promise (for some call events) which will
+   *                    be resolved/rejected on receiving server reply
+   */
+  videoCall(topicName, seq, evt, payload) {
     const pkt = this.#initPacket('note', topicName);
     if (evt != 'hang-up' && evt != 'ringing') {
       pkt.note.id = this.getNextUniqueId();
@@ -1909,7 +1922,6 @@ export class Tinode {
     pkt.note.what = 'call';
     pkt.note.event = evt;
     pkt.note.payload = payload;
-    //pkt.call.leaseexp = leaseexp;
     return this.#send(pkt, pkt.note.id);
   }
 
