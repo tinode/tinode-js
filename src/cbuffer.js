@@ -16,23 +16,17 @@
  *    returns <code>-1</code> if <code>a < b</code>, <code>0</code> if <code>a == b</code>, <code>1</code> otherwise.
  * @param {boolean} unique enforce element uniqueness: when <code>true</code> replace existing element with a new
  *    one on conflict; when <code>false</code> keep both elements.
- * @param {function} isSub returns <code>true</code> if <code>the argument</code> is meant to replace another object.
- * @param {function} finalizeMsg returns the final (finalize) representation of <code>object/argument</code>.
  */
 export default class CBuffer {
   #comparator = undefined;
   #unique = false;
-  #finalizeMsg = undefined;
-  #isSub = undefined;
   buffer = [];
 
-  constructor(compare_, unique_, isSub_, finalizeMsg_) {
+  constructor(compare_, unique_) {
     this.#comparator = compare_ || ((a, b) => {
       return a === b ? 0 : a < b ? -1 : 1;
     });
     this.#unique = unique_;
-    this.#finalizeMsg = finalizeMsg_ || (msg => msg);
-    this.#isSub = isSub_ || (msg => false);
   }
 
   #findNearest(elem, arr, exact) {
@@ -187,28 +181,11 @@ export default class CBuffer {
   forEach(callback, startIdx, beforeIdx, context) {
     startIdx = startIdx | 0;
     beforeIdx = beforeIdx || this.buffer.length;
-    let prevIdx = startIdx - 1;
-    let curIdx = startIdx;
-    while (curIdx < beforeIdx && this.#isSub(this.buffer[curIdx])) {
-      curIdx++;
-    }
-    let nextIdx = curIdx + 1;
-    while (nextIdx < beforeIdx && this.#isSub(this.buffer[nextIdx])) {
-      nextIdx++;
-    }
 
-    let prev = undefined;
-    let cur = curIdx < beforeIdx ? this.#finalizeMsg(this.buffer[curIdx]) : undefined;
-    let next = nextIdx < beforeIdx ? this.#finalizeMsg(this.buffer[nextIdx]) : undefined;
-    while (curIdx < beforeIdx) {
-      callback.call(context, cur, prev, next, curIdx);
-      prevIdx = curIdx;
-      curIdx = nextIdx;
-      do nextIdx++; while (nextIdx < beforeIdx && this.#isSub(this.buffer[nextIdx]));
-      // Update finalize messages.
-      prev = cur;
-      cur = next;
-      next = nextIdx < beforeIdx ? this.#finalizeMsg(this.buffer[nextIdx]) : undefined;
+    for (let i = startIdx; i < beforeIdx; i++) {
+      callback.call(context, this.buffer[i],
+        (i > startIdx ? this.buffer[i - 1] : undefined),
+        (i < beforeIdx - 1 ? this.buffer[i + 1] : undefined), i);
     }
   }
 
