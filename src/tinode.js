@@ -801,7 +801,8 @@ export class Tinode {
             'topic': topic,
             'desc': {},
             'sub': {},
-            'tags': []
+            'tags': [],
+            'ephemeral': {}
           }
         };
 
@@ -820,10 +821,10 @@ export class Tinode {
       case 'note':
         return {
           'note': {
-            // no id by design
+            // no id by design (except calls).
             'topic': topic,
-            'what': null,
-            'seq': undefined // the server-side message id aknowledged as received or read
+            'what': null, // one of "recv", "read", "kp", "call"
+            'seq': undefined // the server-side message id acknowledged as received or read.
           }
         };
 
@@ -1638,7 +1639,7 @@ export class Tinode {
    * Publish {data} message to topic.
    * @memberof Tinode#
    *
-   * @param {string} topic - Name of the topic to publish to.
+   * @param {string} topicName - Name of the topic to publish to.
    * @param {Object} content - Payload to publish.
    * @param {boolean=} noEcho - If <code>true</code>, tell the server not to echo the message to the original session.
    *
@@ -1646,7 +1647,7 @@ export class Tinode {
    */
   publish(topic, content, noEcho) {
     return this.publishMessage(
-      this.createMessage(topic, content, noEcho)
+      this.createMessage(topicName, content, noEcho)
     );
   }
 
@@ -1749,7 +1750,7 @@ export class Tinode {
     const what = [];
 
     if (params) {
-      ['desc', 'sub', 'tags', 'cred'].forEach(function(key) {
+      ['desc', 'sub', 'tags', 'cred', 'ephemeral'].forEach(function(key) {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];
@@ -1897,6 +1898,31 @@ export class Tinode {
     const pkt = this.#initPacket('note', topicName);
     pkt.note.what = 'kp';
     this.#send(pkt);
+  }
+
+  /**
+   * Send a video call notification to topic subscribers (including dialing,
+   * hangup, etc.).
+   * @memberof Tinode#
+   *
+   * @param {string} topicName - Name of the topic to broadcast to.
+   * @param {int} seq - ID of the call message the event pertains to.
+   * @param {string} evt - Call event.
+   * @param {string} payload - Payload associated with this event (e.g. SDP string).
+   *
+   * @returns {Promise} Promise (for some call events) which will
+   *                    be resolved/rejected on receiving server reply
+   */
+  videoCall(topicName, seq, evt, payload) {
+    const pkt = this.#initPacket('note', topicName);
+    if (evt != 'hang-up' && evt != 'ringing') {
+      pkt.note.id = this.getNextUniqueId();
+    }
+    pkt.note.seq = seq;
+    pkt.note.what = 'call';
+    pkt.note.event = evt;
+    pkt.note.payload = payload;
+    return this.#send(pkt, pkt.note.id);
   }
 
   /**

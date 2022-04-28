@@ -79,6 +79,11 @@ export class Topic {
     this._tags = [];
     // Credentials such as email or phone number.
     this._credentials = [];
+    // Message versions cache (e.g. for edited messages).
+    // Keys: original message seq ids.
+    // Values: CBuffers containing newer versions of the original message
+    // ordered by seq id.
+    this._messageVersions = {};
     // Message cache, sorted by message seq values, from old to new.
     this._messages = new CBuffer((a, b) => {
       return a.seq - b.seq;
@@ -821,6 +826,26 @@ export class Topic {
       }
     }
   }
+
+  /**
+   * Send a {note what='call'}. Wrapper for {@link Tinode#videoCall}.
+   * @memberof Tinode#
+   *
+   * @param {string} evt - Call event.
+   * @param {int} seq - ID of the call message the event pertains to.
+   * @param {string} payload - Payload associated with this event (e.g. SDP string).
+   *
+   * @returns {Promise} Promise (for some call events) which will
+   *                    be resolved/rejected on receiving server reply
+   */
+  videoCall(evt, seq, payload) {
+    if (!this._attached && !['ringing', 'hang-up'].includes(evt)) {
+      // Cannot {call} on an inactive topic".
+      return;
+    }
+    return this._tinode.videoCall(this.name, seq, evt, payload);
+  }
+
   /**
    * Send a 'recv' receipt. Wrapper for {@link Tinode#noteRecv}.
    * @memberof Tinode.Topic#
@@ -960,6 +985,26 @@ export class Topic {
     return this._users[uid];
   }
   /**
+   * Iterate over versions of <code>message</code>: call <code>callback</code> for each message.
+   * If <code>callback</code> is undefined, does nothing.
+   * @memberof Tinode.Topic#
+   *
+   * @param {Tinode.ForEachCallbackType} callback - Callback which will receive messages one by one. See {@link Tinode.CBuffer#forEach}
+   * @param {Object} context - Value of `this` inside the `callback`.
+   */
+  messageVersions(message, callback, context) {
+    if (!callback) {
+      // No callback? We are done then.
+      return;
+    }
+    const origSeq = this._isReplacementMsg(message) ? parseInt(message.head.replace.split(':')[1]) : message.seq;
+    const versions = this._messageVersions[origSeq];
+    if (!versions) {
+      return;
+    }
+    versions.forEach(callback, undefined, undefined, context);
+  }
+  /**
    * Iterate over cached messages: call <code>callback</code> for each message in the range [sindeIdx, beforeIdx).
    * If <code>callback</code> is undefined, use <code>this.onData</code>.
    * @memberof Tinode.Topic#
@@ -979,7 +1024,25 @@ export class Topic {
         seq: beforeId
       }, true) : undefined;
       if (startIdx != -1 && beforeIdx != -1) {
-        this._messages.forEach(cb, startIdx, beforeIdx, context);
+        // Step 1. Filter out all replacement messages and
+        // save displayable messages in a temporary buffer.
+        let msgs = [];
+        this._messages.forEach((msg, unused1, unused2, i) => {
+          if (this._isReplacementMsg(msg)) {
+            // Skip replacements.
+            return;
+          }
+          msgs.push({
+            data: this._getLatestMsgVersion(msg),
+            idx: i
+          });
+        }, startIdx, beforeIdx, {});
+        // Step 2. Loop over displayble messages invoking cb on each of them.
+        msgs.forEach((val, i) => {
+          cb.call(context, val.data,
+            (i > 0 ? msgs[i - 1].data : undefined),
+            (i < msgs.length - 1 ? msgs[i + 1].data : undefined), val.idx);
+        });
       }
     }
   }
@@ -1342,6 +1405,36 @@ export class Topic {
 
     return status;
   }
+
+  // Returns true if pub is meant to replace another message (e.g. original message was edited).
+  _isReplacementMsg(pub) {
+    return pub.head && pub.head.replace;
+  }
+
+  // If msg is a replacement for another message, saves msg in the message versions cache
+  // as a newer version for the message it's supposed to replace.
+  _maybeUpdateMessageVersionsCache(msg) {
+    if (!this._isReplacementMsg(msg)) {
+      return;
+    }
+    const targetSeq = parseInt(msg.head.replace.split(':')[1]);
+    if (targetSeq > msg.seq) {
+      // Substitutes are supposed to have higher seq ids.
+      return false;
+    }
+    let versions = this._messageVersions[targetSeq] || new CBuffer((a, b) => {
+      return a.seq - b.seq;
+    }, true);
+    versions.put(msg);
+    this._messageVersions[targetSeq] = versions;
+  }
+
+  // Returns the latest version for `msg` message.
+  _getLatestMsgVersion(msg) {
+    const versions = this._messageVersions[msg.seq];
+    return versions ? versions.getLast() : msg;
+  }
+
   // Process data message
   _routeData(data) {
     if (data.content) {
@@ -1361,6 +1454,7 @@ export class Topic {
     if (!data._noForwarding) {
       this._messages.put(data);
       this._tinode._db.addMessage(data);
+      this._maybeUpdateMessageVersionsCache(data);
       this._updateDeletedRanges();
     }
 
@@ -1783,6 +1877,7 @@ export class Topic {
             this._minSeq = data.seq;
           }
           this._messages.put(data);
+          this._maybeUpdateMessageVersionsCache(data);
         });
         if (msgs.length > 0) {
           this._updateDeletedRanges();

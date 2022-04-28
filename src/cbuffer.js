@@ -181,6 +181,7 @@ export default class CBuffer {
   forEach(callback, startIdx, beforeIdx, context) {
     startIdx = startIdx | 0;
     beforeIdx = beforeIdx || this.buffer.length;
+
     for (let i = startIdx; i < beforeIdx; i++) {
       callback.call(context, this.buffer[i],
         (i > startIdx ? this.buffer[i - 1] : undefined),

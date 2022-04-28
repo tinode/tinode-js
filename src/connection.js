@@ -42,7 +42,6 @@ function makeBaseUrl(host, protocol, version, apiKey) {
     }
     url += '?apikey=' + apiKey;
   }
-
   return url;
 }
 
@@ -313,6 +312,7 @@ export default class Connection {
           }
         }
       };
+      // Using POST to avoid caching response by service worker.
       poller.open('POST', url_, true);
       return poller;
     }
