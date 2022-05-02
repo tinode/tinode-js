@@ -1915,14 +1915,11 @@ export class Tinode {
    */
   videoCall(topicName, seq, evt, payload) {
     const pkt = this.#initPacket('note', topicName);
-    if (evt != 'hang-up' && evt != 'ringing') {
-      pkt.note.id = this.getNextUniqueId();
-    }
     pkt.note.seq = seq;
     pkt.note.what = 'call';
     pkt.note.event = evt;
     pkt.note.payload = payload;
-    return this.#send(pkt, pkt.note.id);
+    this.#send(pkt, pkt.note.id);
   }
 
   /**
