@@ -204,7 +204,7 @@ export default class Connection {
       this.onAutoreconnectIteration(timeout);
     }
 
-    this.#boffTimer = setTimeout(() => {
+    this.#boffTimer = setTimeout(_ => {
       this.#log(`Reconnecting, iter=${this.#boffIteration}, timeout=${timeout}`);
       // Maybe the socket was closed while we waited for the timer?
       if (!this.#boffClosed) {
