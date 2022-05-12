@@ -1,14 +1,13 @@
 /**
  * @file Utilities for uploading and downloading files.
  *
- * @copyright 2015-2021 Tinode
- * @summary Javascript bindings for Tinode.
- * @license Apache 2.0
- * @version 0.18
+ * @copyright 2015-2022 Tinode LLC.
  */
 'use strict';
 
-const { jsonParseHelper } = require('./utils.js');
+import {
+  jsonParseHelper
+} from './utils.js';
 
 let XHRProvider;
 
@@ -20,26 +19,26 @@ let XHRProvider;
  * @param {Tinode} tinode - the main Tinode object.
  * @param {string} version - protocol version, i.e. '0'.
  */
-const LargeFileHelper = function(tinode, version) {
-  this._tinode = tinode;
-  this._version = version;
+export default class LargeFileHelper {
+  constructor(tinode, version) {
+    this._tinode = tinode;
+    this._version = version;
 
-  this._apiKey = tinode._apiKey;
-  this._authToken = tinode.getAuthToken();
-  this._reqId = tinode.getNextUniqueId();
-  this.xhr = new XHRProvider();
+    this._apiKey = tinode._apiKey;
+    this._authToken = tinode.getAuthToken();
+    this._reqId = tinode.getNextUniqueId();
+    this.xhr = new XHRProvider();
 
-  // Promise
-  this.toResolve = null;
-  this.toReject = null;
+    // Promise
+    this.toResolve = null;
+    this.toReject = null;
 
-  // Callbacks
-  this.onProgress = null;
-  this.onSuccess = null;
-  this.onFailure = null;
-}
+    // Callbacks
+    this.onProgress = null;
+    this.onSuccess = null;
+    this.onFailure = null;
+  }
 
-LargeFileHelper.prototype = {
   /**
    * Start uploading the file to a non-default endpoint.
    *
@@ -54,7 +53,7 @@ LargeFileHelper.prototype = {
    *
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
-  uploadWithBaseUrl: function(baseUrl, data, avatarFor, onProgress, onSuccess, onFailure) {
+  uploadWithBaseUrl(baseUrl, data, avatarFor, onProgress, onSuccess, onFailure) {
     if (!this._authToken) {
       throw new Error("Must authenticate first");
     }
@@ -89,7 +88,7 @@ LargeFileHelper.prototype = {
       if (e.lengthComputable && instance.onProgress) {
         instance.onProgress(e.loaded / e.total);
       }
-    }
+    };
 
     this.xhr.onload = function() {
       let pkt;
@@ -117,7 +116,7 @@ LargeFileHelper.prototype = {
           instance.toReject(new Error(`${pkt.ctrl.text} (${pkt.ctrl.code})`));
         }
         if (instance.onFailure) {
-          instance.onFailure(pkt.ctrl)
+          instance.onFailure(pkt.ctrl);
         }
       } else {
         instance._tinode.logger("ERROR: Unexpected server response status", this.status, this.response);
@@ -160,8 +159,7 @@ LargeFileHelper.prototype = {
     }
 
     return result;
-  },
-
+  }
   /**
    * Start uploading the file to default endpoint.
    *
@@ -175,11 +173,10 @@ LargeFileHelper.prototype = {
    *
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
-  upload: function(data, avatarFor, onProgress, onSuccess, onFailure) {
+  upload(data, avatarFor, onProgress, onSuccess, onFailure) {
     const baseUrl = (this._tinode._secure ? 'https://' : 'http://') + this._tinode._host;
     return this.uploadWithBaseUrl(baseUrl, data, avatarFor, onProgress, onSuccess, onFailure);
-  },
-
+  }
   /**
    * Download the file from a given URL using GET request. This method works with the Tinode server only.
    *
@@ -190,7 +187,7 @@ LargeFileHelper.prototype = {
    *
    * @returns {Promise} resolved/rejected when the download is completed/failed.
    */
-  download: function(relativeUrl, filename, mimetype, onProgress, onError) {
+  download(relativeUrl, filename, mimetype, onProgress, onError) {
     if (!Tinode.isRelativeURL(relativeUrl)) {
       // As a security measure refuse to download from an absolute URL.
       if (onError) {
@@ -282,39 +279,32 @@ LargeFileHelper.prototype = {
     }
 
     return result;
-  },
-
+  }
   /**
    * Try to cancel an ongoing upload or download.
    * @memberof Tinode.LargeFileHelper#
    */
-  cancel: function() {
+  cancel() {
     if (this.xhr && this.xhr.readyState < 4) {
       this.xhr.abort();
     }
-  },
-
+  }
   /**
    * Get unique id of this request.
    * @memberof Tinode.LargeFileHelper#
    *
    * @returns {string} unique id
    */
-  getId: function() {
+  getId() {
     return this._reqId;
   }
-};
-
-/**
- * To use LargeFileHelper in a non browser context, supply XMLHttpRequest provider.
- * @static
- * @memberof LargeFileHelper
- * @param xhrProvider XMLHttpRequest provider, e.g. for node <code>require('xhr')</code>.
- */
-LargeFileHelper.setNetworkProvider = function(xhrProvider) {
-  XHRProvider = xhrProvider;
-};
-
-if (typeof module != 'undefined') {
-  module.exports = LargeFileHelper;
+  /**
+   * To use LargeFileHelper in a non browser context, supply XMLHttpRequest provider.
+   * @static
+   * @memberof LargeFileHelper
+   * @param xhrProvider XMLHttpRequest provider, e.g. for node <code>require('xhr')</code>.
+   */
+  static setNetworkProvider(xhrProvider) {
+    XHRProvider = xhrProvider;
+  }
 }
