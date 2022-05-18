@@ -61,6 +61,9 @@ function makeBaseUrl(host, protocol, version, apiKey) {
  * @param {boolean} autoreconnect_ - If connection is lost, try to reconnect automatically.
  */
 export default class Connection {
+  // Logger, does nothing by default.
+  static #log = _ => {};
+
   #boffTimer = null;
   #boffIteration = 0;
   #boffClosed = false; // Indicator if the socket was manually closed - don't autoreconnect if true.
@@ -99,7 +102,7 @@ export default class Connection {
 
     if (!this.initialized) {
       // Invalid or undefined network transport.
-      this.#log("Unknown or invalid network transport. Running under Node? Call 'Tinode.setNetworkProviders()'.");
+      Connection.#log("Unknown or invalid network transport. Running under Node? Call 'Tinode.setNetworkProviders()'.");
       throw new Error("Unknown or invalid network transport. Running under Node? Call 'Tinode.setNetworkProviders()'.");
     }
   }
@@ -114,6 +117,16 @@ export default class Connection {
   static setNetworkProviders(wsProvider, xhrProvider) {
     WebSocketProvider = wsProvider;
     XHRProvider = xhrProvider;
+  }
+
+  /**
+   * Assign a non-default logger.
+   * @static
+   * @memberof Connection
+   * @param {function} l variadic logging function.
+   */
+  static set logger(l) {
+    Connection.#log = l;
   }
 
   /**
@@ -185,12 +198,6 @@ export default class Connection {
     this.#boffReset();
   }
 
-  #log(text, ...args) {
-    if (Connection.logger) {
-      Connection.logger(text, ...args);
-    }
-  }
-
   // Backoff implementation - reconnect after a timeout.
   #boffReconnect() {
     // Clear timer
@@ -204,7 +211,7 @@ export default class Connection {
     }
 
     this.#boffTimer = setTimeout(_ => {
-      this.#log(`Reconnecting, iter=${this.#boffIteration}, timeout=${timeout}`);
+      Connection.#log(`Reconnecting, iter=${this.#boffIteration}, timeout=${timeout}`);
       // Maybe the socket was closed while we waited for the timer?
       if (!this.#boffClosed) {
         const prom = this.connect();
@@ -335,11 +342,11 @@ export default class Connection {
 
       return new Promise((resolve, reject) => {
         const url = makeBaseUrl(this.host, this.secure ? 'https' : 'http', this.version, this.apiKey);
-        this.#log("LP connecting to:", url);
+        Connection.#log("LP connecting to:", url);
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null);
       }).catch((err) => {
-        this.#log("LP connection failed:", err);
+        Connection.#log("LP connection failed:", err);
       });
     };
 
@@ -404,7 +411,7 @@ export default class Connection {
       return new Promise((resolve, reject) => {
         const url = makeBaseUrl(this.host, this.secure ? 'wss' : 'ws', this.version, this.apiKey);
 
-        this.#log("WS connecting to: ", url);
+        Connection.#log("WS connecting to: ", url);
 
         // It throws when the server is not accessible but the exception cannot be caught:
         // https://stackoverflow.com/questions/31002592/javascript-doesnt-catch-error-in-websocket-instantiation/31003057
@@ -518,19 +525,6 @@ export default class Connection {
    * @type {Tinode.Connection.AutoreconnectIterationType}
    */
   onAutoreconnectIteration = undefined;
-
-  /**
-   * A callback to log events from Connection. See {@link Tinode.Connection#logger}.
-   * @memberof Tinode.Connection
-   * @callback LoggerCallbackType
-   * @param {string} event - Event to log.
-   */
-  /**
-   * A callback to report logging events.
-   * @memberof Tinode.Connection#
-   * @type {Tinode.Connection.LoggerCallbackType}
-   */
-  logger = undefined;
 }
 
 Connection.NETWORK_ERROR = NETWORK_ERROR;

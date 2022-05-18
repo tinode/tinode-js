@@ -15,8 +15,8 @@ const DB_NAME = 'tinode-web';
 let IDBProvider;
 
 export default class DB {
-  #onError = function() {};
-  #logger = function() {};
+  #onError = _ => {};
+  #logger = _ => {};
 
   // Instance of IndexDB.
   db = null;

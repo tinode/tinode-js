@@ -366,12 +366,8 @@ export class Tinode {
       this._humanLanguage = navigator.language || 'en-US';
     }
 
-    Connection.logger = (str, ...args) => {
-      this.#logger(str, args);
-    };
-    Drafty.logger = (str, ...args) => {
-      this.#logger(str, args);
-    };
+    Connection.logger = this.logger;
+    Drafty.logger = this.logger;
 
     // WebSocket or long polling network connection.
     if (config.transport != 'lp' && config.transport != 'ws') {
@@ -398,8 +394,8 @@ export class Tinode {
 
     this._persist = config.persist;
     // Initialize object regardless. It simplifies the code.
-    this._db = new DBCache((err) => {
-      this.#logger('DB', err);
+    this._db = new DBCache(err => {
+      this.logger('DB', err);
     }, this.logger);
 
     if (this._persist) {
@@ -440,12 +436,12 @@ export class Tinode {
         if (onComplete) {
           onComplete();
         }
-        this.#logger("Persistent cache initialized.");
+        this.logger("Persistent cache initialized.");
       }).catch((err) => {
         if (onComplete) {
           onComplete(err);
         }
-        this.#logger("Failed to initialize persistent cache:", err);
+        this.logger("Failed to initialize persistent cache:", err);
       });
     } else {
       this._db.deleteDatabase().then(() => {
@@ -459,7 +455,7 @@ export class Tinode {
   // Private methods.
 
   // Console logger. Babel somehow fails to parse '...rest' parameter.
-  #logger(str, ...args) {
+  logger(str, ...args) {
     if (this._loggingEnabled) {
       const d = new Date();
       const dateString = ('0' + d.getUTCHours()).slice(-2) + ':' +
@@ -511,7 +507,7 @@ export class Tinode {
     }
     pkt = simplify(pkt);
     let msg = JSON.stringify(pkt);
-    this.#logger("out: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
+    this.logger("out: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
     try {
       this._connection.sendText(msg);
     } catch (err) {
@@ -549,10 +545,10 @@ export class Tinode {
 
     let pkt = JSON.parse(data, jsonParseHelper);
     if (!pkt) {
-      this.#logger("in: " + data);
-      this.#logger("ERROR: failed to parse data");
+      this.logger("in: " + data);
+      this.logger("ERROR: failed to parse data");
     } else {
-      this.#logger("in: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : data));
+      this.logger("in: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : data));
 
       // Send complete packet to listener
       if (this.onMessage) {
@@ -651,7 +647,7 @@ export class Tinode {
               this.onInfoMessage(pkt.info);
             }
           } else {
-            this.#logger("ERROR: Unknown packet received.");
+            this.logger("ERROR: Unknown packet received.");
           }
         }, 0);
       }
@@ -668,7 +664,7 @@ export class Tinode {
         for (let id in this._pendingPromises) {
           let callbacks = this._pendingPromises[id];
           if (callbacks && callbacks.ts < expires) {
-            this.#logger("Promise expired", id);
+            this.logger("Promise expired", id);
             delete this._pendingPromises[id];
             if (callbacks.reject) {
               callbacks.reject(err);
@@ -877,10 +873,10 @@ export class Tinode {
     topic._cacheDelUser = (uid) => {
       this.#cacheDel('user', uid);
     };
-    topic._cachePutSelf = () => {
+    topic._cachePutSelf = _ => {
       this.#cachePut('topic', topic.name, topic);
     };
-    topic._cacheDelSelf = () => {
+    topic._cacheDelSelf = _ => {
       this.#cacheDel('topic', topic.name);
     };
   }
