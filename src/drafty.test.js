@@ -167,6 +167,20 @@ const parse_this = [
       "txt": "second #юникод",
     },
   ],
+  [
+    '😀 *b1👩🏽‍✈️b2* smile',
+    {
+      "txt": "😀 b1👩🏽‍✈️b2 smile",
+      "fmt": [{"tp": "ST", "at": 2, "len": 5},],
+    }
+  ],
+  [
+    'first 😀 line\nsecond *line*',
+    {
+      "txt": "first 😀 line second line",
+      "fmt": [{"tp": "BR", "at": 12, "len": 1}, {"tp": "ST", "at": 20, "len": 4},],
+    }
+  ]
 ];
 
 test.each(parse_this)('Drafty.parse %s', (src, exp) => {
