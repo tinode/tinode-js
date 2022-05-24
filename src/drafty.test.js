@@ -171,14 +171,26 @@ const parse_this = [
     '😀 *b1👩🏽‍✈️b2* smile',
     {
       "txt": "😀 b1👩🏽‍✈️b2 smile",
-      "fmt": [{"tp": "ST", "at": 2, "len": 5},],
+      "fmt": [{
+        "tp": "ST",
+        "at": 2,
+        "len": 5
+      }, ],
     }
   ],
   [
     'first 😀 line\nsecond *line*',
     {
       "txt": "first 😀 line second line",
-      "fmt": [{"tp": "BR", "at": 12, "len": 1}, {"tp": "ST", "at": 20, "len": 4},],
+      "fmt": [{
+        "tp": "BR",
+        "at": 12,
+        "len": 1
+      }, {
+        "tp": "ST",
+        "at": 20,
+        "len": 4
+      }, ],
     }
   ]
 ];
