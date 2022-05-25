@@ -1676,35 +1676,51 @@ export class Tinode {
    * Out of band notification: notify topic that an external (push) notification was recived by the client.
    * @memberof Tinode#
    *
-   * @param {string} what - notification type, 'msg', 'read', 'sub'.
-   * @param {string} topicName - name of the updated topic.
-   * @param {number} seq - seq ID of the affected message.
-   * @param {string=} act - UID of the sender; default is current.
-   * @param {object=} mode - new subscription 'want' and 'given' {want: 'RWJ...', given: 'ASWP...'}.
+   * @param {object} data - notification payload.
+   * @param {string} data.what - notification type, 'msg', 'read', 'sub'.
+   * @param {string} data.topic - name of the updated topic.
+   * @param {number=} data.seq - seq ID of the affected message.
+   * @param {string=} data.xfrom - UID of the sender.
+   * @param {object=} data.given - new subscription 'given', e.g. 'ASWP...'.
+   * @param {object=} data.want - new subscription 'want', e.g. 'RWJ...'.
    */
-  oobNotification(what, topicName, seq, act, mode) {
-    const me = this.getMeTopic();
-    if (what == 'sub') {
-      let acs = new AccessMode(mode);
-      let pres = (!acs.mode || acs.mode == AccessMode._NONE) ?
-        // Subscription deleted.
-        {
-          what: 'gone',
-          src: topicName
-        } :
-        // New subscription or subscription updated.
-        {
-          what: 'acs',
-          src: topicName,
-          dacs: mode
+  oobNotification(data) {
+    switch (data.what) {
+      case 'msg':
+        const topic = this.#cacheGet('topic', data.topic);
+        if (topic && topic.isChan()) {
+          topic._updateReceived(data.seq, 'fake-uid');
+          this.getMeTopic()._refreshContact('msg', topic);
+        }
+        break;
+      case 'read':
+        this.getMeTopic()._routePres({
+          what: 'read',
+          seq: data.seq
+        });
+        break;
+      case 'sub':
+        let mode = {
+          given: data.modeGiven,
+          want: data.modeWant
         };
-      me._routePres(pres);
-    } else {
-      const topic = this.#cacheGet('topic', topicName);
-      if (topic) {
-        topic._updateReceived(seq, act);
-        me._refreshContact('msg', topic);
-      }
+        let acs = new AccessMode(mode);
+        let pres = (!acs.mode || acs.mode == AccessMode._NONE) ?
+          // Subscription deleted.
+          {
+            what: 'gone',
+            src: data.topic
+          } :
+          // New subscription or subscription updated.
+          {
+            what: 'acs',
+            src: data.topic,
+            dacs: mode
+          };
+        this.getMeTopic()._routePres(pres);
+        break;
+      default:
+        this.logger("Unknown push type ignored", data.what);
     }
   }
 
