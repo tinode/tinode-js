@@ -1676,14 +1676,18 @@ export class Tinode {
    * Out of band notification: notify topic that an external (push) notification was recived by the client.
    * @memberof Tinode#
    *
-   * @param {string} what - notification type, 'msg' or 'read'.
+   * @param {string} what - notification type, 'msg', 'read', 'sub'.
    * @param {string} topicName - name of the updated topic.
    * @param {number} seq - seq ID of the affected message.
    * @param {string=} act - UID of the sender; default is current.
+   * @param {object=} mode - new subscription 'want' and 'given' {want: 'RWJ...', given: 'ASWP...'}.
    */
-  oobNotification(what, topicName, seq, act) {
+  oobNotification(what, topicName, seq, act, mode) {
     const topic = this.#cacheGet('topic', topicName);
-    if (topic) {
+    if (what == 'sub') {
+      // TODO: handle push notification for a new subscription.
+      this.logger("New subscription.", topicName, act, mode);
+    } else if (topic) {
       topic._updateReceived(seq, act);
       this.getMeTopic()._refreshContact('msg', topic);
     }
