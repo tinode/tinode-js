@@ -1683,13 +1683,28 @@ export class Tinode {
    * @param {object=} mode - new subscription 'want' and 'given' {want: 'RWJ...', given: 'ASWP...'}.
    */
   oobNotification(what, topicName, seq, act, mode) {
-    const topic = this.#cacheGet('topic', topicName);
+    const me = this.getMeTopic();
     if (what == 'sub') {
-      // TODO: handle push notification for a new subscription.
-      this.logger("New subscription.", topicName, act, mode);
-    } else if (topic) {
-      topic._updateReceived(seq, act);
-      this.getMeTopic()._refreshContact('msg', topic);
+      let acs = new AccessMode(mode);
+      let pres = (!acs.mode || acs.mode == AccessMode._NONE) ?
+        // Subscription deleted.
+        {
+          what: 'gone',
+          src: topicName
+        } :
+        // New subscription or subscription updated.
+        {
+          what: 'acs',
+          src: topicName,
+          dacs: mode
+        };
+      me._routePres(pres);
+    } else {
+      const topic = this.#cacheGet('topic', topicName);
+      if (topic) {
+        topic._updateReceived(seq, act);
+        me._refreshContact('msg', topic);
+      }
     }
   }
 
