@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Tinode SDK",
-  "version": "0.19.0-beta1",
+  "version": "0.19.0-beta2",
   "scripts": {
     "format": "js-beautify -r src/*.js",
     "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
