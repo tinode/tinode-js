@@ -1689,7 +1689,7 @@ export class Tinode {
     switch (data.what) {
       case 'msg':
         const topic = this.#cacheGet('topic', data.topic);
-        if (topic && topic.isChan()) {
+        if (topic && topic.isChannelType()) {
           topic._updateReceived(data.seq, 'fake-uid');
           this.getMeTopic()._refreshContact('msg', topic);
         }
