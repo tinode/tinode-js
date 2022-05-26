@@ -5,7 +5,7 @@
  * @copyright 2015-2022 Tinode LLC.
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.18
+ * @version 0.19
  *
  * @example
  * <head>
@@ -366,12 +366,8 @@ export class Tinode {
       this._humanLanguage = navigator.language || 'en-US';
     }
 
-    Connection.logger = (str, ...args) => {
-      this.#logger(str, args);
-    };
-    Drafty.logger = (str, ...args) => {
-      this.#logger(str, args);
-    };
+    Connection.logger = this.logger;
+    Drafty.logger = this.logger;
 
     // WebSocket or long polling network connection.
     if (config.transport != 'lp' && config.transport != 'ws') {
@@ -398,8 +394,8 @@ export class Tinode {
 
     this._persist = config.persist;
     // Initialize object regardless. It simplifies the code.
-    this._db = new DBCache((err) => {
-      this.#logger('DB', err);
+    this._db = new DBCache(err => {
+      this.logger('DB', err);
     }, this.logger);
 
     if (this._persist) {
@@ -440,12 +436,12 @@ export class Tinode {
         if (onComplete) {
           onComplete();
         }
-        this.#logger("Persistent cache initialized.");
+        this.logger("Persistent cache initialized.");
       }).catch((err) => {
         if (onComplete) {
           onComplete(err);
         }
-        this.#logger("Failed to initialize persistent cache:", err);
+        this.logger("Failed to initialize persistent cache:", err);
       });
     } else {
       this._db.deleteDatabase().then(() => {
@@ -459,7 +455,7 @@ export class Tinode {
   // Private methods.
 
   // Console logger. Babel somehow fails to parse '...rest' parameter.
-  #logger(str, ...args) {
+  logger(str, ...args) {
     if (this._loggingEnabled) {
       const d = new Date();
       const dateString = ('0' + d.getUTCHours()).slice(-2) + ':' +
@@ -511,7 +507,7 @@ export class Tinode {
     }
     pkt = simplify(pkt);
     let msg = JSON.stringify(pkt);
-    this.#logger("out: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
+    this.logger("out: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
     try {
       this._connection.sendText(msg);
     } catch (err) {
@@ -549,10 +545,10 @@ export class Tinode {
 
     let pkt = JSON.parse(data, jsonParseHelper);
     if (!pkt) {
-      this.#logger("in: " + data);
-      this.#logger("ERROR: failed to parse data");
+      this.logger("in: " + data);
+      this.logger("ERROR: failed to parse data");
     } else {
-      this.#logger("in: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : data));
+      this.logger("in: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : data));
 
       // Send complete packet to listener
       if (this.onMessage) {
@@ -651,7 +647,7 @@ export class Tinode {
               this.onInfoMessage(pkt.info);
             }
           } else {
-            this.#logger("ERROR: Unknown packet received.");
+            this.logger("ERROR: Unknown packet received.");
           }
         }, 0);
       }
@@ -668,7 +664,7 @@ export class Tinode {
         for (let id in this._pendingPromises) {
           let callbacks = this._pendingPromises[id];
           if (callbacks && callbacks.ts < expires) {
-            this.#logger("Promise expired", id);
+            this.logger("Promise expired", id);
             delete this._pendingPromises[id];
             if (callbacks.reject) {
               callbacks.reject(err);
@@ -878,10 +874,10 @@ export class Tinode {
     topic._cacheDelUser = (uid) => {
       this.#cacheDel('user', uid);
     };
-    topic._cachePutSelf = () => {
+    topic._cachePutSelf = _ => {
       this.#cachePut('topic', topic.name, topic);
     };
-    topic._cacheDelSelf = () => {
+    topic._cacheDelSelf = _ => {
       this.#cacheDel('topic', topic.name);
     };
   }
@@ -1645,7 +1641,7 @@ export class Tinode {
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
-  publish(topic, content, noEcho) {
+  publish(topicName, content, noEcho) {
     return this.publishMessage(
       this.createMessage(topicName, content, noEcho)
     );
@@ -1681,16 +1677,51 @@ export class Tinode {
    * Out of band notification: notify topic that an external (push) notification was recived by the client.
    * @memberof Tinode#
    *
-   * @param {string} what - notification type, 'msg' or 'read'.
-   * @param {string} topicName - name of the updated topic.
-   * @param {number} seq - seq ID of the affected message.
-   * @param {string=} act - UID of the sender; default is current.
+   * @param {object} data - notification payload.
+   * @param {string} data.what - notification type, 'msg', 'read', 'sub'.
+   * @param {string} data.topic - name of the updated topic.
+   * @param {number=} data.seq - seq ID of the affected message.
+   * @param {string=} data.xfrom - UID of the sender.
+   * @param {object=} data.given - new subscription 'given', e.g. 'ASWP...'.
+   * @param {object=} data.want - new subscription 'want', e.g. 'RWJ...'.
    */
-  oobNotification(what, topicName, seq, act) {
-    const topic = this.#cacheGet('topic', topicName);
-    if (topic) {
-      topic._updateReceived(seq, act);
-      this.getMeTopic()._refreshContact('msg', topic);
+  oobNotification(data) {
+    switch (data.what) {
+      case 'msg':
+        const topic = this.#cacheGet('topic', data.topic);
+        if (topic && topic.isChan()) {
+          topic._updateReceived(data.seq, 'fake-uid');
+          this.getMeTopic()._refreshContact('msg', topic);
+        }
+        break;
+      case 'read':
+        this.getMeTopic()._routePres({
+          what: 'read',
+          seq: data.seq
+        });
+        break;
+      case 'sub':
+        let mode = {
+          given: data.modeGiven,
+          want: data.modeWant
+        };
+        let acs = new AccessMode(mode);
+        let pres = (!acs.mode || acs.mode == AccessMode._NONE) ?
+          // Subscription deleted.
+          {
+            what: 'gone',
+            src: data.topic
+          } :
+          // New subscription or subscription updated.
+          {
+            what: 'acs',
+            src: data.topic,
+            dacs: mode
+          };
+        this.getMeTopic()._routePres(pres);
+        break;
+      default:
+        this.logger("Unknown push type ignored", data.what);
     }
   }
 

@@ -2131,7 +2131,7 @@ export class TopicMe extends Topic {
           if (!cont._deleted) {
             cont._deleted = true;
             cont._attached = false;
-            this._tinode._db.markTopicAsDeleted(pres.src, true);
+            this._tinode._db.markTopicAsDeleted(pres.src);
           } else {
             this._tinode._db.remTopic(pres.src);
           }

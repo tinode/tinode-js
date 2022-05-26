@@ -39,7 +39,7 @@
     "@babel/preset-env": "^7.12.11",
     "babelify": "^10.0.0",
     "browserify": "^17.0.0",
-    "jest": "^27.1.1",
+    "jest": "^28.0.0",
     "js-beautify": "^1.13.0",
     "jsdoc": "^3.6.6",
     "minami": "^1.2.3",

@@ -20,14 +20,14 @@ export default class MetaGetBuilder {
   }
 
   // Get timestamp of the most recent desc update.
-  #_get_desc_ims() {
+  #get_desc_ims() {
     return this.topic.updated;
   }
 
   // Get timestamp of the most recent subs update.
-  #_get_subs_ims() {
+  #get_subs_ims() {
     if (this.topic.isP2PType()) {
-      return this.#_get_desc_ims();
+      return this.#get_desc_ims();
     }
     return this.topic._lastSubsUpdate;
   }
@@ -91,7 +91,7 @@ export default class MetaGetBuilder {
    * @returns {Tinode.MetaGetBuilder} <code>this</code> object.
    */
   withLaterDesc() {
-    return this.withDesc(this.#_get_desc_ims());
+    return this.withDesc(this.#get_desc_ims());
   }
   /**
    * Add query parameters to fetch subscriptions.
@@ -148,7 +148,7 @@ export default class MetaGetBuilder {
    * @returns {Tinode.MetaGetBuilder} <code>this</code> object.
    */
   withLaterSub(limit) {
-    return this.withSub(this.#_get_subs_ims(), limit);
+    return this.withSub(this.#get_subs_ims(), limit);
   }
   /**
    * Add query parameters to fetch topic tags.
