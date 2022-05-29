@@ -208,6 +208,10 @@ const HTML_TAGS = {
     name: 'b',
     isVoid: false
   },
+  VC: {
+    name: 'div',
+    isVoid: false
+  },
 };
 
 // Convert base64-encoded string into Blob.
@@ -757,6 +761,26 @@ Drafty.insertAudio = function(content, at, audioDesc) {
 
   content.ent.push(ex);
 
+  return content;
+}
+
+/*
+ * Create a (self-contained) video call Drafty document.
+ *
+ * @returns Video call drafty document.
+ */
+Drafty.videoCall = function() {
+  const content = {
+    txt: ' ',
+    fmt: [{
+      at: 0,
+      len: 1,
+      key: 0
+    }],
+    ent: [{
+      tp: 'VC'
+    }]
+  };
   return content;
 }
 
