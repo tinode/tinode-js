@@ -5,7 +5,7 @@
  * @copyright 2015-2022 Tinode LLC.
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.19
+ * @version 0.20
  *
  * @example
  * <head>
@@ -1289,7 +1289,7 @@ export class Tinode {
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
   createAccount(scheme, secret, login, params) {
-    let promise = this.account(USER_NEW, scheme, secret, login, params);
+    let promise = this.account(Const.USER_NEW, scheme, secret, login, params);
     if (login) {
       promise = promise.then((ctrl) => {
         return this.#loginSuccessful(ctrl);
