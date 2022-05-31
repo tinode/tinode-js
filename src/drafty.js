@@ -63,7 +63,9 @@ const MAX_PREVIEW_ATTACHMENTS = 3;
 const MAX_PREVIEW_DATA_SIZE = 64;
 const JSON_MIME_TYPE = 'application/json';
 const DRAFTY_MIME_TYPE = 'text/x-drafty';
-const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'mime', 'name', 'preview', 'ref', 'size', 'url', 'val', 'width'];
+const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'incoming', 'mime', 'name', 'preview',
+  'ref', 'size', 'state', 'url', 'val', 'width'
+];
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
@@ -401,7 +403,19 @@ const DECORATORS = {
     props: (data) => {
       return data ? {} : null;
     },
-  }
+  },
+  // Video call
+  VC: {
+    open: _ => '<div>',
+    close: _ => '</div>',
+    props: data => {
+      if (!data) return {};
+      return {
+        'data-duration': data.duration,
+        'data-state': data.state,
+      };
+    }
+  },
 };
 
 /**
@@ -418,7 +432,7 @@ const Drafty = function() {
 /**
  * Initialize Drafty document to a plain text string.
  *
- * @param {String} plainText - string to use as Drafty content.
+ * @param {string} plainText - string to use as Drafty content.
  *
  * @returns new Drafty document or null is plainText is not a string or undefined.
  */
@@ -439,7 +453,7 @@ Drafty.init = function(plainText) {
  * @memberof Drafty
  * @static
  *
- * @param {String} content - plain-text content to parse.
+ * @param {string} content - plain-text content to parse.
  * @return {Drafty} parsed document or null if the source is not plain text.
  */
 Drafty.parse = function(content) {
@@ -764,10 +778,12 @@ Drafty.insertAudio = function(content, at, audioDesc) {
   return content;
 }
 
-/*
+/**
  * Create a (self-contained) video call Drafty document.
+ * @memberof Drafty
+ * @static
  *
- * @returns Video call drafty document.
+ * @returns Video Call drafty document.
  */
 Drafty.videoCall = function() {
   const content = {
@@ -785,7 +801,51 @@ Drafty.videoCall = function() {
 }
 
 /**
+ * Update video call (VC) entity with the new status and duration.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - VC document to update.
+ * @param {object} params - new video call parameters.
+ * @param {string} params.state - state of video call.
+ * @param {number} params.duration - duration of the video call in milliseconds.
+ *
+ * @returns the same document with update applied.
+ */
+Drafty.updateVideoEnt = function(content, params) {
+  // The video element could be just a format or a format + entity.
+  // Must ensure it's the latter first.
+  const fmt = ((content || {}).fmt || [])[0];
+  if (!fmt) {
+    // Unrecognized content.
+    return content;
+  }
+
+  let ent;
+  if (fmt.tp == 'VC') {
+    // Just a format, convert to format + entity.
+    delete fmt.tp;
+    fmt.key = 0;
+    ent = {
+      tp: 'VC'
+    };
+    content.ent = [ent];
+  } else {
+    ent = (content.ent || [])[fmt.key | 0];
+    if (!ent || ent.tp != 'VC') {
+      // Not a VC entity.
+      return content;
+    }
+  }
+  ent.data = ent.data || {};
+  Object.assign(ent.data, params);
+  return content;
+}
+
+/**
  * Create a quote to Drafty document.
+ * @memberof Drafty
+ * @static
  *
  * @param {string} header - Quote header (title, etc.).
  * @param {string} uid - UID of the author to mention.

@@ -1451,6 +1451,17 @@ export class Topic {
       this._minSeq = data.seq;
     }
 
+    const outgoing = ((!this.isChannelType() && !data.from) || this._tinode.isMe(data.from));
+
+    if (data.head && data.head.webrtc && data.head.mime == Drafty.getContentType() && data.content) {
+      // Rewrite VC body with info from the headers.
+      data.content = Drafty.updateVideoEnt(data.content, {
+        state: data.head.webrtc,
+        duration: data.head['webrtc-duration'],
+        incoming: !outgoing,
+      });
+    }
+
     if (!data._noForwarding) {
       this._messages.put(data);
       this._tinode._db.addMessage(data);
@@ -1463,11 +1474,12 @@ export class Topic {
     }
 
     // Update locally cached contact with the new message count.
-    const what = ((!this.isChannelType() && !data.from) || this._tinode.isMe(data.from)) ? 'read' : 'msg';
+    const what = outgoing ? 'read' : 'msg';
     this._updateReadRecv(what, data.seq, data.ts);
     // Notify 'me' listeners of the change.
     this._tinode.getMeTopic()._refreshContact(what, this);
   }
+
   // Process metadata message
   _routeMeta(meta) {
     if (meta.desc) {
