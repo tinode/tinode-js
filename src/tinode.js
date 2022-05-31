@@ -1288,7 +1288,7 @@ export class Tinode {
    * @returns {Promise} Promise which will be resolved/rejected when server reply is received.
    */
   createAccount(scheme, secret, login, params) {
-    let promise = this.account(USER_NEW, scheme, secret, login, params);
+    let promise = this.account(Const.USER_NEW, scheme, secret, login, params);
     if (login) {
       promise = promise.then((ctrl) => {
         return this.#loginSuccessful(ctrl);
