@@ -2117,14 +2117,14 @@ export class Tinode {
   }
 
   /**
-   * Return server-provided configuration value (long integer).
+   * Return server-provided configuration value.
    * @memberof Tinode#
-   * @param {string} name of the value to return
-   * @param {Object} defaultValue to return in case server limit is not set or not found.
-   * @returns {number} named value.
+   * @param {string} name of the value to return.
+   * @param {Object} defaultValue to return in case the parameter is not set or not found.
+   * @returns {Object} named value.
    */
-  getServerLimit(name, defaultValue) {
-    return (this._serverInfo ? this._serverInfo[name] : null) || defaultValue;
+  getServerParam(name, defaultValue) {
+    return this._serverInfo && this._serverInfo[name] || defaultValue;
   }
 
   /**
