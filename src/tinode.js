@@ -53,6 +53,7 @@ import Connection from './connection.js';
 import DBCache from './db.js';
 import Drafty from './drafty.js';
 import LargeFileHelper from './large-file.js';
+import MetaGetBuilder from './meta-builder.js';
 import {
   Topic,
   TopicMe,
@@ -402,7 +403,7 @@ export class Tinode {
       // Create the persistent cache.
       // Store promises to be resolved when messages load into memory.
       const prom = [];
-      this._db.initDatabase().then(() => {
+      this._db.initDatabase().then(_ => {
         // First load topics into memory.
         return this._db.mapTopics((data) => {
           let topic = this.#cacheGet('topic', data.name);
@@ -424,15 +425,15 @@ export class Tinode {
           // Request to load messages and save the promise.
           prom.push(topic._loadMessages(this._db));
         });
-      }).then(() => {
+      }).then(_ => {
         // Then load users.
         return this._db.mapUsers((data) => {
           this.#cachePut('user', data.uid, mergeObj({}, data.public));
         });
-      }).then(() => {
+      }).then(_ => {
         // Now wait for all messages to finish loading.
         return Promise.all(prom);
-      }).then(() => {
+      }).then(_ => {
         if (onComplete) {
           onComplete();
         }
@@ -444,7 +445,7 @@ export class Tinode {
         this.logger("Failed to initialize persistent cache:", err);
       });
     } else {
-      this._db.deleteDatabase().then(() => {
+      this._db.deleteDatabase().then(_ => {
         if (onComplete) {
           onComplete();
         }
@@ -1688,18 +1689,62 @@ export class Tinode {
   oobNotification(data) {
     switch (data.what) {
       case 'msg':
+        if (!data || !data.seq || data.seq < 1 || !data.topic) {
+          // Server sent invalid data.
+          break;
+        }
+
+        if (!this.isConnected()) {
+          // Let's ignore the message is there is no connection: no connection means there are no open
+          // tabs with Tinode.
+          break;
+        }
+
         const topic = this.#cacheGet('topic', data.topic);
-        if (topic && topic.isChannelType()) {
-          topic._updateReceived(data.seq, 'fake-uid');
-          this.getMeTopic()._refreshContact('msg', topic);
+        if (!topic) {
+          // TODO: check if there is a case when a message can arrive from an unknown topic.
+          break;
+        }
+
+        if (topic.isSubscribed()) {
+          // No need to fetch: topic is already subscribed and got data through normal channel.
+          break;
+        }
+
+        if (topic.maxMsgSeq() < data.seq) {
+          if (topic.isChannelType()) {
+            topic._updateReceived(data.seq, 'fake-uid');
+          }
+
+          // New message.
+          if (data.xfrom && !this.#cacheGet('user', data.xfrom)) {
+            // Message from unknown sender, fetch description from the server.
+            // Sending asynchronously without a subscription.
+            this.getMeta(data.xfrom, new MetaGetBuilder().withDesc().build()).catch(err => {
+              this.logger("Failed to get the name of a new sender", err);
+            });
+          }
+
+          topic.subscribe(null).then(_ => {
+            return topic.getMeta(new MetaGetBuilder(topic).withLaterData(24).withLaterDel(24).build());
+          }).then(_ => {
+            // Allow data fetch to complete and get processed successfully.
+            topic.leaveDelayed(false, 1000);
+          }).catch(err => {
+            this.logger("On push data fetch failed", err);
+          }).finally(_ => {
+            this.getMeTopic()._refreshContact('msg', topic);
+          });
         }
         break;
+
       case 'read':
         this.getMeTopic()._routePres({
           what: 'read',
           seq: data.seq
         });
         break;
+
       case 'sub':
         let mode = {
           given: data.modeGiven,
@@ -1720,6 +1765,7 @@ export class Tinode {
           };
         this.getMeTopic()._routePres(pres);
         break;
+
       default:
         this.logger("Unknown push type ignored", data.what);
     }

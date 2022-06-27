@@ -40,9 +40,12 @@ export const MESSAGE_STATUS_TO_ME = 7; // The message is received from another u
 export const MESSAGE_STATUS_DEL_RANGE = 8; // The message represents a deleted range.
 
 // Reject unresolved futures after this many milliseconds.
-export const EXPIRE_PROMISES_TIMEOUT = 5000;
+export const EXPIRE_PROMISES_TIMEOUT = 5_000;
 // Periodicity of garbage collection of unresolved futures.
-export const EXPIRE_PROMISES_PERIOD = 1000;
+export const EXPIRE_PROMISES_PERIOD = 1_000;
+
+// Delay before acknowledging that a message was recived.
+export const RECV_TIMEOUT = 100;
 
 // Default number of messages to pull into memory from persistent cache.
 export const DEFAULT_MESSAGES_PAGE = 24;

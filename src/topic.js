@@ -75,6 +75,9 @@ export class Topic {
     this._noEarlierMsgs = false;
     // The maximum known deletion ID.
     this._maxDel = 0;
+    // Timer object used to send 'recv' notifications.
+    this._recvNotificationTimer = null;
+
     // User discovery tags
     this._tags = [];
     // Credentials such as email or phone number.
@@ -96,6 +99,9 @@ export class Topic {
     this._new = true;
     // The topic is deleted at the server, this is a local copy.
     this._deleted = false;
+
+    // Timer used to trgger {leave} request after a delay.
+    this._delayedLeaveTimer = null;
 
     // Callbacks
     if (callbacks) {
@@ -233,6 +239,10 @@ export class Topic {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
   subscribe(getParams, setParams) {
+    // Clear request to leave topic.
+    clearTimeout(this._delayedLeaveTimer);
+    this._delayedLeaveTimer = null;
+
     // If the topic is already subscribed, return resolved promise
     if (this._attached) {
       return Promise.resolve(this);
@@ -442,6 +452,23 @@ export class Topic {
       }
       return ctrl;
     });
+  }
+
+  /**
+   * Leave the topic, optionally unsibscribe after a delay. Leaving the topic means the topic will stop
+   * receiving updates from the server. Unsubscribing will terminate user's relationship with the topic.
+   * Wrapper for {@link Tinode#leave}.
+   * @memberof Tinode.Topic#
+   *
+   * @param {boolean} unsub - If true, unsubscribe, otherwise just leave.
+   * @param {number} delay - time in milliseconds to delay leave request.
+   */
+  leaveDelayed(unsub, delay) {
+    clearTimeout(this._delayedLeaveTimer);
+    this._delayedLeaveTimer = setTimeout(_ => {
+      this._delayedLeaveTimer = null;
+      this.leave(unsub)
+    }, delay);
   }
 
   /**
@@ -828,25 +855,6 @@ export class Topic {
   }
 
   /**
-   * Send a {note what='call'}. Wrapper for {@link Tinode#videoCall}.
-   * @memberof Tinode#
-   *
-   * @param {string} evt - Call event.
-   * @param {int} seq - ID of the call message the event pertains to.
-   * @param {string} payload - Payload associated with this event (e.g. SDP string).
-   *
-   * @returns {Promise} Promise (for some call events) which will
-   *                    be resolved/rejected on receiving server reply
-   */
-  videoCall(evt, seq, payload) {
-    if (!this._attached && !['ringing', 'hang-up'].includes(evt)) {
-      // Cannot {call} on an inactive topic".
-      return;
-    }
-    return this._tinode.videoCall(this.name, seq, evt, payload);
-  }
-
-  /**
    * Send a 'recv' receipt. Wrapper for {@link Tinode#noteRecv}.
    * @memberof Tinode.Topic#
    *
@@ -878,6 +886,25 @@ export class Topic {
       this._tinode.logger("INFO: Cannot send notification in inactive topic");
     }
   }
+  /**
+   * Send a {note what='call'}. Wrapper for {@link Tinode#videoCall}.
+   * @memberof Tinode#
+   *
+   * @param {string} evt - Call event.
+   * @param {int} seq - ID of the call message the event pertains to.
+   * @param {string} payload - Payload associated with this event (e.g. SDP string).
+   *
+   * @returns {Promise} Promise (for some call events) which will
+   *                    be resolved/rejected on receiving server reply
+   */
+  videoCall(evt, seq, payload) {
+    if (!this._attached && !['ringing', 'hang-up'].includes(evt)) {
+      // Cannot {call} on an inactive topic".
+      return;
+    }
+    return this._tinode.videoCall(this.name, seq, evt, payload);
+  }
+
   // Update cached read/recv/unread counts.
   _updateReadRecv(what, seq, ts) {
     let oldVal, doUpdate = false;
@@ -1446,7 +1473,15 @@ export class Topic {
 
     if (data.seq > this._maxSeq) {
       this._maxSeq = data.seq;
+      this.msgStatus(data, true);
+      // Ackn receiving the message.
+      clearTimeout(this._recvNotificationTimer);
+      this._recvNotificationTimer = setTimeout(_ => {
+        this._recvNotificationTimer = null;
+        this.noteRecv(this._maxSeq);
+      }, Const.RECV_TIMEOUT);
     }
+
     if (data.seq < this._minSeq || this._minSeq == 0) {
       this._minSeq = data.seq;
     }
