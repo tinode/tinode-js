@@ -11,7 +11,7 @@ import {
 
 // Global constants
 export const PROTOCOL_VERSION = '0'; // Major component of the version, e.g. '0' in '0.17.1'.
-export const VERSION = package_version || '0.18';
+export const VERSION = package_version || '0.20';
 export const LIBRARY = 'tinodejs/' + VERSION;
 
 // Topic name prefixes.
