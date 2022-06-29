@@ -1032,7 +1032,7 @@ export class Topic {
     versions.forEach(callback, undefined, undefined, context);
   }
   /**
-   * Iterate over cached messages: call <code>callback</code> for each message in the range [sindeIdx, beforeIdx).
+   * Iterate over cached messages: call <code>callback</code> for each message in the range [sinceIdx, beforeIdx).
    * If <code>callback</code> is undefined, use <code>this.onData</code>.
    * @memberof Tinode.Topic#
    *
@@ -1060,7 +1060,7 @@ export class Topic {
             return;
           }
           msgs.push({
-            data: this._getLatestMsgVersion(msg),
+            data: this.latestMsgVersion(msg.seq) || msg,
             idx: i
           });
         }, startIdx, beforeIdx, {});
@@ -1102,6 +1102,17 @@ export class Topic {
       return msg;
     }
     return this._messages.getLast(1);
+  }
+  /**
+   * Get the latest version for message.
+   * @memberof Tinode.Topic#
+   *
+   * @param {number} seq - original seq ID of the message.
+   * @returns {Object} the latest version of the message or null if message not found.
+   */
+  latestMsgVersion(seq) {
+    const versions = this._messageVersions[seq];
+    return versions ? versions.getLast() : null;
   }
   /**
    * Get the maximum cached seq ID.
@@ -1454,12 +1465,6 @@ export class Topic {
     }, true);
     versions.put(msg);
     this._messageVersions[targetSeq] = versions;
-  }
-
-  // Returns the latest version for `msg` message.
-  _getLatestMsgVersion(msg) {
-    const versions = this._messageVersions[msg.seq];
-    return versions ? versions.getLast() : msg;
   }
 
   // Process data message
