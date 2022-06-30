@@ -1664,10 +1664,10 @@ Drafty.getEntityMimeType = function(entData) {
  *
  * @param {string} style - two-letter style, like ST or LN.
  *
- * @returns {string} HTML tag name if style is found, '_UNKN' if not found, {code: undefined} if style is falsish.
+ * @returns {string} HTML tag name if style is found, {code: undefined} if style is falsish or not found.
  */
 Drafty.tagName = function(style) {
-  return style ? (HTML_TAGS[style] ? HTML_TAGS[style].name : '_UNKN') : undefined;
+  return HTML_TAGS[style] && HTML_TAGS[style].name;
 }
 
 /**

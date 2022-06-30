@@ -6,7 +6,9 @@
 'use strict';
 
 import AccessMode from './access-mode.js';
-import DEL_CHAR from './config.js';
+import {
+  DEL_CHAR
+} from './config.js';
 
 // Attempt to convert date and AccessMode strings to objects.
 export function jsonParseHelper(key, val) {
