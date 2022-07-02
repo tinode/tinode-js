@@ -1685,6 +1685,8 @@ export class Tinode {
    * @param {object=} data.want - new subscription 'want', e.g. 'RWJ...'.
    */
   oobNotification(data) {
+    this.logger("oob: " + (this._trimLongStrings ? JSON.stringify(data, jsonLoggerHelper) : data));
+
     switch (data.what) {
       case 'msg':
         const topic = this.#cacheGet('topic', data.topic);
@@ -1700,6 +1702,11 @@ export class Tinode {
         });
         break;
       case 'sub':
+        if (!this.isMe(data.xfrom)) {
+          // TODO: handle updates from other users.
+          break;
+        }
+
         let mode = {
           given: data.modeGiven,
           want: data.modeWant
