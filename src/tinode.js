@@ -1691,7 +1691,7 @@ export class Tinode {
 
     switch (data.what) {
       case 'msg':
-        if (!data || !data.seq || data.seq < 1 || !data.topic) {
+        if (!data.seq || data.seq < 1 || !data.topic) {
           // Server sent invalid data.
           break;
         }
