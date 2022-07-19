@@ -67,6 +67,11 @@ import {
   simplify
 } from './utils.js';
 
+// Re-export AccessMode
+export {
+  AccessMode
+};
+
 let WebSocketProvider;
 if (typeof WebSocket != 'undefined') {
   WebSocketProvider = WebSocket;
