@@ -27,6 +27,13 @@ or while developing as
 * For bugs and feature requests [open an issue](https://github.com/tinode/tinode-js/issues/new).
 * Use https://tinode.co/contact for commercial inquiries.
 
+## Helping out
+
+* If you appreciate our work, please help spread the word! Sharing on Reddit, HN, and other communities helps more than you think.
+* Consider buying paid support: https://tinode.co/support.html
+* If you are a software developer, send us your pull requests with bug fixes and new features.
+* If you use the SDK and discover bugs or missing features, let us know by filing bug reports and feature requests. Vote for existing [feature requests](https://github.com/tinode/chat/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc+label%3A%22feature+request%22) you find most valuable.
+
 ## Node JS compatibility
 
 This SDK is intended to be used in a browser. To use `tinode-sdk` in Node JS environment (such as on a server), you have to polyfill network providers, for example with [ws](https://www.npmjs.com/package/ws) and [xmlhttprequest](https://www.npmjs.com/package/xmlhttprequest) or [xhr](https://www.npmjs.com/package/xhr), as well as `indexedDB` with something like [fake-indexeddb](https://www.npmjs.com/package/fake-indexeddb):
