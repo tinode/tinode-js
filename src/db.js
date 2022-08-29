@@ -70,10 +70,10 @@ export default class DB {
         reject(event.target.error);
         this.#onError(event.target.error);
       };
-      req.onupgradeneeded = function(event) {
+      req.onupgradeneeded = (event) => {
         this.db = event.target.result;
 
-        this.db.onerror = function(event) {
+        this.db.onerror = (event) => {
           this.#logger('PCache', "failed to create storage", event);
           this.#onError(event.target.error);
         };
@@ -113,7 +113,7 @@ export default class DB {
     }
     return new Promise((resolve, reject) => {
       const req = IDBProvider.deleteDatabase(DB_NAME);
-      req.onblocked = function(event) {
+      req.onblocked = (event) => {
         if (this.db) {
           this.db.close();
         }
