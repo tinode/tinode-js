@@ -54,9 +54,6 @@ export default class LargeFileHelper {
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
   uploadWithBaseUrl(baseUrl, data, avatarFor, onProgress, onSuccess, onFailure) {
-    if (!this._authToken) {
-      throw new Error("Must authenticate first");
-    }
     const instance = this;
 
     let url = `/v${this._version}/file/u/`;
@@ -74,7 +71,9 @@ export default class LargeFileHelper {
     }
     this.xhr.open('POST', url, true);
     this.xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
-    this.xhr.setRequestHeader('X-Tinode-Auth', `Token ${this._authToken.token}`);
+    if (this._authToken) {
+      this.xhr.setRequestHeader('X-Tinode-Auth', `Token ${this._authToken.token}`);
+    }
     const result = new Promise((resolve, reject) => {
       this.toResolve = resolve;
       this.toReject = reject;
