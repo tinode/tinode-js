@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Tinode SDK",
-  "version": "0.20.0-rc1",
+  "version": "0.20.0-rc2",
   "scripts": {
     "format": "js-beautify -r src/*.js",
     "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
@@ -36,6 +36,7 @@
   "main": "./umd/tinode.prod.js",
   "devDependencies": {
     "@babel/core": "^7.12.10",
+    "@babel/plugin-proposal-numeric-separator": "^7.18.6",
     "@babel/preset-env": "^7.12.11",
     "babelify": "^10.0.0",
     "browserify": "^17.0.0",
