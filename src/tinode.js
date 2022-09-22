@@ -62,6 +62,7 @@ import {
 } from './topic.js';
 
 import {
+  isUrlRelative,
   jsonParseHelper,
   mergeObj,
   rfc3339DateString,
@@ -1055,21 +1056,6 @@ export class Tinode {
   static isNullValue(str) {
     return str === Const.DEL_CHAR;
   }
-  /**
-   * Check if the given URL string is a relative URL.
-   * Check for cases like:
-   *  <code>'http://example.com'</code>
-   *  <code>' http://example.com'</code>
-   *  <code>'//example.com/'</code>
-   *  <code>'http:example.com'</code>
-   *  <code>'http:/example.com'</code>
-   *
-   * @param {string} url - URL string to check.
-   * @returns {boolean} <code>true</code> if the URL is relative, <code>false</code> otherwise.
-   */
-  static isRelativeURL(url) {
-    return !/^\s*([a-z][a-z0-9+.-]*:|\/\/)/im.test(url);
-  }
 
   // Instance methods.
 
@@ -1167,7 +1153,7 @@ export class Tinode {
       return url;
     }
 
-    if (Tinode.isRelativeURL(url)) {
+    if (isUrlRelative(url)) {
       // Fake base to make the relative URL parseable.
       const base = 'scheme://host/';
       const parsed = new URL(url, base);
@@ -1234,7 +1220,7 @@ export class Tinode {
 
       if (Array.isArray(params.attachments) && params.attachments.length > 0) {
         pkt.extra = {
-          attachments: params.attachments.filter(ref => Tinode.isRelativeURL(ref))
+          attachments: params.attachments.filter(ref => isUrlRelative(ref))
         };
       }
     }
@@ -1517,7 +1503,7 @@ export class Tinode {
       // See if external objects were used in topic description.
       if (Array.isArray(setParams.attachments) && setParams.attachments.length > 0) {
         pkt.extra = {
-          attachments: setParams.attachments.filter(ref => Tinode.isRelativeURL(ref))
+          attachments: setParams.attachments.filter(ref => isUrlRelative(ref))
         };
       }
 
@@ -1602,7 +1588,7 @@ export class Tinode {
     };
     if (attachments) {
       msg.extra = {
-        attachments: attachments.filter(ref => Tinode.isRelativeURL(ref))
+        attachments: attachments.filter(ref => isUrlRelative(ref))
       };
     }
     return this.#send(msg, pub.id);
@@ -1771,7 +1757,7 @@ export class Tinode {
 
       if (Array.isArray(params.attachments) && params.attachments.length > 0) {
         pkt.extra = {
-          attachments: params.attachments.filter(ref => Tinode.isRelativeURL(ref))
+          attachments: params.attachments.filter(ref => isUrlRelative(ref))
         };
       }
     }

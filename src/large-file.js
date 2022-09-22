@@ -6,6 +6,7 @@
 'use strict';
 
 import {
+  isUrlRelative,
   jsonParseHelper
 } from './utils.js';
 
@@ -187,7 +188,7 @@ export default class LargeFileHelper {
    * @returns {Promise} resolved/rejected when the download is completed/failed.
    */
   download(relativeUrl, filename, mimetype, onProgress, onError) {
-    if (!Tinode.isRelativeURL(relativeUrl)) {
+    if (!isUrlRelative(relativeUrl)) {
       // As a security measure refuse to download from an absolute URL.
       if (onError) {
         onError(`The URL '${relativeUrl}' must be relative, not absolute`);
