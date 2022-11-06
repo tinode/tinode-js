@@ -1612,27 +1612,39 @@ export class Topic {
   }
   // Process {info} message
   _routeInfo(info) {
-    if (info.what !== 'kp') {
-      const user = this._users[info.from];
-      if (user) {
-        user[info.what] = info.seq;
-        if (user.recv < user.read) {
-          user.recv = user.read;
+    switch (info.what) {
+      case 'recv':
+      case 'read':
+        const user = this._users[info.from];
+        if (user) {
+          user[info.what] = info.seq;
+          if (user.recv < user.read) {
+            user.recv = user.read;
+          }
         }
-      }
-      const msg = this.latestMessage();
-      if (msg) {
-        this.msgStatus(msg, true);
-      }
+        const msg = this.latestMessage();
+        if (msg) {
+          this.msgStatus(msg, true);
+        }
 
-      // If this is an update from the current user, update the cache with the new count.
-      if (this._tinode.isMe(info.from)) {
-        this._updateReadRecv(info.what, info.seq);
-      }
+        // If this is an update from the current user, update the cache with the new count.
+        if (this._tinode.isMe(info.from)) {
+          this._updateReadRecv(info.what, info.seq);
+        }
 
-      // Notify 'me' listener of the status change.
-      this._tinode.getMeTopic()._refreshContact(info.what, this);
+        // Notify 'me' listener of the status change.
+        this._tinode.getMeTopic()._refreshContact(info.what, this);
+        break;
+      case 'kp':
+        // Do nothing.
+        break;
+      case 'call':
+        // Do nothing here.
+        break;
+      default:
+        this._tinode.logger("INFO: Ignored info update", info.what);
     }
+
     if (this.onInfo) {
       this.onInfo(info);
     }
