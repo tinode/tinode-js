@@ -219,7 +219,7 @@ export default class Connection {
           this.onAutoreconnectIteration(0, prom);
         } else {
           // Suppress error if it's not used.
-          prom.catch(() => {
+          prom.catch(_ => {
             /* do nothing */
           });
         }
