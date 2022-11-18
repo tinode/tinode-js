@@ -141,77 +141,95 @@ const ENTITY_TYPES = [
 ];
 
 // HTML tag name suggestions
-const HTML_TAGS = {
+const FORMAT_TAGS = {
   AU: {
-    name: 'audio',
+    html_tag: 'audio',
+    md_tag: undefined,
     isVoid: false
   },
   BN: {
-    name: 'button',
+    html_tag: 'button',
+    md_tag: undefined,
     isVoid: false
   },
   BR: {
-    name: 'br',
+    html_tag: 'br',
+    md_tag: '\n',
     isVoid: true
   },
   CO: {
-    name: 'tt',
+    html_tag: 'tt',
+    md_tag: '`',
     isVoid: false
   },
   DL: {
-    name: 'del',
+    html_tag: 'del',
+    md_tag: '~',
     isVoid: false
   },
   EM: {
-    name: 'i',
+    html_tag: 'i',
+    md_tag: '_',
     isVoid: false
   },
   EX: {
-    name: '',
+    html_tag: '',
+    md_tag: undefined,
     isVoid: true
   },
   FM: {
-    name: 'div',
+    html_tag: 'div',
+    md_tag: undefined,
     isVoid: false
   },
   HD: {
-    name: '',
+    html_tag: '',
+    md_tag: undefined,
     isVoid: false
   },
   HL: {
-    name: 'span',
+    html_tag: 'span',
+    md_tag: undefined,
     isVoid: false
   },
   HT: {
-    name: 'a',
+    html_tag: 'a',
+    md_tag: undefined,
     isVoid: false
   },
   IM: {
-    name: 'img',
+    html_tag: 'img',
+    md_tag: undefined,
     isVoid: false
   },
   LN: {
-    name: 'a',
+    html_tag: 'a',
+    md_tag: undefined,
     isVoid: false
   },
   MN: {
-    name: 'a',
+    html_tag: 'a',
+    md_tag: undefined,
     isVoid: false
   },
   RW: {
-    name: 'div',
+    html_tag: 'div',
+    md_tag: undefined,
     isVoid: false,
   },
   QQ: {
-    name: 'div',
+    html_tag: 'div',
+    md_tag: undefined,
     isVoid: false
   },
   ST: {
-    name: 'b',
+    html_tag: 'b',
+    md_tag: '*',
     isVoid: false
   },
   VC: {
-    name: 'div',
+    html_tag: 'div',
+    md_tag: undefined,
     isVoid: false
   },
 };
@@ -1217,7 +1235,7 @@ Drafty.appendLineBreak = function(content) {
  * @returns {string} HTML-representation of content.
  */
 Drafty.UNSAFE_toHTML = function(doc) {
-  let tree = draftyToTree(doc);
+  const tree = draftyToTree(doc);
   const htmlFormatter = function(type, data, values) {
     const tag = DECORATORS[type];
     let result = values ? values.join('') : '';
@@ -1431,6 +1449,31 @@ Drafty.toPlainText = function(content) {
  */
 Drafty.isPlainText = function(content) {
   return typeof content == 'string' || !(content.fmt || content.ent);
+}
+
+/**
+ * Convert document to plain text with markdown. All elements which cannot
+ * be represented in markdown are stripped.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document to convert to plain text with markdown.
+ */
+Drafty.toMarkdown = function(content) {
+  let tree = draftyToTree(content);
+  const mdFormatter = function(type, _, values) {
+    const def = FORMAT_TAGS[type];
+    let result = (values ? values.join('') : '');
+    if (def) {
+      if (def.isVoid) {
+        result = def.md_tag || '';
+      } else if (def.md_tag) {
+        result = def.md_tag + result + def.md_tag;
+      }
+    }
+    return result;
+  };
+  return treeBottomUp(tree, mdFormatter, 0);
 }
 
 /**
@@ -1667,7 +1710,7 @@ Drafty.getEntityMimeType = function(entData) {
  * @returns {string} HTML tag name if style is found, {code: undefined} if style is falsish or not found.
  */
 Drafty.tagName = function(style) {
-  return HTML_TAGS[style] && HTML_TAGS[style].name;
+  return FORMAT_TAGS[style] && FORMAT_TAGS[style].html_tag;
 }
 
 /**
@@ -2050,7 +2093,7 @@ function spansToTree(parent, text, start, end, spans) {
         break;
       } else if (inner.start < span.end) {
         if (inner.end <= span.end) {
-          const tag = HTML_TAGS[inner.tp] || {};
+          const tag = FORMAT_TAGS[inner.tp] || {};
           if (inner.start < inner.end || tag.isVoid) {
             // Valid subspan: completely within the current span and
             // either non-zero length or zero length is acceptable.

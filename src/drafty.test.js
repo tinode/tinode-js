@@ -1143,8 +1143,8 @@ test.each(reply_this)('Drafty.replyContent %j', (src, exp) => {
   expect(Drafty.replyContent(src, 25)).toEqual(exp);
 });
 
-// Drafty docs for testing Drafty.replyContent.
-const format_this = [
+// Drafty docs for testing Drafty.UNSAFE_toHTML and Drafty.toMarkdown.
+const html_this = [
   [{
       "ent": [{
         "data": {
@@ -1203,8 +1203,87 @@ const format_this = [
   ],
 ];
 
-test.each(format_this)('Drafty.UNSAFE_toHTML %j', (src, exp) => {
+test.each(html_this)('Drafty.UNSAFE_toHTML %j', (src, exp) => {
   expect(Drafty.UNSAFE_toHTML(src)).toEqual(exp);
+});
+
+// Drafty docs for testing Drafty.toMarkdown.
+const md_this = [
+
+  [{
+      "fmt": [{
+        "at": 8,
+        "len": 4,
+        "tp": "ST"
+      }, {
+        "at": 14,
+        "len": 4,
+        "tp": "CO"
+      }, {
+        "at": 23,
+        "len": 6,
+        "tp": "EM"
+      }, {
+        "at": 31,
+        "len": 6,
+        "tp": "DL"
+      }],
+      "txt": "This is bold, code and italic, strike"
+    },
+    'This is *bold*, `code` and _italic_, ~strike~'
+  ],
+  [{
+      "fmt": [{
+        "at": 14,
+        "len": 0,
+        "tp": "BR"
+      }, {
+        "at": 23,
+        "len": 15,
+        "tp": "ST"
+      }, {
+        "at": 32,
+        "len": 6,
+        "tp": "EM"
+      }],
+      "txt": "two lines withcombined bold and italic"
+    },
+    "two lines with\ncombined *bold and _italic_*",
+  ],
+  [{
+      "ent": [{
+          "data": {
+            "val": "mention"
+          },
+          "tp": "MN"
+        },
+        {
+          "data": {
+            "val": "hashtag"
+          },
+          "tp": "HT"
+        },
+      ],
+      "fmt": [{
+          "at": 10,
+          "key": 0,
+          "len": 8
+        },
+        {
+          "at": 25,
+          "key": 1,
+          "len": 8
+        },
+      ],
+      "txt": "this is a @mention and a #hashtag in a string"
+    },
+    "this is a @mention and a #hashtag in a string"
+  ],
+];
+
+
+test.each(md_this)('Drafty.toMarkdown %j', (src, exp) => {
+  expect(Drafty.toMarkdown(src)).toEqual(exp);
 });
 
 // Test for handling invalid Drafty.
