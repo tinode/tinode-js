@@ -313,17 +313,19 @@ export class Topic {
   createMessage(data, noEcho) {
     return this._tinode.createMessage(this.name, data, noEcho);
   }
+
   /**
    * Immediately publish data to topic. Wrapper for {@link Tinode#publish}.
    * @memberof Tinode.Topic#
    *
-   * @param {string | Object} data - Data to publish, either plain string or a Drafty object.
+   * @param {string | Object} data - Message to publish, either plain string or a Drafty object.
    * @param {boolean=} noEcho - If <code>true</code> server will not echo message back to originating
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
   publish(data, noEcho) {
     return this.publishMessage(this.createMessage(data, noEcho));
   }
+
   /**
    * Publish message created by {@link Tinode.Topic#createMessage}.
    * @memberof Tinode.Topic#
@@ -348,7 +350,7 @@ export class Topic {
     let attachments = null;
     if (Drafty.hasEntities(pub.content)) {
       attachments = [];
-      Drafty.entities(pub.content, (data) => {
+      Drafty.entities(pub.content, data => {
         if (data && data.ref) {
           attachments.push(data.ref);
         }
@@ -358,13 +360,14 @@ export class Topic {
       }
     }
 
-    return this._tinode.publishMessage(pub, attachments).then((ctrl) => {
+    return this._tinode.publishMessage(pub, attachments).then(ctrl => {
       pub._sending = false;
       pub.ts = ctrl.ts;
       this.swapMessageId(pub, ctrl.params.seq);
+      this._maybeUpdateMessageVersionsCache(pub);
       this._routeData(pub);
       return ctrl;
-    }).catch((err) => {
+    }).catch(err => {
       this._tinode.logger("WARNING: Message rejected by the server", err);
       pub._sending = false;
       pub._failed = true;
@@ -373,6 +376,7 @@ export class Topic {
       }
     });
   }
+
   /**
    * Add message to local message cache, send to the server when the promise is resolved.
    * If promise is null or undefined, the message will be sent immediately.
