@@ -345,17 +345,17 @@ export default class Connection {
         Connection.#log("LP connecting to:", url);
         _poller = lp_poller(url, resolve, reject);
         _poller.send(null);
-      }).catch((err) => {
+      }).catch(err => {
         Connection.#log("LP connection failed:", err);
       });
     };
 
-    this.reconnect = (force) => {
+    this.reconnect = force => {
       this.#boffStop();
       this.connect(null, force);
     };
 
-    this.disconnect = () => {
+    this.disconnect = _ => {
       this.#boffClosed = true;
       this.#boffStop();
 
@@ -386,7 +386,7 @@ export default class Connection {
       }
     };
 
-    this.isConnected = () => {
+    this.isConnected = _ => {
       return (_poller && true);
     };
   }
@@ -417,11 +417,11 @@ export default class Connection {
         // https://stackoverflow.com/questions/31002592/javascript-doesnt-catch-error-in-websocket-instantiation/31003057
         const conn = new WebSocketProvider(url);
 
-        conn.onerror = (err) => {
+        conn.onerror = err => {
           reject(err);
         };
 
-        conn.onopen = (evt) => {
+        conn.onopen = _ => {
           if (this.autoreconnect) {
             this.#boffStop();
           }
@@ -433,7 +433,7 @@ export default class Connection {
           resolve();
         };
 
-        conn.onclose = (evt) => {
+        conn.onclose = _ => {
           this.#socket = null;
 
           if (this.onDisconnect) {
@@ -447,7 +447,7 @@ export default class Connection {
           }
         };
 
-        conn.onmessage = (evt) => {
+        conn.onmessage = evt => {
           if (this.onMessage) {
             this.onMessage(evt.data);
           }
@@ -457,12 +457,12 @@ export default class Connection {
       });
     }
 
-    this.reconnect = (force) => {
+    this.reconnect = force => {
       this.#boffStop();
       this.connect(null, force);
     };
 
-    this.disconnect = () => {
+    this.disconnect = _ => {
       this.#boffClosed = true;
       this.#boffStop();
 
@@ -473,7 +473,7 @@ export default class Connection {
       this.#socket = null;
     };
 
-    this.sendText = (msg) => {
+    this.sendText = msg => {
       if (this.#socket && (this.#socket.readyState == this.#socket.OPEN)) {
         this.#socket.send(msg);
       } else {
@@ -481,7 +481,7 @@ export default class Connection {
       }
     };
 
-    this.isConnected = () => {
+    this.isConnected = _ => {
       return (this.#socket && (this.#socket.readyState == this.#socket.OPEN));
     };
   }

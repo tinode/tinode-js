@@ -256,7 +256,7 @@ export class Topic {
     // Send subscribe message, handle async response.
     // If topic name is explicitly provided, use it. If no name, then it's a new group topic,
     // use "new".
-    return this._tinode.subscribe(this.name || Const.TOPIC_NEW, getParams, setParams).then((ctrl) => {
+    return this._tinode.subscribe(this.name || Const.TOPIC_NEW, getParams, setParams).then(ctrl => {
       if (ctrl.code >= 300) {
         // Do nothing if subscription status has not changed.
         return ctrl;
@@ -449,7 +449,7 @@ export class Topic {
     }
 
     // Send a 'leave' message, handle async response
-    return this._tinode.leave(this.name, unsub).then((ctrl) => {
+    return this._tinode.leave(this.name, unsub).then(ctrl => {
       this._resetSub();
       if (unsub) {
         this._gone();
@@ -521,7 +521,7 @@ export class Topic {
           this.startMetaQuery().withEarlierData(limit);
         let promise = this.getMeta(query.build());
         if (!forward) {
-          promise = promise.then((ctrl) => {
+          promise = promise.then(ctrl => {
             if (ctrl && ctrl.params && !ctrl.params.count) {
               this._noEarlierMsgs = true;
             }
@@ -543,7 +543,7 @@ export class Topic {
     }
     // Send Set message, handle async response.
     return this._tinode.setMeta(this.name, params)
-      .then((ctrl) => {
+      .then(ctrl => {
         if (ctrl && ctrl.code >= 300) {
           // Not modified
           return ctrl;
@@ -697,7 +697,7 @@ export class Topic {
       });
     }
     // Update local cache.
-    return result.then((ctrl) => {
+    return result.then(ctrl => {
       if (ctrl.params.del > this._maxDel) {
         this._maxDel = ctrl.params.del;
       }
@@ -788,7 +788,7 @@ export class Topic {
       return Promise.resolve(null);
     }
 
-    return this._tinode.delTopic(this.name, hard).then((ctrl) => {
+    return this._tinode.delTopic(this.name, hard).then(ctrl => {
       this._deleted = true;
       this._resetSub();
       this._gone();
@@ -807,7 +807,7 @@ export class Topic {
       return Promise.reject(new Error("Cannot delete subscription in inactive topic"));
     }
     // Send {del} message, return promise
-    return this._tinode.delSubscription(this.name, user).then((ctrl) => {
+    return this._tinode.delSubscription(this.name, user).then(ctrl => {
       // Remove the object from the subscription cache;
       delete this._users[user];
       // Notify listeners
@@ -2274,7 +2274,7 @@ export class TopicMe extends Topic {
       return Promise.reject(new Error("Cannot delete credential in inactive 'me' topic"));
     }
     // Send {del} message, return promise
-    return this._tinode.delCredential(method, value).then((ctrl) => {
+    return this._tinode.delCredential(method, value).then(ctrl => {
       // Remove deleted credential from the cache.
       const index = this._credentials.findIndex((el) => {
         return el.meth == method && el.val == value;
@@ -2425,7 +2425,7 @@ export class TopicFnd extends Topic {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   setMeta(params) {
-    return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(() => {
+    return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(_ => {
       if (Object.keys(this._contacts).length > 0) {
         this._contacts = {};
         if (this.onSubsUpdated) {

@@ -1028,11 +1028,11 @@ Drafty.attachFile = function(content, attachmentDesc) {
   if (attachmentDesc.urlPromise) {
     ex.data._processing = true;
     attachmentDesc.urlPromise.then(
-      (url) => {
+      url => {
         ex.data.ref = url;
         ex.data._processing = undefined;
       },
-      (err) => {
+      _ => {
         /* catch the error, otherwise it will appear in the console. */
         ex.data._processing = undefined;
       }
