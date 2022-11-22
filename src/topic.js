@@ -83,7 +83,7 @@ export class Topic {
     // Credentials such as email or phone number.
     this._credentials = [];
     // Message versions cache (e.g. for edited messages).
-    // Keys: original message seq ids.
+    // Keys: original message seq ID.
     // Values: CBuffers containing newer versions of the original message
     // ordered by seq id.
     this._messageVersions = {};
@@ -720,7 +720,7 @@ export class Topic {
     });
   }
   /**
-   * Delete all messages. Hard-deleting messages requires Owner permission.
+   * Delete all messages. Hard-deleting messages requires Deleter permission.
    * @memberof Tinode.Topic#
    *
    * @param {boolean} hardDel - true if messages should be hard-deleted.
@@ -738,11 +738,12 @@ export class Topic {
       _all: true
     }], hardDel);
   }
+
   /**
-   * Delete multiple messages defined by their IDs. Hard-deleting messages requires Owner permission.
+   * Delete multiple messages defined by their IDs. Hard-deleting messages requires Deleter permission.
    * @memberof Tinode.Topic#
    *
-   * @param {Tinode.DelRange[]} list - list of seq IDs to delete
+   * @param {number[]} list - list of seq IDs to delete.
    * @param {boolean=} hardDel - true if messages should be hard-deleted.
    *
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
@@ -774,6 +775,23 @@ export class Topic {
     // Send {del} message, return promise
     return this.delMessages(ranges, hardDel);
   }
+
+  /**
+   * Delete original message and edited variants. Hard-deleting messages requires Deleter permission.
+   * @memberof Tinode.Topic#
+   *
+   * @param {number} seq - original seq ID of the message to delete.
+   * @param {boolean=} hardDel - true if messages should be hard-deleted.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
+   */
+  delMessagesEdits(seq, hardDel) {
+    const list = [seq];
+    this.messageVersions(seq, msg => list.push(msg.seq));
+    // Send {del} message, return promise
+    return this.delMessagesList(list, hardDel);
+  }
+
   /**
    * Delete topic. Requires Owner permission. Wrapper for {@link Tinode#delTopic}.
    * @memberof Tinode.Topic#
@@ -1016,19 +1034,19 @@ export class Topic {
     return this._users[uid];
   }
   /**
-   * Iterate over versions of <code>message</code>: call <code>callback</code> for each message.
+   * Iterate over versions of a message: call <code>callback</code> for each version (excluding original).
    * If <code>callback</code> is undefined, does nothing.
    * @memberof Tinode.Topic#
    *
+   * @param {number} origSeq - seq ID of the original message.
    * @param {Tinode.ForEachCallbackType} callback - Callback which will receive messages one by one. See {@link Tinode.CBuffer#forEach}
    * @param {Object} context - Value of `this` inside the `callback`.
    */
-  messageVersions(message, callback, context) {
+  messageVersions(origSeq, callback, context) {
     if (!callback) {
       // No callback? We are done then.
       return;
     }
-    const origSeq = this._isReplacementMsg(message) ? parseInt(message.head.replace.split(':')[1]) : message.seq;
     const versions = this._messageVersions[origSeq];
     if (!versions) {
       return;
@@ -1234,11 +1252,38 @@ export class Topic {
     const idx = this._messages.find({
       seq: seqId
     });
+    delete this._messageVersions[seqId];
     if (idx >= 0) {
       this._tinode._db.remMessages(this.name, seqId);
       return this._messages.delAt(idx);
     }
     return undefined;
+  }
+  /**
+   * Remove a range of messages from the local cache.
+   * @memberof Tinode.Topic#
+   *
+   * @param {number} fromId seq ID of the first message to remove (inclusive).
+   * @param {number} untilId seqID of the last message to remove (exclusive).
+   *
+   * @returns {Message[]} array of removed messages (could be empty).
+   */
+  flushMessageRange(fromId, untilId) {
+    // Remove range from persistent cache.
+    this._tinode._db.remMessages(this.name, fromId, untilId);
+
+    // Remove all versions keyed by IDs in the range.
+    for (let i = fromId; i < untilId; i++) {
+      delete this._messageVersions[i];
+    }
+
+    // start, end: find insertion points (nearest == true).
+    const since = this._messages.find({
+      seq: fromId
+    }, true);
+    return since >= 0 ? this._messages.delRange(since, this._messages.find({
+      seq: untilId
+    }, true)) : [];
   }
   /**
    * Update message's seqId.
@@ -1259,26 +1304,6 @@ export class Topic {
       this._messages.put(pub);
       this._tinode._db.addMessage(pub);
     }
-  }
-  /**
-   * Remove a range of messages from the local cache.
-   * @memberof Tinode.Topic#
-   *
-   * @param {number} fromId seq ID of the first message to remove (inclusive).
-   * @param {number} untilId seqID of the last message to remove (exclusive).
-   *
-   * @returns {Message[]} array of removed messages (could be empty).
-   */
-  flushMessageRange(fromId, untilId) {
-    // Remove range from persistent cache.
-    this._tinode._db.remMessages(this.name, fromId, untilId);
-    // start, end: find insertion points (nearest == true).
-    const since = this._messages.find({
-      seq: fromId
-    }, true);
-    return since >= 0 ? this._messages.delRange(since, this._messages.find({
-      seq: untilId
-    }, true)) : [];
   }
   /**
    * Attempt to stop message from being sent.
@@ -1453,7 +1478,7 @@ export class Topic {
     return pub.head && pub.head.replace;
   }
 
-  // If msg is a replacement for another message, saves msg in the message versions cache
+  // If msg is a replacement for another message, save the msg in the message versions cache
   // as a newer version for the message it's supposed to replace.
   _maybeUpdateMessageVersionsCache(msg) {
     if (!this._isReplacementMsg(msg)) {
