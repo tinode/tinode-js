@@ -743,7 +743,7 @@ export class Topic {
    * Delete multiple messages defined by their IDs. Hard-deleting messages requires Deleter permission.
    * @memberof Tinode.Topic#
    *
-   * @param {number[]} list - list of seq IDs to delete.
+   * @param {Array.<number>} list - list of seq IDs to delete.
    * @param {boolean=} hardDel - true if messages should be hard-deleted.
    *
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
