@@ -710,8 +710,6 @@ export class Topic {
         }
       });
 
-      this._updateDeletedRanges();
-
       if (this.onData) {
         // Calling with no parameters to indicate the messages were deleted.
         this.onData();
@@ -1115,15 +1113,10 @@ export class Topic {
    * Get the most recent message from cache. This method counts all messages, including deleted ranges.
    * @memberof Tinode.Topic#
    *
-   * @param {boolen} skipDeleted - if the last message is a deleted range, get the one before it.
    * @returns {Object} the most recent cached message or <code>undefined</code>, if no messages are cached.
    */
-  latestMessage(skipDeleted) {
+  latestMessage() {
     const msg = this._messages.getLast();
-    if (!skipDeleted || !msg || msg._status != Const.MESSAGE_STATUS_DEL_RANGE) {
-      return msg;
-    }
-    return this._messages.getLast(1);
   }
   /**
    * Get the latest version for message.
@@ -1459,8 +1452,8 @@ export class Topic {
       } else if (msg.seq > 0) {
         status = Const.MESSAGE_STATUS_SENT;
       }
-    } else if (msg._status == Const.MESSAGE_STATUS_DEL_RANGE) {
-      status == Const.MESSAGE_STATUS_DEL_RANGE;
+      // } else if (msg._status == Const.MESSAGE_STATUS_DEL_RANGE) {
+      //   status == Const.MESSAGE_STATUS_DEL_RANGE;
     } else {
       status = Const.MESSAGE_STATUS_TO_ME;
     }
@@ -1535,7 +1528,6 @@ export class Topic {
       this._messages.put(data);
       this._tinode._db.addMessage(data);
       this._maybeUpdateMessageVersionsCache(data);
-      this._updateDeletedRanges();
     }
 
     if (this.onData) {
@@ -1781,7 +1773,7 @@ export class Topic {
     }
 
     if (count > 0) {
-      this._updateDeletedRanges();
+      // this._updateDeletedRanges();
 
       if (this.onData) {
         this.onData();
@@ -1790,7 +1782,6 @@ export class Topic {
   }
   // Topic is informed that the entire response to {get what=data} has been received.
   _allMessagesReceived(count) {
-    this._updateDeletedRanges();
 
     if (this.onAllMessagesReceived) {
       this.onAllMessagesReceived(count);
@@ -1842,113 +1833,7 @@ export class Topic {
   _getQueuedSeqId() {
     return this._queuedSeqId++;
   }
-  // Calculate ranges of missing messages.
-  _updateDeletedRanges() {
-    const ranges = [];
 
-    // Gap marker, possibly empty.
-    let prev = null;
-
-    // Check for gap in the beginning, before the first message.
-    const first = this._messages.getAt(0);
-    if (first && this._minSeq > 1 && !this._noEarlierMsgs) {
-      // Some messages are missing in the beginning.
-      if (first.hi) {
-        // The first message already represents a gap.
-        if (first.seq > 1) {
-          first.seq = 1;
-        }
-        if (first.hi < this._minSeq - 1) {
-          first.hi = this._minSeq - 1;
-        }
-        prev = first;
-      } else {
-        // Create new gap.
-        prev = {
-          seq: 1,
-          hi: this._minSeq - 1
-        };
-        ranges.push(prev);
-      }
-    } else {
-      // No gap in the beginning.
-      prev = {
-        seq: 0,
-        hi: 0
-      };
-    }
-
-    // Find new gaps in the list of received messages. The list contains messages-proper as well
-    // as placeholders for deleted ranges.
-    // The messages are iterated by seq ID in ascending order.
-    this._messages.filter((data) => {
-      // Do not create a gap between the last sent message and the first unsent as well as between unsent messages.
-      if (data.seq >= Const.LOCAL_SEQID) {
-        return true;
-      }
-
-      // Check for a gap between the previous message/marker and this message/marker.
-      if (data.seq == (prev.hi || prev.seq) + 1) {
-        // No gap between this message and the previous.
-        if (data.hi && prev.hi) {
-          // Two gap markers in a row. Extend the previous one, discard the current.
-          prev.hi = data.hi;
-          return false;
-        }
-        prev = data;
-
-        // Keep current.
-        return true;
-      }
-
-      // Found a new gap.
-      // Check if the previous is also a gap marker.
-      if (prev.hi) {
-        // Alter it instead of creating a new one.
-        prev.hi = data.hi || data.seq;
-      } else {
-        // Previous is not a gap marker. Create a new one.
-        prev = {
-          seq: prev.seq + 1,
-          hi: data.hi || data.seq
-        };
-        ranges.push(prev);
-      }
-
-      // If marker, remove; keep if regular message.
-      if (!data.hi) {
-        // Keeping the current regular message, save it as previous.
-        prev = data;
-        return true;
-      }
-
-      // Discard the current gap marker: we either created an earlier gap, or extended the prevous one.
-      return false;
-    });
-
-    // Check for missing messages at the end.
-    // All messages could be missing or it could be a new topic with no messages.
-    const last = this._messages.getLast();
-    const maxSeq = Math.max(this.seq, this._maxSeq) || 0;
-    if ((maxSeq > 0 && !last) || (last && ((last.hi || last.seq) < maxSeq))) {
-      if (last && last.hi) {
-        // Extend existing gap
-        last.hi = maxSeq;
-      } else {
-        // Create new gap.
-        ranges.push({
-          seq: last ? last.seq + 1 : 1,
-          hi: maxSeq
-        });
-      }
-    }
-
-    // Insert new gaps into cache.
-    ranges.forEach((gap) => {
-      gap._status = Const.MESSAGE_STATUS_DEL_RANGE;
-      this._messages.put(gap);
-    });
-  }
   // Load most recent messages from persistent cache.
   _loadMessages(db, params) {
     const {
@@ -1972,9 +1857,6 @@ export class Topic {
           this._messages.put(data);
           this._maybeUpdateMessageVersionsCache(data);
         });
-        if (msgs.length > 0) {
-          this._updateDeletedRanges();
-        }
         return msgs.length;
       });
   }
@@ -1991,7 +1873,6 @@ export class Topic {
     this._tinode._db.updTopic(this);
   }
 }
-
 
 /**
  * @class TopicMe - special case of {@link Tinode.Topic} for

@@ -37,7 +37,6 @@ export const MESSAGE_STATUS_SENT = 4; // Delivered to the server.
 export const MESSAGE_STATUS_RECEIVED = 5; // Received by the client.
 export const MESSAGE_STATUS_READ = 6; // Read by the user.
 export const MESSAGE_STATUS_TO_ME = 7; // The message is received from another user.
-export const MESSAGE_STATUS_DEL_RANGE = 8; // The message represents a deleted range.
 
 // Reject unresolved futures after this many milliseconds.
 export const EXPIRE_PROMISES_TIMEOUT = 5_000;
