@@ -1547,6 +1547,8 @@ Drafty.hasAttachments = function(content) {
  * @param {Object} data entity data.
  * @param {string} entity type.
  * @param {number} index entity's index in `content.ent`.
+ *
+ * @return 'true-ish' to stop processing, 'false-ish' otherwise.
  */
 
 /**
@@ -1562,15 +1564,18 @@ Drafty.attachments = function(content, callback, context) {
   if (!Array.isArray(content.fmt)) {
     return;
   }
-  let i = 0;
-  content.fmt.forEach(fmt => {
+  let count = 0;
+  for (let i in content.ent) {
+    let fmt = content.fmt[i];
     if (fmt && fmt.at < 0) {
       const ent = content.ent[fmt.key | 0];
       if (ent && ent.tp == 'EX' && ent.data) {
-        callback.call(context, ent.data, i++, 'EX');
+        if (callback.call(context, ent.data, count++, 'EX')) {
+          break;
+        }
       }
     }
-  });
+  };
 }
 
 /**
@@ -1598,7 +1603,9 @@ Drafty.entities = function(content, callback, context) {
   if (content.ent && content.ent.length > 0) {
     for (let i in content.ent) {
       if (content.ent[i]) {
-        callback.call(context, content.ent[i].data, i, content.ent[i].tp);
+        if (callback.call(context, content.ent[i].data, i, content.ent[i].tp)) {
+          break;
+        }
       }
     }
   }
