@@ -1092,8 +1092,14 @@ export class Topic {
             // Skip replacements.
             return;
           }
+          // In case the massage was edited, replace timestamp of the version with the original's timestamp.
+          const latest = this.latestMsgVersion(msg.seq) || msg;
+          if (!latest._origTs) {
+            latest._origTs = latest.ts;
+            latest.ts = msg.ts;
+          }
           msgs.push({
-            data: this.latestMsgVersion(msg.seq) || msg,
+            data: latest,
             idx: i
           });
         }, startIdx, beforeIdx, {});
@@ -1495,7 +1501,7 @@ export class Topic {
       // Substitutes are supposed to have higher seq ids.
       return false;
     }
-    let versions = this._messageVersions[targetSeq] || new CBuffer((a, b) => {
+    const versions = this._messageVersions[targetSeq] || new CBuffer((a, b) => {
       return a.seq - b.seq;
     }, true);
     versions.put(msg);
@@ -1859,7 +1865,7 @@ export class Topic {
         before: before,
         limit: limit || Const.DEFAULT_MESSAGES_PAGE
       })
-      .then((msgs) => {
+      .then(msgs => {
         msgs.forEach((data) => {
           if (data.seq > this._maxSeq) {
             this._maxSeq = data.seq;

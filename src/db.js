@@ -37,13 +37,13 @@ export default class DB {
 
     return new Promise((resolve, reject) => {
       const trx = this.db.transaction([source]);
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'mapObjects', source, event.target.error);
         reject(event.target.error);
       };
-      trx.objectStore(source).getAll().onsuccess = (event) => {
+      trx.objectStore(source).getAll().onsuccess = event => {
         if (callback) {
-          event.target.result.forEach((topic) => {
+          event.target.result.forEach(topic => {
             callback.call(context, topic);
           });
         }
@@ -60,20 +60,20 @@ export default class DB {
     return new Promise((resolve, reject) => {
       // Open the database and initialize callbacks.
       const req = IDBProvider.open(DB_NAME, DB_VERSION);
-      req.onsuccess = (event) => {
+      req.onsuccess = event => {
         this.db = event.target.result;
         this.disabled = false;
         resolve(this.db);
       };
-      req.onerror = (event) => {
+      req.onerror = event => {
         this.#logger('PCache', "failed to initialize", event);
         reject(event.target.error);
         this.#onError(event.target.error);
       };
-      req.onupgradeneeded = (event) => {
+      req.onupgradeneeded = event => {
         this.db = event.target.result;
 
-        this.db.onerror = (event) => {
+        this.db.onerror = event => {
           this.#logger('PCache', "failed to create storage", event);
           this.#onError(event.target.error);
         };
@@ -113,7 +113,7 @@ export default class DB {
     }
     return new Promise((resolve, reject) => {
       const req = IDBProvider.deleteDatabase(DB_NAME);
-      req.onblocked = (event) => {
+      req.onblocked = _ => {
         if (this.db) {
           this.db.close();
         }
@@ -121,12 +121,12 @@ export default class DB {
         this.#logger('PCache', 'deleteDatabase', err);
         reject(err);
       };
-      req.onsuccess = (event) => {
+      req.onsuccess = _ => {
         this.db = null;
         this.disabled = true;
         resolve(true);
       };
-      req.onerror = (event) => {
+      req.onerror = event => {
         this.#logger('PCache', 'deleteDatabase', event.target.error);
         reject(event.target.error);
       };
@@ -158,15 +158,15 @@ export default class DB {
     }
     return new Promise((resolve, reject) => {
       const trx = this.db.transaction(['topic'], 'readwrite');
-      trx.oncomplete = (event) => {
+      trx.oncomplete = event => {
         resolve(event.target.result);
       };
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'updTopic', event.target.error);
         reject(event.target.error);
       };
       const req = trx.objectStore('topic').get(topic.name);
-      req.onsuccess = (event) => {
+      req.onsuccess = _ => {
         trx.objectStore('topic').put(DB.#serializeTopic(req.result, topic));
         trx.commit();
       };
@@ -187,15 +187,15 @@ export default class DB {
     }
     return new Promise((resolve, reject) => {
       const trx = this.db.transaction(['topic'], 'readwrite');
-      trx.oncomplete = (event) => {
+      trx.oncomplete = event => {
         resolve(event.target.result);
       };
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'markTopicAsDeleted', event.target.error);
         reject(event.target.error);
       };
       const req = trx.objectStore('topic').get(name);
-      req.onsuccess = (event) => {
+      req.onsuccess = event => {
         const topic = event.target.result;
         topic._deleted = true;
         trx.objectStore('topic').put(topic);
@@ -218,10 +218,10 @@ export default class DB {
     }
     return new Promise((resolve, reject) => {
       const trx = this.db.transaction(['topic', 'subscription', 'message'], 'readwrite');
-      trx.oncomplete = (event) => {
+      trx.oncomplete = event => {
         resolve(event.target.result);
       };
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'remTopic', event.target.error);
         reject(event.target.error);
       };
@@ -273,10 +273,10 @@ export default class DB {
     }
     return new Promise((resolve, reject) => {
       const trx = this.db.transaction(['user'], 'readwrite');
-      trx.oncomplete = (event) => {
+      trx.oncomplete = event => {
         resolve(event.target.result);
       };
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'updUser', event.target.error);
         reject(event.target.error);
       };
@@ -302,10 +302,10 @@ export default class DB {
     }
     return new Promise((resolve, reject) => {
       const trx = this.db.transaction(['user'], 'readwrite');
-      trx.oncomplete = (event) => {
+      trx.oncomplete = event => {
         resolve(event.target.result);
       };
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'remUser', event.target.error);
         reject(event.target.error);
       };
@@ -339,14 +339,14 @@ export default class DB {
     }
     return new Promise((resolve, reject) => {
       const trx = this.db.transaction(['user']);
-      trx.oncomplete = (event) => {
+      trx.oncomplete = event => {
         const user = event.target.result;
         resolve({
           user: user.uid,
           public: user.public
         });
       };
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'getUser', event.target.error);
         reject(event.target.error);
       };
@@ -371,10 +371,10 @@ export default class DB {
     }
     return new Promise((resolve, reject) => {
       const trx = this.db.transaction(['subscription'], 'readwrite');
-      trx.oncomplete = (event) => {
+      trx.oncomplete = event => {
         resolve(event.target.result);
       };
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'updSubscription', event.target.error);
         reject(event.target.error);
       };
@@ -433,10 +433,10 @@ export default class DB {
     }
     return new Promise((resolve, reject) => {
       const trx = this.db.transaction(['message'], 'readwrite');
-      trx.onsuccess = (event) => {
+      trx.onsuccess = event => {
         resolve(event.target.result);
       };
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'addMessage', event.target.error);
         reject(event.target.error);
       };
@@ -461,15 +461,15 @@ export default class DB {
     }
     return new Promise((resolve, reject) => {
       const trx = this.db.transaction(['message'], 'readwrite');
-      trx.onsuccess = (event) => {
+      trx.onsuccess = event => {
         resolve(event.target.result);
       };
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'updMessageStatus', event.target.error);
         reject(event.target.error);
       };
       const req = trx.objectStore('message').get(IDBKeyRange.only([topicName, seq]));
-      req.onsuccess = (event) => {
+      req.onsuccess = event => {
         const src = req.result || event.target.result;
         if (!src || src._status == status) {
           trx.commit();
