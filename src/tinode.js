@@ -1877,10 +1877,11 @@ export class Tinode {
    * typing notifications "user X is typing...".
    *
    * @param {string} topicName - Name of the topic to broadcast to.
+   * @param {string=} type - notification to send, default is 'kp'.
    */
-  noteKeyPress(topicName) {
+  noteKeyPress(topicName, type) {
     const pkt = this.#initPacket('note', topicName);
-    pkt.note.what = 'kp';
+    pkt.note.what = type || 'kp';
     this.#send(pkt);
   }
 

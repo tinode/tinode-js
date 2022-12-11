@@ -907,6 +907,19 @@ export class Topic {
     }
   }
   /**
+   * Send a notification than a video or audio message is . Wrapper for {@link Tinode#noteKeyPress}.
+   * @memberof Tinode.Topic#
+   * @param audioOnly - true if the recording is audio-only, false if it's a video recording.
+   */
+  noteRecording(audioOnly) {
+    if (this._attached) {
+      this._tinode.noteKeyPress(this.name, audioOnly ? 'kpa' : 'kpv');
+    } else {
+      this._tinode.logger("INFO: Cannot send notification in inactive topic");
+    }
+  }
+
+  /**
    * Send a {note what='call'}. Wrapper for {@link Tinode#videoCall}.
    * @memberof Tinode#
    *
