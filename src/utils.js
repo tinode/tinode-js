@@ -15,7 +15,6 @@ export function jsonParseHelper(key, val) {
   // Try to convert string timestamps with optional milliseconds to Date,
   // e.g. 2015-09-02T01:45:43[.123]Z
   if (typeof val == 'string' && val.length >= 20 && val.length <= 24 && ['ts', 'touched', 'updated', 'created', 'when', 'deleted', 'expires'].includes(key)) {
-
     const date = new Date(val);
     if (!isNaN(date)) {
       return date;

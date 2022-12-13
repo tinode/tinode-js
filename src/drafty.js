@@ -232,6 +232,11 @@ const FORMAT_TAGS = {
     md_tag: undefined,
     isVoid: false
   },
+  VD: {
+    html_tag: 'video',
+    md_tag: undefined,
+    isVoid: false
+  }
 };
 
 // Convert base64-encoded string into Blob.
@@ -431,6 +436,26 @@ const DECORATORS = {
       return {
         'data-duration': data.duration,
         'data-state': data.state,
+      };
+    }
+  },
+  // Video.
+  VD: {
+    open: (data) => {
+      const url = data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger);
+      return '<video controls src="' + url + '">';
+    },
+    close: _ => '</video>',
+    props: (data) => {
+      if (!data) return null;
+      return {
+        // Embedded data or external link.
+        src: data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
+        'data-preload': data.ref ? 'metadata' : 'auto',
+        'data-duration': data.duration,
+        'data-name': data.name,
+        'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
+        'data-mime': data.mime,
       };
     }
   },
@@ -727,6 +752,80 @@ Drafty.insertImage = function(content, at, imageDesc) {
 }
 
 /**
+ * @typedef Drafty.VideoDesc
+ * @memberof Drafty
+ * @type Object
+ * @param {string} mime - mime-type of the video, e.g. "video/mpeg"
+ * @param {string} preview - base64-encoded video content (or preview, if large video is attached). Could be null/undefined.
+ * @param {integer} width - width of the video
+ * @param {integer} height - height of the video
+ * @param {integer} duration - duration of the video.
+ * @param {string} filename - file name suggestion for downloading the video.
+ * @param {integer} size - size of the video in bytes. Treat is as an untrusted hint.
+ * @param {string} refurl - reference to the content. Could be null/undefined.
+ * @param {string} _tempPreview - base64-encoded image preview used during upload process; not serializable.
+ * @param {Promise} urlPromise - Promise which returns content URL when resolved.
+ */
+
+/**
+ * Insert inline image into Drafty document.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document to add video to.
+ * @param {integer} at - index where the object is inserted. The length of the video is always 1.
+ * @param {VideoDesc} videoDesc - object with video paramenets and data.
+ *
+ * @return {Drafty} updated document.
+ */
+Drafty.insertVideo = function(content, at, videoDesc) {
+  content = content || {
+    txt: ' '
+  };
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: at | 0,
+    len: 1,
+    key: content.ent.length
+  });
+
+  const ex = {
+    tp: 'VD',
+    data: {
+      mime: videoDesc.mime,
+      val: videoDesc.preview,
+      width: videoDesc.width,
+      height: videoDesc.height,
+      name: videoDesc.filename,
+      size: videoDesc.size | 0,
+      ref: videoDesc.refurl
+    }
+  };
+
+  if (videoDesc.urlPromise) {
+    ex.data._tempPreview = videoDesc._tempPreview;
+    ex.data._processing = true;
+    videoDesc.urlPromise.then(
+      url => {
+        ex.data.ref = url;
+        ex.data._tempPreview = undefined;
+        ex.data._processing = undefined;
+      },
+      _ => {
+        // Catch the error, otherwise it will appear in the console.
+        ex.data._processing = undefined;
+      }
+    );
+  }
+
+  content.ent.push(ex);
+
+  return content;
+}
+
+/**
  * @typedef Drafty.AudioDesc
  * @memberof Drafty
  * @type Object
@@ -830,7 +929,7 @@ Drafty.videoCall = function() {
  *
  * @returns the same document with update applied.
  */
-Drafty.updateVideoEnt = function(content, params) {
+Drafty.updateVideoCall = function(content, params) {
   // The video element could be just a format or a format + entity.
   // Must ensure it's the latter first.
   const fmt = ((content || {}).fmt || [])[0];
