@@ -63,7 +63,7 @@ const MAX_PREVIEW_ATTACHMENTS = 3;
 const MAX_PREVIEW_DATA_SIZE = 64;
 const JSON_MIME_TYPE = 'application/json';
 const DRAFTY_MIME_TYPE = 'text/x-drafty';
-const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'incoming', 'mime', 'name', 'preview',
+const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'incoming', 'mime', 'name', 'premime', 'preref', 'preview',
   'ref', 'size', 'state', 'url', 'val', 'width'
 ];
 
@@ -380,7 +380,7 @@ const DECORATORS = {
   },
   // Image
   IM: {
-    open: (data) => {
+    open: data => {
       // Don't use data.ref for preview: it's a security risk.
       const tmpPreviewUrl = base64toDataUrl(data._tempPreview, data.mime);
       const previewUrl = base64toObjectUrl(data.val, data.mime, Drafty.logger);
@@ -390,10 +390,10 @@ const DECORATORS = {
         (data.width ? ' width="' + data.width + '"' : '') +
         (data.height ? ' height="' + data.height + '"' : '') + ' border="0" />';
     },
-    close: (data) => {
+    close: data => {
       return (data.name ? '</a>' : '');
     },
-    props: (data) => {
+    props: data => {
       if (!data) return null;
       return {
         // Temporary preview, or permanent preview, or external link.
@@ -441,18 +441,25 @@ const DECORATORS = {
   },
   // Video.
   VD: {
-    open: (data) => {
-      const url = data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger);
-      return '<video controls src="' + url + '">';
+    open: data => {
+      const tmpPreviewUrl = base64toDataUrl(data._tempPreview, data.mime);
+      const previewUrl = data.ref || base64toObjectUrl(data.preview, data.premime || 'image/json', Drafty.logger);
+      return '<img src="' + (tmpPreviewUrl || previewUrl) + '"' +
+        (data.width ? ' width="' + data.width + '"' : '') +
+        (data.height ? ' height="' + data.height + '"' : '') + ' border="0" />';
     },
-    close: _ => '</video>',
-    props: (data) => {
+    close: _ => '',
+    props: data => {
       if (!data) return null;
       return {
         // Embedded data or external link.
-        src: data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
+        src: data.preref || base64toObjectUrl(data.preview, data.premime || 'image/json', Drafty.logger),
+        'data-src': data.ref || base64toDataUrl(data.val, data.mime),
+        'data-width': data.width,
+        'data-height': data.height,
         'data-preload': data.ref ? 'metadata' : 'auto',
-        'data-duration': data.duration,
+        'data-preview': base64toObjectUrl(data.preview, data.premime || 'image/json', Drafty.logger),
+        'data-duration': data.duration | 0,
         'data-name': data.name,
         'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
         'data-mime': data.mime,
@@ -682,13 +689,14 @@ Drafty.append = function(first, second) {
  * @typedef Drafty.ImageDesc
  * @memberof Drafty
  * @type Object
- * @param {string} mime - mime-type of the image, e.g. "image/png"
- * @param {string} preview - base64-encoded image content (or preview, if large image is attached). Could be null/undefined.
- * @param {integer} width - width of the image
- * @param {integer} height - height of the image
+ * @param {string} mime - mime-type of the image, e.g. "image/png".
+ * @param {string} refurl - reference to the content. Could be null/undefined.
+ * @param {string} bits - base64-encoded image content. Could be null/undefined.
+ * @param {string} preview - base64-encoded thumbnail of the image.
+ * @param {integer} width - width of the image.
+ * @param {integer} height - height of the image.
  * @param {string} filename - file name suggestion for downloading the image.
  * @param {integer} size - size of the image in bytes. Treat is as an untrusted hint.
- * @param {string} refurl - reference to the content. Could be null/undefined.
  * @param {string} _tempPreview - base64-encoded image preview used during upload process; not serializable.
  * @param {Promise} urlPromise - Promise which returns content URL when resolved.
  */
@@ -721,12 +729,12 @@ Drafty.insertImage = function(content, at, imageDesc) {
     tp: 'IM',
     data: {
       mime: imageDesc.mime,
-      val: imageDesc.preview,
+      ref: imageDesc.refurl,
+      val: imageDesc.bits || imageDesc.preview,
       width: imageDesc.width,
       height: imageDesc.height,
       name: imageDesc.filename,
       size: imageDesc.size | 0,
-      ref: imageDesc.refurl
     }
   };
 
@@ -755,16 +763,19 @@ Drafty.insertImage = function(content, at, imageDesc) {
  * @typedef Drafty.VideoDesc
  * @memberof Drafty
  * @type Object
- * @param {string} mime - mime-type of the video, e.g. "video/mpeg"
- * @param {string} preview - base64-encoded video content (or preview, if large video is attached). Could be null/undefined.
- * @param {integer} width - width of the video
- * @param {integer} height - height of the video
+ * @param {string} mime - mime-type of the video, e.g. "video/mpeg".
+ * @param {string} refurl - reference to the content. Could be null/undefined.
+ * @param {string} bits - in-band base64-encoded image data. Could be null/undefined.
+ * @param {string} preview - base64-encoded screencapture from the video. Could be null/undefined.
+ * @param {string} preref - reference to screencapture from the video. Could be null/undefined.
+ * @param {integer} width - width of the video.
+ * @param {integer} height - height of the video.
  * @param {integer} duration - duration of the video.
  * @param {string} filename - file name suggestion for downloading the video.
  * @param {integer} size - size of the video in bytes. Treat is as an untrusted hint.
- * @param {string} refurl - reference to the content. Could be null/undefined.
- * @param {string} _tempPreview - base64-encoded image preview used during upload process; not serializable.
- * @param {Promise} urlPromise - Promise which returns content URL when resolved.
+ * @param {string} _tempPreview - base64-encoded screencapture used during upload process; not serializable.
+ * @param {Promise} urlPromise - array of two promises, which return URLs of video and preview uploads correspondingly
+ *        (either could be null).
  */
 
 /**
@@ -795,12 +806,15 @@ Drafty.insertVideo = function(content, at, videoDesc) {
     tp: 'VD',
     data: {
       mime: videoDesc.mime,
-      val: videoDesc.preview,
+      ref: videoDesc.refurl,
+      val: videoDesc.bits,
+      preref: videoDesc.preref,
+      preview: videoDesc.preview,
       width: videoDesc.width,
       height: videoDesc.height,
+      duration: videoDesc.duration | 0,
       name: videoDesc.filename,
       size: videoDesc.size | 0,
-      ref: videoDesc.refurl
     }
   };
 
@@ -808,8 +822,9 @@ Drafty.insertVideo = function(content, at, videoDesc) {
     ex.data._tempPreview = videoDesc._tempPreview;
     ex.data._processing = true;
     videoDesc.urlPromise.then(
-      url => {
-        ex.data.ref = url;
+      urls => {
+        ex.data.ref = urls[0];
+        ex.data.preref = urls[1];
         ex.data._tempPreview = undefined;
         ex.data._processing = undefined;
       },
@@ -830,12 +845,12 @@ Drafty.insertVideo = function(content, at, videoDesc) {
  * @memberof Drafty
  * @type Object
  * @param {string} mime - mime-type of the audio, e.g. "audio/ogg".
- * @param {string} data - base64-encoded audio content. Could be null/undefined.
+ * @param {string} refurl - reference to the content. Could be null/undefined.
+ * @param {string} bits - base64-encoded audio content. Could be null/undefined.
  * @param {integer} duration - duration of the record in milliseconds.
  * @param {string} preview - base64 encoded short array of amplitude values 0..100.
  * @param {string} filename - file name suggestion for downloading the audio.
  * @param {integer} size - size of the recording in bytes. Treat is as an untrusted hint.
- * @param {string} refurl - reference to the content. Could be null/undefined.
  * @param {Promise} urlPromise - Promise which returns content URL when resolved.
  */
 
@@ -867,7 +882,7 @@ Drafty.insertAudio = function(content, at, audioDesc) {
     tp: 'AU',
     data: {
       mime: audioDesc.mime,
-      val: audioDesc.data,
+      val: audioDesc.bits,
       duration: audioDesc.duration | 0,
       preview: audioDesc.preview,
       name: audioDesc.filename,
