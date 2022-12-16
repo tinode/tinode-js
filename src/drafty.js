@@ -1479,8 +1479,17 @@ Drafty.replyContent = function(original, limit) {
   tree = attachmentsToEnd(tree, MAX_PREVIEW_ATTACHMENTS);
   // Shorten the doc.
   tree = shortenTree(tree, limit, '…');
-  // Strip heavy elements except IM.data['val'] (have to keep them to generate previews later).
-  tree = lightEntity(tree, node => (node.type == 'IM' ? ['val'] : null));
+  // Strip heavy elements except IM.data['val'] and VD.data['preview'] (have to keep them to generate previews later).
+  const filter = node => {
+    switch (node.type) {
+      case 'IM':
+        return ['val'];
+      case 'VD':
+        return ['preview'];
+    }
+    return null;
+  };
+  tree = lightEntity(tree, filter);
   // Convert back to Drafty.
   return treeToDrafty({}, tree, []);
 }
@@ -2406,7 +2415,7 @@ function shortenTree(tree, limit, tail) {
 
 // Strip heavy entities from a tree.
 function lightEntity(tree, allow) {
-  const lightCopy = (node) => {
+  const lightCopy = node => {
     const data = copyEntData(node.data, true, allow ? allow(node) : null);
     if (data) {
       node.data = data;
@@ -2550,7 +2559,7 @@ function copyEntData(data, light, allow) {
   if (data && Object.entries(data).length > 0) {
     allow = allow || [];
     const dc = {};
-    ALLOWED_ENT_FIELDS.forEach((key) => {
+    ALLOWED_ENT_FIELDS.forEach(key => {
       if (data[key]) {
         if (light && !allow.includes(key) &&
           (typeof data[key] == 'string' || Array.isArray(data[key])) &&

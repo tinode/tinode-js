@@ -1135,7 +1135,7 @@ export class Topic {
    * @returns {Object} the most recent cached message or <code>undefined</code>, if no messages are cached.
    */
   latestMessage() {
-    const msg = this._messages.getLast();
+    return this._messages.getLast();
   }
   /**
    * Get the latest version for message.
