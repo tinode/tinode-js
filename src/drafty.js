@@ -1661,7 +1661,7 @@ Drafty.hasAttachments = function(content) {
 }
 
 /**
- * Callback for applying custom formatting/transformation to a Drafty document.
+ * Callback for enumerating entities in a Drafty document.
  * Called once for each entity.
  * @memberof Drafty
  * @static
@@ -1714,19 +1714,58 @@ Drafty.hasEntities = function(content) {
 }
 
 /**
- * Enumerate entities.
+ * Enumerate entities. Enumeration stops if callback returns 'true'.
  * @memberof Drafty
  * @static
  *
  * @param {Drafty} content - document with entities to enumerate.
  * @param {EntityCallback} callback - callback to call for each entity.
  * @param {Object} context - value of "this" for callback.
+ *
  */
 Drafty.entities = function(content, callback, context) {
   if (content.ent && content.ent.length > 0) {
     for (let i in content.ent) {
       if (content.ent[i]) {
         if (callback.call(context, content.ent[i].data, i, content.ent[i].tp)) {
+          break;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Callback for enumerating styles (inline formats) in a Drafty document.
+ * Called once for each style.
+ * @memberof Drafty
+ * @static
+ *
+ * @callback StyleCallback
+ * @param {string} tp - format type.
+ * @param {number} at - starting position of the format in text.
+ * @param {number} len - extent of the format in characters.
+ * @param {number} key - index of the entity if format is a reference.
+ * @param {number} index - style's index in `content.fmt`.
+ *
+ * @return 'true-ish' to stop processing, 'false-ish' otherwise.
+ */
+
+/**
+ * Enumerate styles (inline formats). Enumeration stops if callback returns 'true'.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document with styles (formats) to enumerate.
+ * @param {StyleCallback} callback - callback to call for each format.
+ * @param {Object} context - value of "this" for callback.
+ */
+Drafty.styles = function(content, callback, context) {
+  if (content.fmt && content.fmt.length > 0) {
+    for (let i in content.fmt) {
+      const fmt = content.fmt[i];
+      if (fmt) {
+        if (callback.call(context, fmt.tp, fmt.at, fmt.len, fmt.key, i)) {
           break;
         }
       }
