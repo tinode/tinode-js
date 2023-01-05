@@ -1494,12 +1494,27 @@ export class Topic {
   // as a newer version for the message it's supposed to replace.
   _maybeUpdateMessageVersionsCache(msg) {
     if (!this._isReplacementMsg(msg)) {
+      // Check if this message is the original in the chain of edits and if so
+      // ensure all version have the same sender.
+      if (this._messageVersions[msg.seq]) {
+        // Remove versions with different 'from'.
+        this._messageVersions[msg.seq].filter(version => version.from == msg.from);
+        if (this._messageVersions[msg.seq].isEmpty()) {
+          delete this._messageVersions[msg.seq];
+        }
+      }
       return;
     }
+
     const targetSeq = parseInt(msg.head.replace.split(':')[1]);
     if (targetSeq > msg.seq) {
       // Substitutes are supposed to have higher seq ids.
-      return false;
+      return;
+    }
+    const targetMsg = this.findMessage(targetSeq);
+    if (targetMsg && targetMsg.from != msg.from) {
+      // Substitute cannot change the sender.
+      return;
     }
     const versions = this._messageVersions[targetSeq] || new CBuffer((a, b) => {
       return a.seq - b.seq;

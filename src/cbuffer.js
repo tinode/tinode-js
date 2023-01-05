@@ -206,7 +206,7 @@ export default class CBuffer {
 
   /**
    * Callback for filtering the buffer. See {@link Tinode.CBuffer#filter}.
-   * @callback ForEachCallbackType
+   * @callback FilterCallbackType
    * @memberof Tinode.CBuffer#
    * @param {Object} elem - Current element of the buffer.
    * @param {number} index - Index of the current element.
@@ -230,5 +230,13 @@ export default class CBuffer {
     }
 
     this.buffer.splice(count);
+  }
+
+  /**
+   * Check if buffer is empty.
+   * @returns {boolean} <code>true</code> if the buffer is empty, <code>false</code> otherwise.
+   */
+  isEmpty() {
+    return this.buffer.length == 0;
   }
 }
