@@ -454,7 +454,7 @@ const DECORATORS = {
       return {
         // Embedded data or external link.
         src: data.preref || base64toObjectUrl(data.preview, data.premime || 'image/json', Drafty.logger),
-        'data-src': data.ref || base64toDataUrl(data.val, data.mime),
+        'data-src': data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
         'data-width': data.width,
         'data-height': data.height,
         'data-preload': data.ref ? 'metadata' : 'auto',
