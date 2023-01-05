@@ -1540,8 +1540,14 @@ Drafty.preview = function(original, limit, forwarding) {
 
   tree = shortenTree(tree, limit, '…');
   if (forwarding) {
-    // Keep IM data for preview.
-    tree = lightEntity(tree, node => (node.type == 'IM' ? ['val'] : null));
+    // Keep some IM and VD data for preview.
+    const filter = {
+      IM: ['val'],
+      VD: ['preview']
+    };
+    tree = lightEntity(tree, node => {
+      return filter[node.type];
+    });
   } else {
     tree = lightEntity(tree);
   }
