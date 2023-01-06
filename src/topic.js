@@ -1096,7 +1096,9 @@ export class Topic {
           const latest = this.latestMsgVersion(msg.seq) || msg;
           if (!latest._origTs) {
             latest._origTs = latest.ts;
+            latest._origSeq = latest.seq;
             latest.ts = msg.ts;
+            latest.seq = msg.seq;
           }
           msgs.push({
             data: latest,
