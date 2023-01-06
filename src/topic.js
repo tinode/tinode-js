@@ -1518,6 +1518,11 @@ export class Topic {
       // Substitute cannot change the sender.
       return;
     }
+    const targetMsg = this.findMessage(targetSeq);
+    if (targetMsg && targetMsg.from != msg.from) {
+      // Substitute cannot change the sender.
+      return;
+    }
     const versions = this._messageVersions[targetSeq] || new CBuffer((a, b) => {
       return a.seq - b.seq;
     }, true);
