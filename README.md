@@ -44,4 +44,4 @@ This SDK is intended to be used in a browser. To use `tinode-sdk` in Node JS env
   this.tinode = new Tinode(...);
 ```
 
-Keep in mind that the SDK also references `URL.createObjectURL()` which is [not currently polyfilled](https://github.com/nodejs/node/issues/16167). An exception will be thrown when the user attempts to download a file attachment. See discussion: https://github.com/tinode/tinode-js/issues/28
+`URL.createObjectURL()` and related methods were added in Node v16.7.0. The SDK is unlikely to work correctly with earlier versions of Node.

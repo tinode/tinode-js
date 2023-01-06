@@ -63,7 +63,7 @@ const MAX_PREVIEW_ATTACHMENTS = 3;
 const MAX_PREVIEW_DATA_SIZE = 64;
 const JSON_MIME_TYPE = 'application/json';
 const DRAFTY_MIME_TYPE = 'text/x-drafty';
-const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'incoming', 'mime', 'name', 'preview',
+const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'incoming', 'mime', 'name', 'premime', 'preref', 'preview',
   'ref', 'size', 'state', 'url', 'val', 'width'
 ];
 
@@ -141,79 +141,102 @@ const ENTITY_TYPES = [
 ];
 
 // HTML tag name suggestions
-const HTML_TAGS = {
+const FORMAT_TAGS = {
   AU: {
-    name: 'audio',
+    html_tag: 'audio',
+    md_tag: undefined,
     isVoid: false
   },
   BN: {
-    name: 'button',
+    html_tag: 'button',
+    md_tag: undefined,
     isVoid: false
   },
   BR: {
-    name: 'br',
+    html_tag: 'br',
+    md_tag: '\n',
     isVoid: true
   },
   CO: {
-    name: 'tt',
+    html_tag: 'tt',
+    md_tag: '`',
     isVoid: false
   },
   DL: {
-    name: 'del',
+    html_tag: 'del',
+    md_tag: '~',
     isVoid: false
   },
   EM: {
-    name: 'i',
+    html_tag: 'i',
+    md_tag: '_',
     isVoid: false
   },
   EX: {
-    name: '',
+    html_tag: '',
+    md_tag: undefined,
     isVoid: true
   },
   FM: {
-    name: 'div',
+    html_tag: 'div',
+    md_tag: undefined,
     isVoid: false
   },
   HD: {
-    name: '',
+    html_tag: '',
+    md_tag: undefined,
     isVoid: false
   },
   HL: {
-    name: 'span',
+    html_tag: 'span',
+    md_tag: undefined,
     isVoid: false
   },
   HT: {
-    name: 'a',
+    html_tag: 'a',
+    md_tag: undefined,
     isVoid: false
   },
   IM: {
-    name: 'img',
+    html_tag: 'img',
+    md_tag: undefined,
     isVoid: false
   },
   LN: {
-    name: 'a',
+    html_tag: 'a',
+    md_tag: undefined,
     isVoid: false
   },
   MN: {
-    name: 'a',
+    html_tag: 'a',
+    md_tag: undefined,
     isVoid: false
   },
   RW: {
-    name: 'div',
+    html_tag: 'div',
+    md_tag: undefined,
     isVoid: false,
   },
   QQ: {
-    name: 'div',
+    html_tag: 'div',
+    md_tag: undefined,
     isVoid: false
   },
   ST: {
-    name: 'b',
+    html_tag: 'b',
+    md_tag: '*',
     isVoid: false
   },
   VC: {
-    name: 'div',
+    html_tag: 'div',
+    md_tag: undefined,
     isVoid: false
   },
+  VD: {
+    html_tag: 'video',
+    md_tag: undefined,
+    isVoid: false
+  }
 };
 
 // Convert base64-encoded string into Blob.
@@ -357,7 +380,7 @@ const DECORATORS = {
   },
   // Image
   IM: {
-    open: (data) => {
+    open: data => {
       // Don't use data.ref for preview: it's a security risk.
       const tmpPreviewUrl = base64toDataUrl(data._tempPreview, data.mime);
       const previewUrl = base64toObjectUrl(data.val, data.mime, Drafty.logger);
@@ -367,10 +390,10 @@ const DECORATORS = {
         (data.width ? ' width="' + data.width + '"' : '') +
         (data.height ? ' height="' + data.height + '"' : '') + ' border="0" />';
     },
-    close: (data) => {
+    close: data => {
       return (data.name ? '</a>' : '');
     },
-    props: (data) => {
+    props: data => {
       if (!data) return null;
       return {
         // Temporary preview, or permanent preview, or external link.
@@ -413,6 +436,33 @@ const DECORATORS = {
       return {
         'data-duration': data.duration,
         'data-state': data.state,
+      };
+    }
+  },
+  // Video.
+  VD: {
+    open: data => {
+      const tmpPreviewUrl = base64toDataUrl(data._tempPreview, data.mime);
+      const previewUrl = data.ref || base64toObjectUrl(data.preview, data.premime || 'image/json', Drafty.logger);
+      return '<img src="' + (tmpPreviewUrl || previewUrl) + '"' +
+        (data.width ? ' width="' + data.width + '"' : '') +
+        (data.height ? ' height="' + data.height + '"' : '') + ' border="0" />';
+    },
+    close: _ => '',
+    props: data => {
+      if (!data) return null;
+      return {
+        // Embedded data or external link.
+        src: data.preref || base64toObjectUrl(data.preview, data.premime || 'image/json', Drafty.logger),
+        'data-src': data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
+        'data-width': data.width,
+        'data-height': data.height,
+        'data-preload': data.ref ? 'metadata' : 'auto',
+        'data-preview': base64toObjectUrl(data.preview, data.premime || 'image/json', Drafty.logger),
+        'data-duration': data.duration | 0,
+        'data-name': data.name,
+        'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
+        'data-mime': data.mime,
       };
     }
   },
@@ -639,13 +689,14 @@ Drafty.append = function(first, second) {
  * @typedef Drafty.ImageDesc
  * @memberof Drafty
  * @type Object
- * @param {string} mime - mime-type of the image, e.g. "image/png"
- * @param {string} preview - base64-encoded image content (or preview, if large image is attached). Could be null/undefined.
- * @param {integer} width - width of the image
- * @param {integer} height - height of the image
+ * @param {string} mime - mime-type of the image, e.g. "image/png".
+ * @param {string} refurl - reference to the content. Could be null/undefined.
+ * @param {string} bits - base64-encoded image content. Could be null/undefined.
+ * @param {string} preview - base64-encoded thumbnail of the image.
+ * @param {integer} width - width of the image.
+ * @param {integer} height - height of the image.
  * @param {string} filename - file name suggestion for downloading the image.
  * @param {integer} size - size of the image in bytes. Treat is as an untrusted hint.
- * @param {string} refurl - reference to the content. Could be null/undefined.
  * @param {string} _tempPreview - base64-encoded image preview used during upload process; not serializable.
  * @param {Promise} urlPromise - Promise which returns content URL when resolved.
  */
@@ -678,12 +729,12 @@ Drafty.insertImage = function(content, at, imageDesc) {
     tp: 'IM',
     data: {
       mime: imageDesc.mime,
-      val: imageDesc.preview,
+      ref: imageDesc.refurl,
+      val: imageDesc.bits || imageDesc.preview,
       width: imageDesc.width,
       height: imageDesc.height,
       name: imageDesc.filename,
       size: imageDesc.size | 0,
-      ref: imageDesc.refurl
     }
   };
 
@@ -709,16 +760,97 @@ Drafty.insertImage = function(content, at, imageDesc) {
 }
 
 /**
+ * @typedef Drafty.VideoDesc
+ * @memberof Drafty
+ * @type Object
+ * @param {string} mime - mime-type of the video, e.g. "video/mpeg".
+ * @param {string} refurl - reference to the content. Could be null/undefined.
+ * @param {string} bits - in-band base64-encoded image data. Could be null/undefined.
+ * @param {string} preview - base64-encoded screencapture from the video. Could be null/undefined.
+ * @param {string} preref - reference to screencapture from the video. Could be null/undefined.
+ * @param {integer} width - width of the video.
+ * @param {integer} height - height of the video.
+ * @param {integer} duration - duration of the video.
+ * @param {string} filename - file name suggestion for downloading the video.
+ * @param {integer} size - size of the video in bytes. Treat is as an untrusted hint.
+ * @param {string} _tempPreview - base64-encoded screencapture used during upload process; not serializable.
+ * @param {Promise} urlPromise - array of two promises, which return URLs of video and preview uploads correspondingly
+ *        (either could be null).
+ */
+
+/**
+ * Insert inline image into Drafty document.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document to add video to.
+ * @param {integer} at - index where the object is inserted. The length of the video is always 1.
+ * @param {VideoDesc} videoDesc - object with video paramenets and data.
+ *
+ * @return {Drafty} updated document.
+ */
+Drafty.insertVideo = function(content, at, videoDesc) {
+  content = content || {
+    txt: ' '
+  };
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: at | 0,
+    len: 1,
+    key: content.ent.length
+  });
+
+  const ex = {
+    tp: 'VD',
+    data: {
+      mime: videoDesc.mime,
+      ref: videoDesc.refurl,
+      val: videoDesc.bits,
+      preref: videoDesc.preref,
+      preview: videoDesc.preview,
+      width: videoDesc.width,
+      height: videoDesc.height,
+      duration: videoDesc.duration | 0,
+      name: videoDesc.filename,
+      size: videoDesc.size | 0,
+    }
+  };
+
+  if (videoDesc.urlPromise) {
+    ex.data._tempPreview = videoDesc._tempPreview;
+    ex.data._processing = true;
+    videoDesc.urlPromise.then(
+      urls => {
+        ex.data.ref = urls[0];
+        ex.data.preref = urls[1];
+        ex.data._tempPreview = undefined;
+        ex.data._processing = undefined;
+      },
+      _ => {
+        // Catch the error, otherwise it will appear in the console.
+        ex.data._processing = undefined;
+      }
+    );
+  }
+
+  content.ent.push(ex);
+
+  return content;
+}
+
+/**
  * @typedef Drafty.AudioDesc
  * @memberof Drafty
  * @type Object
  * @param {string} mime - mime-type of the audio, e.g. "audio/ogg".
- * @param {string} data - base64-encoded audio content. Could be null/undefined.
+ * @param {string} refurl - reference to the content. Could be null/undefined.
+ * @param {string} bits - base64-encoded audio content. Could be null/undefined.
  * @param {integer} duration - duration of the record in milliseconds.
  * @param {string} preview - base64 encoded short array of amplitude values 0..100.
  * @param {string} filename - file name suggestion for downloading the audio.
  * @param {integer} size - size of the recording in bytes. Treat is as an untrusted hint.
- * @param {string} refurl - reference to the content. Could be null/undefined.
  * @param {Promise} urlPromise - Promise which returns content URL when resolved.
  */
 
@@ -750,7 +882,7 @@ Drafty.insertAudio = function(content, at, audioDesc) {
     tp: 'AU',
     data: {
       mime: audioDesc.mime,
-      val: audioDesc.data,
+      val: audioDesc.bits,
       duration: audioDesc.duration | 0,
       preview: audioDesc.preview,
       name: audioDesc.filename,
@@ -812,7 +944,7 @@ Drafty.videoCall = function() {
  *
  * @returns the same document with update applied.
  */
-Drafty.updateVideoEnt = function(content, params) {
+Drafty.updateVideoCall = function(content, params) {
   // The video element could be just a format or a format + entity.
   // Must ensure it's the latter first.
   const fmt = ((content || {}).fmt || [])[0];
@@ -1010,11 +1142,11 @@ Drafty.attachFile = function(content, attachmentDesc) {
   if (attachmentDesc.urlPromise) {
     ex.data._processing = true;
     attachmentDesc.urlPromise.then(
-      (url) => {
+      url => {
         ex.data.ref = url;
         ex.data._processing = undefined;
       },
-      (err) => {
+      _ => {
         /* catch the error, otherwise it will appear in the console. */
         ex.data._processing = undefined;
       }
@@ -1217,7 +1349,7 @@ Drafty.appendLineBreak = function(content) {
  * @returns {string} HTML-representation of content.
  */
 Drafty.UNSAFE_toHTML = function(doc) {
-  let tree = draftyToTree(doc);
+  const tree = draftyToTree(doc);
   const htmlFormatter = function(type, data, values) {
     const tag = DECORATORS[type];
     let result = values ? values.join('') : '';
@@ -1347,8 +1479,17 @@ Drafty.replyContent = function(original, limit) {
   tree = attachmentsToEnd(tree, MAX_PREVIEW_ATTACHMENTS);
   // Shorten the doc.
   tree = shortenTree(tree, limit, '…');
-  // Strip heavy elements except IM.data['val'] (have to keep them to generate previews later).
-  tree = lightEntity(tree, node => (node.type == 'IM' ? ['val'] : null));
+  // Strip heavy elements except IM.data['val'] and VD.data['preview'] (have to keep them to generate previews later).
+  const filter = node => {
+    switch (node.type) {
+      case 'IM':
+        return ['val'];
+      case 'VD':
+        return ['preview'];
+    }
+    return null;
+  };
+  tree = lightEntity(tree, filter);
   // Convert back to Drafty.
   return treeToDrafty({}, tree, []);
 }
@@ -1399,8 +1540,14 @@ Drafty.preview = function(original, limit, forwarding) {
 
   tree = shortenTree(tree, limit, '…');
   if (forwarding) {
-    // Keep IM data for preview.
-    tree = lightEntity(tree, node => (node.type == 'IM' ? ['val'] : null));
+    // Keep some IM and VD data for preview.
+    const filter = {
+      IM: ['val'],
+      VD: ['preview']
+    };
+    tree = lightEntity(tree, node => {
+      return filter[node.type];
+    });
   } else {
     tree = lightEntity(tree);
   }
@@ -1431,6 +1578,31 @@ Drafty.toPlainText = function(content) {
  */
 Drafty.isPlainText = function(content) {
   return typeof content == 'string' || !(content.fmt || content.ent);
+}
+
+/**
+ * Convert document to plain text with markdown. All elements which cannot
+ * be represented in markdown are stripped.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document to convert to plain text with markdown.
+ */
+Drafty.toMarkdown = function(content) {
+  let tree = draftyToTree(content);
+  const mdFormatter = function(type, _, values) {
+    const def = FORMAT_TAGS[type];
+    let result = (values ? values.join('') : '');
+    if (def) {
+      if (def.isVoid) {
+        result = def.md_tag || '';
+      } else if (def.md_tag) {
+        result = def.md_tag + result + def.md_tag;
+      }
+    }
+    return result;
+  };
+  return treeBottomUp(tree, mdFormatter, 0);
 }
 
 /**
@@ -1495,7 +1667,7 @@ Drafty.hasAttachments = function(content) {
 }
 
 /**
- * Callback for applying custom formatting/transformation to a Drafty document.
+ * Callback for enumerating entities in a Drafty document.
  * Called once for each entity.
  * @memberof Drafty
  * @static
@@ -1504,6 +1676,8 @@ Drafty.hasAttachments = function(content) {
  * @param {Object} data entity data.
  * @param {string} entity type.
  * @param {number} index entity's index in `content.ent`.
+ *
+ * @return 'true-ish' to stop processing, 'false-ish' otherwise.
  */
 
 /**
@@ -1519,15 +1693,18 @@ Drafty.attachments = function(content, callback, context) {
   if (!Array.isArray(content.fmt)) {
     return;
   }
-  let i = 0;
-  content.fmt.forEach(fmt => {
+  let count = 0;
+  for (let i in content.ent) {
+    let fmt = content.fmt[i];
     if (fmt && fmt.at < 0) {
       const ent = content.ent[fmt.key | 0];
       if (ent && ent.tp == 'EX' && ent.data) {
-        callback.call(context, ent.data, i++, 'EX');
+        if (callback.call(context, ent.data, count++, 'EX')) {
+          break;
+        }
       }
     }
-  });
+  };
 }
 
 /**
@@ -1543,19 +1720,60 @@ Drafty.hasEntities = function(content) {
 }
 
 /**
- * Enumerate entities.
+ * Enumerate entities. Enumeration stops if callback returns 'true'.
  * @memberof Drafty
  * @static
  *
  * @param {Drafty} content - document with entities to enumerate.
  * @param {EntityCallback} callback - callback to call for each entity.
  * @param {Object} context - value of "this" for callback.
+ *
  */
 Drafty.entities = function(content, callback, context) {
   if (content.ent && content.ent.length > 0) {
     for (let i in content.ent) {
       if (content.ent[i]) {
-        callback.call(context, content.ent[i].data, i, content.ent[i].tp);
+        if (callback.call(context, content.ent[i].data, i, content.ent[i].tp)) {
+          break;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Callback for enumerating styles (inline formats) in a Drafty document.
+ * Called once for each style.
+ * @memberof Drafty
+ * @static
+ *
+ * @callback StyleCallback
+ * @param {string} tp - format type.
+ * @param {number} at - starting position of the format in text.
+ * @param {number} len - extent of the format in characters.
+ * @param {number} key - index of the entity if format is a reference.
+ * @param {number} index - style's index in `content.fmt`.
+ *
+ * @return 'true-ish' to stop processing, 'false-ish' otherwise.
+ */
+
+/**
+ * Enumerate styles (inline formats). Enumeration stops if callback returns 'true'.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - document with styles (formats) to enumerate.
+ * @param {StyleCallback} callback - callback to call for each format.
+ * @param {Object} context - value of "this" for callback.
+ */
+Drafty.styles = function(content, callback, context) {
+  if (content.fmt && content.fmt.length > 0) {
+    for (let i in content.fmt) {
+      const fmt = content.fmt[i];
+      if (fmt) {
+        if (callback.call(context, fmt.tp, fmt.at, fmt.len, fmt.key, i)) {
+          break;
+        }
       }
     }
   }
@@ -1667,7 +1885,7 @@ Drafty.getEntityMimeType = function(entData) {
  * @returns {string} HTML tag name if style is found, {code: undefined} if style is falsish or not found.
  */
 Drafty.tagName = function(style) {
-  return HTML_TAGS[style] && HTML_TAGS[style].name;
+  return FORMAT_TAGS[style] && FORMAT_TAGS[style].html_tag;
 }
 
 /**
@@ -2050,7 +2268,7 @@ function spansToTree(parent, text, start, end, spans) {
         break;
       } else if (inner.start < span.end) {
         if (inner.end <= span.end) {
-          const tag = HTML_TAGS[inner.tp] || {};
+          const tag = FORMAT_TAGS[inner.tp] || {};
           if (inner.start < inner.end || tag.isVoid) {
             // Valid subspan: completely within the current span and
             // either non-zero length or zero length is acceptable.
@@ -2242,7 +2460,7 @@ function shortenTree(tree, limit, tail) {
 
 // Strip heavy entities from a tree.
 function lightEntity(tree, allow) {
-  const lightCopy = (node) => {
+  const lightCopy = node => {
     const data = copyEntData(node.data, true, allow ? allow(node) : null);
     if (data) {
       node.data = data;
@@ -2386,7 +2604,7 @@ function copyEntData(data, light, allow) {
   if (data && Object.entries(data).length > 0) {
     allow = allow || [];
     const dc = {};
-    ALLOWED_ENT_FIELDS.forEach((key) => {
+    ALLOWED_ENT_FIELDS.forEach(key => {
       if (data[key]) {
         if (light && !allow.includes(key) &&
           (typeof data[key] == 'string' || Array.isArray(data[key])) &&

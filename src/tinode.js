@@ -17,24 +17,24 @@
  *  ...
  * <script>
  *  // Instantiate tinode.
- *  const tinode = new Tinode(config, () => {
+ *  const tinode = new Tinode(config, _ => {
  *    // Called on init completion.
  *  });
  *  tinode.enableLogging(true);
- *  tinode.onDisconnect = (err) => {
+ *  tinode.onDisconnect = err => {
  *    // Handle disconnect.
  *  };
  *  // Connect to the server.
- *  tinode.connect('https://example.com/').then(() => {
+ *  tinode.connect('https://example.com/').then(_ => {
  *    // Connected. Login now.
  *    return tinode.loginBasic(login, password);
- *  }).then((ctrl) => {
+ *  }).then(ctrl => {
  *    // Logged in fine, attach callbacks, subscribe to 'me'.
  *    const me = tinode.getMeTopic();
  *    me.onMetaDesc = function(meta) { ... };
  *    // Subscribe, fetch topic description and the list of contacts.
  *    me.subscribe({get: {desc: {}, sub: {}}});
- *  }).catch((err) => {
+ *  }).catch(err => {
  *    // Login or subscription failed, do something.
  *    ...
  *  });
@@ -389,13 +389,11 @@ export class Tinode {
       // Call the main message dispatcher.
       this.#dispatchMessage(data);
     }
-    this._connection.onOpen = () => {
-      // Ready to start sending.
-      this.#connectionOpen();
-    }
-    this._connection.onDisconnect = (err, code) => {
-      this.#disconnected(err, code);
-    }
+
+    // Ready to start sending.
+    this._connection.onOpen = _ => this.#connectionOpen();
+    this._connection.onDisconnect = (err, code) => this.#disconnected(err, code);
+
     // Wrapper for the reconnect iterator callback.
     this._connection.onAutoreconnectIteration = (timeout, promise) => {
       if (this.onAutoreconnectIteration) {
@@ -448,7 +446,7 @@ export class Tinode {
           onComplete();
         }
         this.logger("Persistent cache initialized.");
-      }).catch((err) => {
+      }).catch(err => {
         if (onComplete) {
           onComplete(err);
         }
@@ -576,7 +574,7 @@ export class Tinode {
         if (pkt.ctrl.id) {
           this.#execPromise(pkt.ctrl.id, pkt.ctrl.code, pkt.ctrl, pkt.ctrl.text);
         }
-        setTimeout(() => {
+        setTimeout(_ => {
           if (pkt.ctrl.code == 205 && pkt.ctrl.text == 'evicted') {
             // User evicted from topic.
             const topic = this.#cacheGet('topic', pkt.ctrl.topic);
@@ -604,7 +602,7 @@ export class Tinode {
           }
         }, 0);
       } else {
-        setTimeout(() => {
+        setTimeout(_ => {
           if (pkt.meta) {
             // Handling a {meta} message.
             // Preferred API: Route meta to topic, if one is registered
@@ -669,7 +667,7 @@ export class Tinode {
   #connectionOpen() {
     if (!this._expirePromises) {
       // Reject promises which have not been resolved for too long.
-      this._expirePromises = setInterval(() => {
+      this._expirePromises = setInterval(_ => {
         const err = new Error("Timeout (504)");
         const expires = new Date(new Date().getTime() - Const.EXPIRE_PROMISES_TIMEOUT);
         for (let id in this._pendingPromises) {
@@ -1241,9 +1239,7 @@ export class Tinode {
   createAccount(scheme, secret, login, params) {
     let promise = this.account(Const.USER_NEW, scheme, secret, login, params);
     if (login) {
-      promise = promise.then((ctrl) => {
-        return this.#loginSuccessful(ctrl);
-      });
+      promise = promise.then(ctrl => this.#loginSuccessful(ctrl));
     }
     return promise;
   }
@@ -1293,7 +1289,7 @@ export class Tinode {
     const pkt = this.#initPacket('hi');
 
     return this.#send(pkt, pkt.hi.id)
-      .then((ctrl) => {
+      .then(ctrl => {
         // Reset backoff counter on successful connection.
         this._connection.backoffReset();
 
@@ -1308,7 +1304,7 @@ export class Tinode {
         }
 
         return ctrl;
-      }).catch((err) => {
+      }).catch(err => {
         this._connection.reconnect(true);
 
         if (this.onDisconnect) {
@@ -1368,9 +1364,7 @@ export class Tinode {
     pkt.login.cred = cred;
 
     return this.#send(pkt, pkt.login.id)
-      .then((ctrl) => {
-        return this.#loginSuccessful(ctrl);
-      });
+      .then(ctrl => this.#loginSuccessful(ctrl));
   }
 
   /**
@@ -1384,7 +1378,7 @@ export class Tinode {
    */
   loginBasic(uname, password, cred) {
     return this.login('basic', b64EncodeUnicode(uname + ':' + password), cred)
-      .then((ctrl) => {
+      .then(ctrl => {
         this._login = uname;
         return ctrl;
       });
@@ -1855,7 +1849,7 @@ export class Tinode {
     pkt.del.what = 'user';
     pkt.del.hard = hard;
 
-    return this.#send(pkt, pkt.del.id).then((ctrl) => {
+    return this.#send(pkt, pkt.del.id).then(_ => {
       this._myUID = null;
     });
   }
@@ -1883,10 +1877,11 @@ export class Tinode {
    * typing notifications "user X is typing...".
    *
    * @param {string} topicName - Name of the topic to broadcast to.
+   * @param {string=} type - notification to send, default is 'kp'.
    */
-  noteKeyPress(topicName) {
+  noteKeyPress(topicName, type) {
     const pkt = this.#initPacket('note', topicName);
-    pkt.note.what = 'kp';
+    pkt.note.what = type || 'kp';
     this.#send(pkt);
   }
 
@@ -2238,7 +2233,6 @@ Tinode.MESSAGE_STATUS_SENT = Const.MESSAGE_STATUS_SENT;
 Tinode.MESSAGE_STATUS_RECEIVED = Const.MESSAGE_STATUS_RECEIVED;
 Tinode.MESSAGE_STATUS_READ = Const.MESSAGE_STATUS_READ;
 Tinode.MESSAGE_STATUS_TO_ME = Const.MESSAGE_STATUS_TO_ME;
-Tinode.MESSAGE_STATUS_DEL_RANGE = Const.MESSAGE_STATUS_DEL_RANGE;
 
 // Unicode [del] symbol.
 Tinode.DEL_CHAR = Const.DEL_CHAR;

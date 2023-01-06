@@ -83,7 +83,7 @@ export class Topic {
     // Credentials such as email or phone number.
     this._credentials = [];
     // Message versions cache (e.g. for edited messages).
-    // Keys: original message seq ids.
+    // Keys: original message seq ID.
     // Values: CBuffers containing newer versions of the original message
     // ordered by seq id.
     this._messageVersions = {};
@@ -256,7 +256,7 @@ export class Topic {
     // Send subscribe message, handle async response.
     // If topic name is explicitly provided, use it. If no name, then it's a new group topic,
     // use "new".
-    return this._tinode.subscribe(this.name || Const.TOPIC_NEW, getParams, setParams).then((ctrl) => {
+    return this._tinode.subscribe(this.name || Const.TOPIC_NEW, getParams, setParams).then(ctrl => {
       if (ctrl.code >= 300) {
         // Do nothing if subscription status has not changed.
         return ctrl;
@@ -313,17 +313,19 @@ export class Topic {
   createMessage(data, noEcho) {
     return this._tinode.createMessage(this.name, data, noEcho);
   }
+
   /**
    * Immediately publish data to topic. Wrapper for {@link Tinode#publish}.
    * @memberof Tinode.Topic#
    *
-   * @param {string | Object} data - Data to publish, either plain string or a Drafty object.
+   * @param {string | Object} data - Message to publish, either plain string or a Drafty object.
    * @param {boolean=} noEcho - If <code>true</code> server will not echo message back to originating
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
   publish(data, noEcho) {
     return this.publishMessage(this.createMessage(data, noEcho));
   }
+
   /**
    * Publish message created by {@link Tinode.Topic#createMessage}.
    * @memberof Tinode.Topic#
@@ -348,7 +350,7 @@ export class Topic {
     let attachments = null;
     if (Drafty.hasEntities(pub.content)) {
       attachments = [];
-      Drafty.entities(pub.content, (data) => {
+      Drafty.entities(pub.content, data => {
         if (data && data.ref) {
           attachments.push(data.ref);
         }
@@ -358,13 +360,14 @@ export class Topic {
       }
     }
 
-    return this._tinode.publishMessage(pub, attachments).then((ctrl) => {
+    return this._tinode.publishMessage(pub, attachments).then(ctrl => {
       pub._sending = false;
       pub.ts = ctrl.ts;
       this.swapMessageId(pub, ctrl.params.seq);
+      this._maybeUpdateMessageVersionsCache(pub);
       this._routeData(pub);
       return ctrl;
-    }).catch((err) => {
+    }).catch(err => {
       this._tinode.logger("WARNING: Message rejected by the server", err);
       pub._sending = false;
       pub._failed = true;
@@ -373,6 +376,7 @@ export class Topic {
       }
     });
   }
+
   /**
    * Add message to local message cache, send to the server when the promise is resolved.
    * If promise is null or undefined, the message will be sent immediately.
@@ -445,7 +449,7 @@ export class Topic {
     }
 
     // Send a 'leave' message, handle async response
-    return this._tinode.leave(this.name, unsub).then((ctrl) => {
+    return this._tinode.leave(this.name, unsub).then(ctrl => {
       this._resetSub();
       if (unsub) {
         this._gone();
@@ -517,7 +521,7 @@ export class Topic {
           this.startMetaQuery().withEarlierData(limit);
         let promise = this.getMeta(query.build());
         if (!forward) {
-          promise = promise.then((ctrl) => {
+          promise = promise.then(ctrl => {
             if (ctrl && ctrl.params && !ctrl.params.count) {
               this._noEarlierMsgs = true;
             }
@@ -539,7 +543,7 @@ export class Topic {
     }
     // Send Set message, handle async response.
     return this._tinode.setMeta(this.name, params)
-      .then((ctrl) => {
+      .then(ctrl => {
         if (ctrl && ctrl.code >= 300) {
           // Not modified
           return ctrl;
@@ -693,7 +697,7 @@ export class Topic {
       });
     }
     // Update local cache.
-    return result.then((ctrl) => {
+    return result.then(ctrl => {
       if (ctrl.params.del > this._maxDel) {
         this._maxDel = ctrl.params.del;
       }
@@ -706,8 +710,6 @@ export class Topic {
         }
       });
 
-      this._updateDeletedRanges();
-
       if (this.onData) {
         // Calling with no parameters to indicate the messages were deleted.
         this.onData();
@@ -716,7 +718,7 @@ export class Topic {
     });
   }
   /**
-   * Delete all messages. Hard-deleting messages requires Owner permission.
+   * Delete all messages. Hard-deleting messages requires Deleter permission.
    * @memberof Tinode.Topic#
    *
    * @param {boolean} hardDel - true if messages should be hard-deleted.
@@ -734,11 +736,12 @@ export class Topic {
       _all: true
     }], hardDel);
   }
+
   /**
-   * Delete multiple messages defined by their IDs. Hard-deleting messages requires Owner permission.
+   * Delete multiple messages defined by their IDs. Hard-deleting messages requires Deleter permission.
    * @memberof Tinode.Topic#
    *
-   * @param {Tinode.DelRange[]} list - list of seq IDs to delete
+   * @param {Array.<number>} list - list of seq IDs to delete.
    * @param {boolean=} hardDel - true if messages should be hard-deleted.
    *
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
@@ -770,6 +773,23 @@ export class Topic {
     // Send {del} message, return promise
     return this.delMessages(ranges, hardDel);
   }
+
+  /**
+   * Delete original message and edited variants. Hard-deleting messages requires Deleter permission.
+   * @memberof Tinode.Topic#
+   *
+   * @param {number} seq - original seq ID of the message to delete.
+   * @param {boolean=} hardDel - true if messages should be hard-deleted.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
+   */
+  delMessagesEdits(seq, hardDel) {
+    const list = [seq];
+    this.messageVersions(seq, msg => list.push(msg.seq));
+    // Send {del} message, return promise
+    return this.delMessagesList(list, hardDel);
+  }
+
   /**
    * Delete topic. Requires Owner permission. Wrapper for {@link Tinode#delTopic}.
    * @memberof Tinode.Topic#
@@ -784,7 +804,7 @@ export class Topic {
       return Promise.resolve(null);
     }
 
-    return this._tinode.delTopic(this.name, hard).then((ctrl) => {
+    return this._tinode.delTopic(this.name, hard).then(ctrl => {
       this._deleted = true;
       this._resetSub();
       this._gone();
@@ -803,7 +823,7 @@ export class Topic {
       return Promise.reject(new Error("Cannot delete subscription in inactive topic"));
     }
     // Send {del} message, return promise
-    return this._tinode.delSubscription(this.name, user).then((ctrl) => {
+    return this._tinode.delSubscription(this.name, user).then(ctrl => {
       // Remove the object from the subscription cache;
       delete this._users[user];
       // Notify listeners
@@ -886,6 +906,19 @@ export class Topic {
       this._tinode.logger("INFO: Cannot send notification in inactive topic");
     }
   }
+  /**
+   * Send a notification than a video or audio message is . Wrapper for {@link Tinode#noteKeyPress}.
+   * @memberof Tinode.Topic#
+   * @param audioOnly - true if the recording is audio-only, false if it's a video recording.
+   */
+  noteRecording(audioOnly) {
+    if (this._attached) {
+      this._tinode.noteKeyPress(this.name, audioOnly ? 'kpa' : 'kpv');
+    } else {
+      this._tinode.logger("INFO: Cannot send notification in inactive topic");
+    }
+  }
+
   /**
    * Send a {note what='call'}. Wrapper for {@link Tinode#videoCall}.
    * @memberof Tinode#
@@ -1012,19 +1045,19 @@ export class Topic {
     return this._users[uid];
   }
   /**
-   * Iterate over versions of <code>message</code>: call <code>callback</code> for each message.
+   * Iterate over versions of a message: call <code>callback</code> for each version (excluding original).
    * If <code>callback</code> is undefined, does nothing.
    * @memberof Tinode.Topic#
    *
+   * @param {number} origSeq - seq ID of the original message.
    * @param {Tinode.ForEachCallbackType} callback - Callback which will receive messages one by one. See {@link Tinode.CBuffer#forEach}
    * @param {Object} context - Value of `this` inside the `callback`.
    */
-  messageVersions(message, callback, context) {
+  messageVersions(origSeq, callback, context) {
     if (!callback) {
       // No callback? We are done then.
       return;
     }
-    const origSeq = this._isReplacementMsg(message) ? parseInt(message.head.replace.split(':')[1]) : message.seq;
     const versions = this._messageVersions[origSeq];
     if (!versions) {
       return;
@@ -1059,8 +1092,16 @@ export class Topic {
             // Skip replacements.
             return;
           }
+          // In case the massage was edited, replace timestamp of the version with the original's timestamp.
+          const latest = this.latestMsgVersion(msg.seq) || msg;
+          if (!latest._origTs) {
+            latest._origTs = latest.ts;
+            latest._origSeq = latest.seq;
+            latest.ts = msg.ts;
+            latest.seq = msg.seq;
+          }
           msgs.push({
-            data: this.latestMsgVersion(msg.seq) || msg,
+            data: latest,
             idx: i
           });
         }, startIdx, beforeIdx, {});
@@ -1093,15 +1134,10 @@ export class Topic {
    * Get the most recent message from cache. This method counts all messages, including deleted ranges.
    * @memberof Tinode.Topic#
    *
-   * @param {boolen} skipDeleted - if the last message is a deleted range, get the one before it.
    * @returns {Object} the most recent cached message or <code>undefined</code>, if no messages are cached.
    */
-  latestMessage(skipDeleted) {
-    const msg = this._messages.getLast();
-    if (!skipDeleted || !msg || msg._status != Const.MESSAGE_STATUS_DEL_RANGE) {
-      return msg;
-    }
-    return this._messages.getLast(1);
+  latestMessage() {
+    return this._messages.getLast();
   }
   /**
    * Get the latest version for message.
@@ -1230,11 +1266,38 @@ export class Topic {
     const idx = this._messages.find({
       seq: seqId
     });
+    delete this._messageVersions[seqId];
     if (idx >= 0) {
       this._tinode._db.remMessages(this.name, seqId);
       return this._messages.delAt(idx);
     }
     return undefined;
+  }
+  /**
+   * Remove a range of messages from the local cache.
+   * @memberof Tinode.Topic#
+   *
+   * @param {number} fromId seq ID of the first message to remove (inclusive).
+   * @param {number} untilId seqID of the last message to remove (exclusive).
+   *
+   * @returns {Message[]} array of removed messages (could be empty).
+   */
+  flushMessageRange(fromId, untilId) {
+    // Remove range from persistent cache.
+    this._tinode._db.remMessages(this.name, fromId, untilId);
+
+    // Remove all versions keyed by IDs in the range.
+    for (let i = fromId; i < untilId; i++) {
+      delete this._messageVersions[i];
+    }
+
+    // start, end: find insertion points (nearest == true).
+    const since = this._messages.find({
+      seq: fromId
+    }, true);
+    return since >= 0 ? this._messages.delRange(since, this._messages.find({
+      seq: untilId
+    }, true)) : [];
   }
   /**
    * Update message's seqId.
@@ -1255,26 +1318,6 @@ export class Topic {
       this._messages.put(pub);
       this._tinode._db.addMessage(pub);
     }
-  }
-  /**
-   * Remove a range of messages from the local cache.
-   * @memberof Tinode.Topic#
-   *
-   * @param {number} fromId seq ID of the first message to remove (inclusive).
-   * @param {number} untilId seqID of the last message to remove (exclusive).
-   *
-   * @returns {Message[]} array of removed messages (could be empty).
-   */
-  flushMessageRange(fromId, untilId) {
-    // Remove range from persistent cache.
-    this._tinode._db.remMessages(this.name, fromId, untilId);
-    // start, end: find insertion points (nearest == true).
-    const since = this._messages.find({
-      seq: fromId
-    }, true);
-    return since >= 0 ? this._messages.delRange(since, this._messages.find({
-      seq: untilId
-    }, true)) : [];
   }
   /**
    * Attempt to stop message from being sent.
@@ -1430,8 +1473,8 @@ export class Topic {
       } else if (msg.seq > 0) {
         status = Const.MESSAGE_STATUS_SENT;
       }
-    } else if (msg._status == Const.MESSAGE_STATUS_DEL_RANGE) {
-      status == Const.MESSAGE_STATUS_DEL_RANGE;
+      // } else if (msg._status == Const.MESSAGE_STATUS_DEL_RANGE) {
+      //   status == Const.MESSAGE_STATUS_DEL_RANGE;
     } else {
       status = Const.MESSAGE_STATUS_TO_ME;
     }
@@ -1449,7 +1492,7 @@ export class Topic {
     return pub.head && pub.head.replace;
   }
 
-  // If msg is a replacement for another message, saves msg in the message versions cache
+  // If msg is a replacement for another message, save the msg in the message versions cache
   // as a newer version for the message it's supposed to replace.
   _maybeUpdateMessageVersionsCache(msg) {
     if (!this._isReplacementMsg(msg)) {
@@ -1475,7 +1518,12 @@ export class Topic {
       // Substitute cannot change the sender.
       return;
     }
-    let versions = this._messageVersions[targetSeq] || new CBuffer((a, b) => {
+    const targetMsg = this.findMessage(targetSeq);
+    if (targetMsg && targetMsg.from != msg.from) {
+      // Substitute cannot change the sender.
+      return;
+    }
+    const versions = this._messageVersions[targetSeq] || new CBuffer((a, b) => {
       return a.seq - b.seq;
     }, true);
     versions.put(msg);
@@ -1510,7 +1558,7 @@ export class Topic {
 
     if (data.head && data.head.webrtc && data.head.mime == Drafty.getContentType() && data.content) {
       // Rewrite VC body with info from the headers.
-      data.content = Drafty.updateVideoEnt(data.content, {
+      data.content = Drafty.updateVideoCall(data.content, {
         state: data.head.webrtc,
         duration: data.head['webrtc-duration'],
         incoming: !outgoing,
@@ -1521,7 +1569,6 @@ export class Topic {
       this._messages.put(data);
       this._tinode._db.addMessage(data);
       this._maybeUpdateMessageVersionsCache(data);
-      this._updateDeletedRanges();
     }
 
     if (this.onData) {
@@ -1767,7 +1814,7 @@ export class Topic {
     }
 
     if (count > 0) {
-      this._updateDeletedRanges();
+      // this._updateDeletedRanges();
 
       if (this.onData) {
         this.onData();
@@ -1776,7 +1823,6 @@ export class Topic {
   }
   // Topic is informed that the entire response to {get what=data} has been received.
   _allMessagesReceived(count) {
-    this._updateDeletedRanges();
 
     if (this.onAllMessagesReceived) {
       this.onAllMessagesReceived(count);
@@ -1828,113 +1874,7 @@ export class Topic {
   _getQueuedSeqId() {
     return this._queuedSeqId++;
   }
-  // Calculate ranges of missing messages.
-  _updateDeletedRanges() {
-    const ranges = [];
 
-    // Gap marker, possibly empty.
-    let prev = null;
-
-    // Check for gap in the beginning, before the first message.
-    const first = this._messages.getAt(0);
-    if (first && this._minSeq > 1 && !this._noEarlierMsgs) {
-      // Some messages are missing in the beginning.
-      if (first.hi) {
-        // The first message already represents a gap.
-        if (first.seq > 1) {
-          first.seq = 1;
-        }
-        if (first.hi < this._minSeq - 1) {
-          first.hi = this._minSeq - 1;
-        }
-        prev = first;
-      } else {
-        // Create new gap.
-        prev = {
-          seq: 1,
-          hi: this._minSeq - 1
-        };
-        ranges.push(prev);
-      }
-    } else {
-      // No gap in the beginning.
-      prev = {
-        seq: 0,
-        hi: 0
-      };
-    }
-
-    // Find new gaps in the list of received messages. The list contains messages-proper as well
-    // as placeholders for deleted ranges.
-    // The messages are iterated by seq ID in ascending order.
-    this._messages.filter((data) => {
-      // Do not create a gap between the last sent message and the first unsent as well as between unsent messages.
-      if (data.seq >= Const.LOCAL_SEQID) {
-        return true;
-      }
-
-      // Check for a gap between the previous message/marker and this message/marker.
-      if (data.seq == (prev.hi || prev.seq) + 1) {
-        // No gap between this message and the previous.
-        if (data.hi && prev.hi) {
-          // Two gap markers in a row. Extend the previous one, discard the current.
-          prev.hi = data.hi;
-          return false;
-        }
-        prev = data;
-
-        // Keep current.
-        return true;
-      }
-
-      // Found a new gap.
-      // Check if the previous is also a gap marker.
-      if (prev.hi) {
-        // Alter it instead of creating a new one.
-        prev.hi = data.hi || data.seq;
-      } else {
-        // Previous is not a gap marker. Create a new one.
-        prev = {
-          seq: prev.seq + 1,
-          hi: data.hi || data.seq
-        };
-        ranges.push(prev);
-      }
-
-      // If marker, remove; keep if regular message.
-      if (!data.hi) {
-        // Keeping the current regular message, save it as previous.
-        prev = data;
-        return true;
-      }
-
-      // Discard the current gap marker: we either created an earlier gap, or extended the prevous one.
-      return false;
-    });
-
-    // Check for missing messages at the end.
-    // All messages could be missing or it could be a new topic with no messages.
-    const last = this._messages.getLast();
-    const maxSeq = Math.max(this.seq, this._maxSeq) || 0;
-    if ((maxSeq > 0 && !last) || (last && ((last.hi || last.seq) < maxSeq))) {
-      if (last && last.hi) {
-        // Extend existing gap
-        last.hi = maxSeq;
-      } else {
-        // Create new gap.
-        ranges.push({
-          seq: last ? last.seq + 1 : 1,
-          hi: maxSeq
-        });
-      }
-    }
-
-    // Insert new gaps into cache.
-    ranges.forEach((gap) => {
-      gap._status = Const.MESSAGE_STATUS_DEL_RANGE;
-      this._messages.put(gap);
-    });
-  }
   // Load most recent messages from persistent cache.
   _loadMessages(db, params) {
     const {
@@ -1947,7 +1887,7 @@ export class Topic {
         before: before,
         limit: limit || Const.DEFAULT_MESSAGES_PAGE
       })
-      .then((msgs) => {
+      .then(msgs => {
         msgs.forEach((data) => {
           if (data.seq > this._maxSeq) {
             this._maxSeq = data.seq;
@@ -1958,9 +1898,6 @@ export class Topic {
           this._messages.put(data);
           this._maybeUpdateMessageVersionsCache(data);
         });
-        if (msgs.length > 0) {
-          this._updateDeletedRanges();
-        }
         return msgs.length;
       });
   }
@@ -1977,7 +1914,6 @@ export class Topic {
     this._tinode._db.updTopic(this);
   }
 }
-
 
 /**
  * @class TopicMe - special case of {@link Tinode.Topic} for
@@ -2285,7 +2221,7 @@ export class TopicMe extends Topic {
       return Promise.reject(new Error("Cannot delete credential in inactive 'me' topic"));
     }
     // Send {del} message, return promise
-    return this._tinode.delCredential(method, value).then((ctrl) => {
+    return this._tinode.delCredential(method, value).then(ctrl => {
       // Remove deleted credential from the cache.
       const index = this._credentials.findIndex((el) => {
         return el.meth == method && el.val == value;
@@ -2436,7 +2372,7 @@ export class TopicFnd extends Topic {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   setMeta(params) {
-    return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(() => {
+    return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(_ => {
       if (Object.keys(this._contacts).length > 0) {
         this._contacts = {};
         if (this.onSubsUpdated) {

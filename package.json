@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Tinode SDK",
-  "version": "0.20.3",
+  "version": "0.21.0-beta1",
   "scripts": {
     "format": "js-beautify -r src/*.js",
     "build": "npm run vers && npm run format && npm run build:prod && npm run build:dev",
@@ -40,7 +40,7 @@
     "@babel/preset-env": "^7.20.2",
     "babelify": "^10.0.0",
     "browserify": "^17.0.0",
-    "jest": "^29.3.0",
+    "jest": "^29.3.1",
     "js-beautify": "^1.14.7",
     "jsdoc": "^4.0.0",
     "minami": "^1.2.3",
