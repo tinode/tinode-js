@@ -914,10 +914,10 @@ Drafty.insertAudio = function(content, at, audioDesc) {
  * Create a (self-contained) video call Drafty document.
  * @memberof Drafty
  * @static
- *
+ * @param {boolean} audioOnly <code>true</code> if the call is initially audio-only.
  * @returns Video Call drafty document.
  */
-Drafty.videoCall = function() {
+Drafty.videoCall = function(audioOnly) {
   const content = {
     txt: ' ',
     fmt: [{
@@ -926,7 +926,10 @@ Drafty.videoCall = function() {
       key: 0
     }],
     ent: [{
-      tp: 'VC'
+      tp: 'VC',
+      data: {
+        aonly: audioOnly
+      },
     }]
   };
   return content;
