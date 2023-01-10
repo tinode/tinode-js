@@ -50,6 +50,7 @@
 
 import AccessMode from './access-mode.js';
 import * as Const from './config.js';
+import CommError from './comm-error.js';
 import Connection from './connection.js';
 import DBCache from './db.js';
 import Drafty from './drafty.js';
@@ -503,7 +504,7 @@ export class Tinode {
           callbacks.resolve(onOK);
         }
       } else if (callbacks.reject) {
-        callbacks.reject(new Error(`${errorText} (${code})`));
+        callbacks.reject(new CommError(errorText, code));
       }
     }
   }
@@ -668,7 +669,7 @@ export class Tinode {
     if (!this._expirePromises) {
       // Reject promises which have not been resolved for too long.
       this._expirePromises = setInterval(_ => {
-        const err = new Error("Timeout (504)");
+        const err = new CommError("timeout", 504);
         const expires = new Date(new Date().getTime() - Const.EXPIRE_PROMISES_TIMEOUT);
         for (let id in this._pendingPromises) {
           let callbacks = this._pendingPromises[id];

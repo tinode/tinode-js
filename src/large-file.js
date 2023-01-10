@@ -5,6 +5,7 @@
  */
 'use strict';
 
+import CommError from './comm-error.js';
 import {
   isUrlRelative,
   jsonParseHelper
@@ -113,7 +114,7 @@ export default class LargeFileHelper {
         }
       } else if (this.status >= 400) {
         if (instance.toReject) {
-          instance.toReject(new Error(`${pkt.ctrl.text} (${pkt.ctrl.code})`));
+          instance.toReject(new CommError(pkt.ctrl.text, pkt.ctrl.code));
         }
         if (instance.onFailure) {
           instance.onFailure(pkt.ctrl);
@@ -125,7 +126,7 @@ export default class LargeFileHelper {
 
     this.xhr.onerror = function(e) {
       if (instance.toReject) {
-        instance.toReject(new Error("failed"));
+        instance.toReject(e || new Error("failed"));
       }
       if (instance.onFailure) {
         instance.onFailure(null);
@@ -248,7 +249,7 @@ export default class LargeFileHelper {
         reader.onload = function() {
           try {
             const pkt = JSON.parse(this.result, jsonParseHelper);
-            instance.toReject(new Error(`${pkt.ctrl.text} (${pkt.ctrl.code})`));
+            instance.toReject(new CommError(pkt.ctrl.text, pkt.ctrl.code));
           } catch (err) {
             instance._tinode.logger("ERROR: Invalid server response in LargeFileHelper", this.result);
             instance.toReject(err);

@@ -5,6 +5,7 @@
  */
 'use strict';
 
+import CommError from './comm-error.js';
 import {
   jsonParseHelper
 } from './utils.js';
@@ -259,7 +260,7 @@ export default class Connection {
       sender.onreadystatechange = (evt) => {
         if (sender.readyState == XDR_DONE && sender.status >= 400) {
           // Some sort of error response
-          throw new Error(`LP sender failed, ${sender.status}`);
+          throw new CommError("LP sender failed", sender.status);
         }
       };
 
@@ -308,7 +309,7 @@ export default class Connection {
             if (this.onDisconnect) {
               const code = poller.status || (this.#boffClosed ? NETWORK_USER : NETWORK_ERROR);
               const text = poller.responseText || (this.#boffClosed ? NETWORK_USER_TEXT : NETWORK_ERROR_TEXT);
-              this.onDisconnect(new Error(text + ' (' + code + ')'), code);
+              this.onDisconnect(new CommError(text, code), code);
             }
 
             // Polling has stopped. Indicate it by setting poller to null.
@@ -371,7 +372,7 @@ export default class Connection {
       }
 
       if (this.onDisconnect) {
-        this.onDisconnect(new Error(NETWORK_USER_TEXT + ' (' + NETWORK_USER + ')'), NETWORK_USER);
+        this.onDisconnect(new CommError(NETWORK_USER_TEXT, NETWORK_USER), NETWORK_USER);
       }
       // Ensure it's reconstructed
       _lpURL = null;
@@ -438,8 +439,7 @@ export default class Connection {
 
           if (this.onDisconnect) {
             const code = this.#boffClosed ? NETWORK_USER : NETWORK_ERROR;
-            this.onDisconnect(new Error(this.#boffClosed ? NETWORK_USER_TEXT : NETWORK_ERROR_TEXT +
-              ' (' + code + ')'), code);
+            this.onDisconnect(new CommError(this.#boffClosed ? NETWORK_USER_TEXT : NETWORK_ERROR_TEXT, code), code);
           }
 
           if (!this.#boffClosed && this.autoreconnect) {
