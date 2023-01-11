@@ -1601,7 +1601,7 @@ export class Tinode {
    * @param {object=} data.want - new subscription 'want', e.g. 'RWJ...'.
    */
   oobNotification(data) {
-    this.logger("oob: " + (this._trimLongStrings ? JSON.stringify(data, jsonLoggerHelper) : data));
+    this.logger('oob: ' + (this._trimLongStrings ? JSON.stringify(data, jsonLoggerHelper) : data));
 
     switch (data.what) {
       case 'msg':
@@ -1611,7 +1611,7 @@ export class Tinode {
         }
 
         if (!this.isConnected()) {
-          // Let's ignore the message is there is no connection: no connection means there are no open
+          // Let's ignore the message if there is no connection: no connection means there are no open
           // tabs with Tinode.
           break;
         }
@@ -1667,12 +1667,12 @@ export class Tinode {
           break;
         }
 
-        let mode = {
+        const mode = {
           given: data.modeGiven,
           want: data.modeWant
         };
-        let acs = new AccessMode(mode);
-        let pres = (!acs.mode || acs.mode == AccessMode._NONE) ?
+        const acs = new AccessMode(mode);
+        const pres = (!acs.mode || acs.mode == AccessMode._NONE) ?
           // Subscription deleted.
           {
             what: 'gone',
