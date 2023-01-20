@@ -272,7 +272,7 @@ export default class Connection {
       let poller = new XHRProvider();
       let promiseCompleted = false;
 
-      poller.onreadystatechange = (evt) => {
+      poller.onreadystatechange = evt => {
         if (poller.readyState == XDR_DONE) {
           if (poller.status == 201) { // 201 == HTTP.Created, get SID
             let pkt = JSON.parse(poller.responseText, jsonParseHelper);
@@ -291,7 +291,7 @@ export default class Connection {
             if (this.autoreconnect) {
               this.#boffStop();
             }
-          } else if (poller.status < 400) { // 400 = HTTP.BadRequest
+          } else if (poller.status > 0 && poller.status < 400) { // 0 = network error; 400 = HTTP.BadRequest
             if (this.onMessage) {
               this.onMessage(poller.responseText);
             }
