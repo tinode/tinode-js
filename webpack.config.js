@@ -22,7 +22,11 @@ module.exports = (env, argv) => {
     output: {
       path: path.resolve(__dirname, 'umd'),
       filename: `tinode.${mode}.js`,
-      publicPath: '/umd/'
+      globalObject: 'this',
+      library: {
+        name: 'tinode',
+        type: 'umd',
+      },
     },
     optimization: {
       minimize: (mode === 'prod'),
