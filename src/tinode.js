@@ -742,6 +742,8 @@ export class Tinode {
             'user': null,
             'scheme': null,
             'secret': null,
+            'tmpscheme': null,
+            'tmpsecret': null,
             'login': false,
             'tags': null,
             'desc': {},
@@ -1078,7 +1080,7 @@ export class Tinode {
   /**
    * Attempt to reconnect to the server immediately.
    *
-   * @param {string} force - reconnect even if there is a connection already.
+   * @param {string} force - if <code>true</code>, reconnect even if there is a connection already.
    */
   reconnect(force) {
     this._connection.reconnect(force);
@@ -1177,7 +1179,8 @@ export class Tinode {
    * @property {Object=} private - Private application-defined data accessible on <code>me</code> topic.
    * @property {Object=} trusted - Trusted user data which can be set by a root user only.
    * @property {Array.<string>} tags - array of string tags for user discovery.
-   * @property {string=} token - authentication token to use.
+   * @property {string} scheme - Temporary authentication scheme for password reset.
+   * @property {string} secret - Temporary authentication secret for password reset.
    * @property {Array.<string>=} attachments - Array of references to out of band attachments used in account description.
    */
   /**
@@ -1215,7 +1218,8 @@ export class Tinode {
       pkt.acc.tags = params.tags;
       pkt.acc.cred = params.cred;
 
-      pkt.acc.token = params.token;
+      pkt.acc.tmpscheme = params.scheme;
+      pkt.acc.tmpsecret = params.secret;
 
       if (Array.isArray(params.attachments) && params.attachments.length > 0) {
         pkt.extra = {
