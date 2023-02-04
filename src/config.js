@@ -1,17 +1,17 @@
 /**
  * @file Global constants and configuration parameters.
  *
- * @copyright 2015-2022 Tinode LLC
+ * @copyright 2015-2023 Tinode LLC
  */
 'use strict';
 
 import {
-  version as package_version
-} from '../version.json';
+  PACKAGE_VERSION
+} from '../version.js';
 
 // Global constants
 export const PROTOCOL_VERSION = '0'; // Major component of the version, e.g. '0' in '0.17.1'.
-export const VERSION = package_version || '0.20';
+export const VERSION = PACKAGE_VERSION || '0.21';
 export const LIBRARY = 'tinodejs/' + VERSION;
 
 // Topic name prefixes.
