@@ -1,3 +1,4 @@
 tinode.dev.js binary
 tinode.prod.js binary
+tinode.*.map binary
 package-lock.json binary

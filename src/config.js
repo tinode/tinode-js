@@ -30,13 +30,14 @@ export const LOCAL_SEQID = 0xFFFFFFF;
 
 // Status codes.
 export const MESSAGE_STATUS_NONE = 0; // Status not assigned.
-export const MESSAGE_STATUS_QUEUED = 1; // Local ID assigned, in progress to be sent.
-export const MESSAGE_STATUS_SENDING = 2; // Transmission started.
-export const MESSAGE_STATUS_FAILED = 3; // At least one attempt was made to send the message.
-export const MESSAGE_STATUS_SENT = 4; // Delivered to the server.
-export const MESSAGE_STATUS_RECEIVED = 5; // Received by the client.
-export const MESSAGE_STATUS_READ = 6; // Read by the user.
-export const MESSAGE_STATUS_TO_ME = 7; // The message is received from another user.
+export const MESSAGE_STATUS_QUEUED = 10; // Local ID assigned, in progress to be sent.
+export const MESSAGE_STATUS_SENDING = 20; // Transmission started.
+export const MESSAGE_STATUS_FAILED = 30; // At least one attempt was made to send the message.
+export const MESSAGE_STATUS_FATAL = 40; // Message sending failed and it should not be retried.
+export const MESSAGE_STATUS_SENT = 50; // Delivered to the server.
+export const MESSAGE_STATUS_RECEIVED = 60; // Received by the client.
+export const MESSAGE_STATUS_READ = 70; // Read by the user.
+export const MESSAGE_STATUS_TO_ME = 80; // The message is received from another user.
 
 // Reject unresolved futures after this many milliseconds.
 export const EXPIRE_PROMISES_TIMEOUT = 5_000;

@@ -7,6 +7,7 @@
 
 import AccessMode from './access-mode.js';
 import CBuffer from './cbuffer.js';
+import CommError from './comm-error.js';
 import * as Const from './config.js';
 import Drafty from './drafty.js';
 import MetaGetBuilder from './meta-builder.js';
@@ -425,6 +426,7 @@ export class Topic {
         this._tinode.logger("WARNING: Message draft rejected", err);
         pub._sending = false;
         pub._failed = true;
+        pub._fatal = err instanceof CommError ? (err.code >= 400 && err.code < 500) : false;
         if (this.onData) {
           this.onData();
         }
@@ -1334,7 +1336,9 @@ export class Topic {
     if (idx >= 0) {
       const msg = this._messages.getAt(idx);
       const status = this.msgStatus(msg);
-      if (status == Const.MESSAGE_STATUS_QUEUED || status == Const.MESSAGE_STATUS_FAILED) {
+      if (status == Const.MESSAGE_STATUS_QUEUED ||
+        status == Const.MESSAGE_STATUS_FAILED ||
+        status == Const.MESSAGE_STATUS_FATAL) {
         this._tinode._db.remMessages(this.name, seqId);
         msg._cancelled = true;
         this._messages.delAt(idx);
@@ -1462,7 +1466,9 @@ export class Topic {
     if (this._tinode.isMe(msg.from)) {
       if (msg._sending) {
         status = Const.MESSAGE_STATUS_SENDING;
-      } else if (msg._failed || msg._cancelled) {
+      } else if (msg._fatal || msg._cancelled) {
+        status = Const.MESSAGE_STATUS_FATAL;
+      } else if (msg._failed) {
         status = Const.MESSAGE_STATUS_FAILED;
       } else if (msg.seq >= Const.LOCAL_SEQID) {
         status = Const.MESSAGE_STATUS_QUEUED;
@@ -1473,8 +1479,6 @@ export class Topic {
       } else if (msg.seq > 0) {
         status = Const.MESSAGE_STATUS_SENT;
       }
-      // } else if (msg._status == Const.MESSAGE_STATUS_DEL_RANGE) {
-      //   status == Const.MESSAGE_STATUS_DEL_RANGE;
     } else {
       status = Const.MESSAGE_STATUS_TO_ME;
     }

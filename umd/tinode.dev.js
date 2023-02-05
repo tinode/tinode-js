@@ -411,6 +411,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "LIBRARY": () => (/* binding */ LIBRARY),
 /* harmony export */   "LOCAL_SEQID": () => (/* binding */ LOCAL_SEQID),
 /* harmony export */   "MESSAGE_STATUS_FAILED": () => (/* binding */ MESSAGE_STATUS_FAILED),
+/* harmony export */   "MESSAGE_STATUS_FATAL": () => (/* binding */ MESSAGE_STATUS_FATAL),
 /* harmony export */   "MESSAGE_STATUS_NONE": () => (/* binding */ MESSAGE_STATUS_NONE),
 /* harmony export */   "MESSAGE_STATUS_QUEUED": () => (/* binding */ MESSAGE_STATUS_QUEUED),
 /* harmony export */   "MESSAGE_STATUS_READ": () => (/* binding */ MESSAGE_STATUS_READ),
@@ -449,13 +450,14 @@ const TOPIC_P2P = 'p2p';
 const USER_NEW = 'new';
 const LOCAL_SEQID = 0xFFFFFFF;
 const MESSAGE_STATUS_NONE = 0;
-const MESSAGE_STATUS_QUEUED = 1;
-const MESSAGE_STATUS_SENDING = 2;
-const MESSAGE_STATUS_FAILED = 3;
-const MESSAGE_STATUS_SENT = 4;
-const MESSAGE_STATUS_RECEIVED = 5;
-const MESSAGE_STATUS_READ = 6;
-const MESSAGE_STATUS_TO_ME = 7;
+const MESSAGE_STATUS_QUEUED = 10;
+const MESSAGE_STATUS_SENDING = 20;
+const MESSAGE_STATUS_FAILED = 30;
+const MESSAGE_STATUS_FATAL = 40;
+const MESSAGE_STATUS_SENT = 50;
+const MESSAGE_STATUS_RECEIVED = 60;
+const MESSAGE_STATUS_READ = 70;
+const MESSAGE_STATUS_TO_ME = 80;
 const EXPIRE_PROMISES_TIMEOUT = 5000;
 const EXPIRE_PROMISES_PERIOD = 1000;
 const RECV_TIMEOUT = 100;
@@ -3371,16 +3373,18 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var _access_mode_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./access-mode.js */ "./src/access-mode.js");
 /* harmony import */ var _cbuffer_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./cbuffer.js */ "./src/cbuffer.js");
-/* harmony import */ var _config_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./config.js */ "./src/config.js");
-/* harmony import */ var _drafty_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./drafty.js */ "./src/drafty.js");
-/* harmony import */ var _drafty_js__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(_drafty_js__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var _meta_builder_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./meta-builder.js */ "./src/meta-builder.js");
-/* harmony import */ var _utils_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./utils.js */ "./src/utils.js");
+/* harmony import */ var _comm_error_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./comm-error.js */ "./src/comm-error.js");
+/* harmony import */ var _config_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./config.js */ "./src/config.js");
+/* harmony import */ var _drafty_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./drafty.js */ "./src/drafty.js");
+/* harmony import */ var _drafty_js__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(_drafty_js__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var _meta_builder_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./meta-builder.js */ "./src/meta-builder.js");
+/* harmony import */ var _utils_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./utils.js */ "./src/utils.js");
 
 
 function _defineProperty(obj, key, value) { key = _toPropertyKey(key); if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 function _toPropertyKey(arg) { var key = _toPrimitive(arg, "string"); return typeof key === "symbol" ? key : String(key); }
 function _toPrimitive(input, hint) { if (typeof input !== "object" || input === null) return input; var prim = input[Symbol.toPrimitive]; if (prim !== undefined) { var res = prim.call(input, hint || "default"); if (typeof res !== "object") return res; throw new TypeError("@@toPrimitive must return a primitive value."); } return (hint === "string" ? String : Number)(input); }
+
 
 
 
@@ -3399,7 +3403,7 @@ class Topic {
     this.public = null;
     this.trusted = null;
     this._users = {};
-    this._queuedSeqId = _config_js__WEBPACK_IMPORTED_MODULE_2__.LOCAL_SEQID;
+    this._queuedSeqId = _config_js__WEBPACK_IMPORTED_MODULE_3__.LOCAL_SEQID;
     this._maxSeq = 0;
     this._minSeq = 0;
     this._noEarlierMsgs = false;
@@ -3432,34 +3436,34 @@ class Topic {
   }
   static topicType(name) {
     const types = {
-      'me': _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_ME,
-      'fnd': _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_FND,
-      'grp': _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_GRP,
-      'new': _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_GRP,
-      'nch': _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_GRP,
-      'chn': _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_GRP,
-      'usr': _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_P2P,
-      'sys': _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_SYS
+      'me': _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_ME,
+      'fnd': _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_FND,
+      'grp': _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_GRP,
+      'new': _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_GRP,
+      'nch': _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_GRP,
+      'chn': _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_GRP,
+      'usr': _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_P2P,
+      'sys': _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_SYS
     };
     return types[typeof name == 'string' ? name.substring(0, 3) : 'xxx'];
   }
   static isMeTopicName(name) {
-    return Topic.topicType(name) == _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_ME;
+    return Topic.topicType(name) == _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_ME;
   }
   static isGroupTopicName(name) {
-    return Topic.topicType(name) == _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_GRP;
+    return Topic.topicType(name) == _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_GRP;
   }
   static isP2PTopicName(name) {
-    return Topic.topicType(name) == _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_P2P;
+    return Topic.topicType(name) == _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_P2P;
   }
   static isCommTopicName(name) {
     return Topic.isP2PTopicName(name) || Topic.isGroupTopicName(name);
   }
   static isNewGroupTopicName(name) {
-    return typeof name == 'string' && (name.substring(0, 3) == _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_NEW || name.substring(0, 3) == _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_NEW_CHAN);
+    return typeof name == 'string' && (name.substring(0, 3) == _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_NEW || name.substring(0, 3) == _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_NEW_CHAN);
   }
   static isChannelTopicName(name) {
-    return typeof name == 'string' && (name.substring(0, 3) == _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_CHAN || name.substring(0, 3) == _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_NEW_CHAN);
+    return typeof name == 'string' && (name.substring(0, 3) == _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_CHAN || name.substring(0, 3) == _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_NEW_CHAN);
   }
   isSubscribed() {
     return this._attached;
@@ -3473,7 +3477,7 @@ class Topic {
     if (this._deleted) {
       return Promise.reject(new Error("Conversation deleted"));
     }
-    return this._tinode.subscribe(this.name || _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_NEW, getParams, setParams).then(ctrl => {
+    return this._tinode.subscribe(this.name || _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_NEW, getParams, setParams).then(ctrl => {
       if (ctrl.code >= 300) {
         return ctrl;
       }
@@ -3489,7 +3493,7 @@ class Topic {
         this._cachePutSelf();
         this.created = ctrl.ts;
         this.updated = ctrl.ts;
-        if (this.name != _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_ME && this.name != _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_FND) {
+        if (this.name != _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_ME && this.name != _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_FND) {
           const me = this._tinode.getMeTopic();
           if (me.onMetaSub) {
             me.onMetaSub(this);
@@ -3522,9 +3526,9 @@ class Topic {
     pub._sending = true;
     pub._failed = false;
     let attachments = null;
-    if (_drafty_js__WEBPACK_IMPORTED_MODULE_3___default().hasEntities(pub.content)) {
+    if (_drafty_js__WEBPACK_IMPORTED_MODULE_4___default().hasEntities(pub.content)) {
       attachments = [];
-      _drafty_js__WEBPACK_IMPORTED_MODULE_3___default().entities(pub.content, data => {
+      _drafty_js__WEBPACK_IMPORTED_MODULE_4___default().entities(pub.content, data => {
         if (data && data.ref) {
           attachments.push(data.ref);
         }
@@ -3575,6 +3579,7 @@ class Topic {
       this._tinode.logger("WARNING: Message draft rejected", err);
       pub._sending = false;
       pub._failed = true;
+      pub._fatal = err instanceof _comm_error_js__WEBPACK_IMPORTED_MODULE_2__["default"] ? err.code >= 400 && err.code < 500 : false;
       if (this.onData) {
         this.onData();
       }
@@ -3630,7 +3635,7 @@ class Topic {
   }
   setMeta(params) {
     if (params.tags) {
-      params.tags = (0,_utils_js__WEBPACK_IMPORTED_MODULE_5__.normalizeArray)(params.tags);
+      params.tags = (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.normalizeArray)(params.tags);
     }
     return this._tinode.setMeta(this.name, params).then(ctrl => {
       if (ctrl && ctrl.code >= 300) {
@@ -3692,7 +3697,7 @@ class Topic {
     return this.setMeta({
       desc: {
         private: {
-          arch: arch ? true : _config_js__WEBPACK_IMPORTED_MODULE_2__.DEL_CHAR
+          arch: arch ? true : _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR
         }
       }
     });
@@ -3711,8 +3716,8 @@ class Topic {
       return false;
     });
     let tosend = ranges.reduce((out, r) => {
-      if (r.low < _config_js__WEBPACK_IMPORTED_MODULE_2__.LOCAL_SEQID) {
-        if (!r.hi || r.hi < _config_js__WEBPACK_IMPORTED_MODULE_2__.LOCAL_SEQID) {
+      if (r.low < _config_js__WEBPACK_IMPORTED_MODULE_3__.LOCAL_SEQID) {
+        if (!r.hi || r.hi < _config_js__WEBPACK_IMPORTED_MODULE_3__.LOCAL_SEQID) {
           out.push(r);
         } else {
           out.push({
@@ -4001,7 +4006,7 @@ class Topic {
     if (!callback) {
       throw new Error("Callback must be provided");
     }
-    this.messages(callback, _config_js__WEBPACK_IMPORTED_MODULE_2__.LOCAL_SEQID, undefined, context);
+    this.messages(callback, _config_js__WEBPACK_IMPORTED_MODULE_3__.LOCAL_SEQID, undefined, context);
   }
   msgReceiptCount(what, seq) {
     let count = 0;
@@ -4069,7 +4074,7 @@ class Topic {
     if (idx >= 0) {
       const msg = this._messages.getAt(idx);
       const status = this.msgStatus(msg);
-      if (status == _config_js__WEBPACK_IMPORTED_MODULE_2__.MESSAGE_STATUS_QUEUED || status == _config_js__WEBPACK_IMPORTED_MODULE_2__.MESSAGE_STATUS_FAILED) {
+      if (status == _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_QUEUED || status == _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_FAILED || status == _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_FATAL) {
         this._tinode._db.remMessages(this.name, seqId);
         msg._cancelled = true;
         this._messages.delAt(idx);
@@ -4094,7 +4099,7 @@ class Topic {
     return this.defacs;
   }
   startMetaQuery() {
-    return new _meta_builder_js__WEBPACK_IMPORTED_MODULE_4__["default"](this);
+    return new _meta_builder_js__WEBPACK_IMPORTED_MODULE_5__["default"](this);
   }
   isArchived() {
     return this.private && !!this.private.arch;
@@ -4115,23 +4120,25 @@ class Topic {
     return Topic.isCommTopicName(this.name);
   }
   msgStatus(msg, upd) {
-    let status = _config_js__WEBPACK_IMPORTED_MODULE_2__.MESSAGE_STATUS_NONE;
+    let status = _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_NONE;
     if (this._tinode.isMe(msg.from)) {
       if (msg._sending) {
-        status = _config_js__WEBPACK_IMPORTED_MODULE_2__.MESSAGE_STATUS_SENDING;
-      } else if (msg._failed || msg._cancelled) {
-        status = _config_js__WEBPACK_IMPORTED_MODULE_2__.MESSAGE_STATUS_FAILED;
-      } else if (msg.seq >= _config_js__WEBPACK_IMPORTED_MODULE_2__.LOCAL_SEQID) {
-        status = _config_js__WEBPACK_IMPORTED_MODULE_2__.MESSAGE_STATUS_QUEUED;
+        status = _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_SENDING;
+      } else if (msg._fatal || msg._cancelled) {
+        status = _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_FATAL;
+      } else if (msg._failed) {
+        status = _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_FAILED;
+      } else if (msg.seq >= _config_js__WEBPACK_IMPORTED_MODULE_3__.LOCAL_SEQID) {
+        status = _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_QUEUED;
       } else if (this.msgReadCount(msg.seq) > 0) {
-        status = _config_js__WEBPACK_IMPORTED_MODULE_2__.MESSAGE_STATUS_READ;
+        status = _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_READ;
       } else if (this.msgRecvCount(msg.seq) > 0) {
-        status = _config_js__WEBPACK_IMPORTED_MODULE_2__.MESSAGE_STATUS_RECEIVED;
+        status = _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_RECEIVED;
       } else if (msg.seq > 0) {
-        status = _config_js__WEBPACK_IMPORTED_MODULE_2__.MESSAGE_STATUS_SENT;
+        status = _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_SENT;
       }
     } else {
-      status = _config_js__WEBPACK_IMPORTED_MODULE_2__.MESSAGE_STATUS_TO_ME;
+      status = _config_js__WEBPACK_IMPORTED_MODULE_3__.MESSAGE_STATUS_TO_ME;
     }
     if (upd && msg._status != status) {
       msg._status = status;
@@ -4180,14 +4187,14 @@ class Topic {
       this._recvNotificationTimer = setTimeout(_ => {
         this._recvNotificationTimer = null;
         this.noteRecv(this._maxSeq);
-      }, _config_js__WEBPACK_IMPORTED_MODULE_2__.RECV_TIMEOUT);
+      }, _config_js__WEBPACK_IMPORTED_MODULE_3__.RECV_TIMEOUT);
     }
     if (data.seq < this._minSeq || this._minSeq == 0) {
       this._minSeq = data.seq;
     }
     const outgoing = !this.isChannelType() && !data.from || this._tinode.isMe(data.from);
-    if (data.head && data.head.webrtc && data.head.mime == _drafty_js__WEBPACK_IMPORTED_MODULE_3___default().getContentType() && data.content) {
-      data.content = _drafty_js__WEBPACK_IMPORTED_MODULE_3___default().updateVideoCall(data.content, {
+    if (data.head && data.head.webrtc && data.head.mime == _drafty_js__WEBPACK_IMPORTED_MODULE_4___default().getContentType() && data.content) {
+      data.content = _drafty_js__WEBPACK_IMPORTED_MODULE_4___default().updateVideoCall(data.content, {
         state: data.head.webrtc,
         duration: data.head['webrtc-duration'],
         incoming: !outgoing
@@ -4319,9 +4326,9 @@ class Topic {
       delete desc.defacs;
       this._tinode._db.updUser(this.name, desc.public);
     }
-    (0,_utils_js__WEBPACK_IMPORTED_MODULE_5__.mergeObj)(this, desc);
+    (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.mergeObj)(this, desc);
     this._tinode._db.updTopic(this);
-    if (this.name !== _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_ME && !desc._noForwarding) {
+    if (this.name !== _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_ME && !desc._noForwarding) {
       const me = this._tinode.getMeTopic();
       if (me.onMetaSub) {
         me.onMetaSub(this);
@@ -4362,7 +4369,7 @@ class Topic {
     }
   }
   _processMetaTags(tags) {
-    if (tags.length == 1 && tags[0] == _config_js__WEBPACK_IMPORTED_MODULE_2__.DEL_CHAR) {
+    if (tags.length == 1 && tags[0] == _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR) {
       tags = [];
     }
     this._tags = tags;
@@ -4419,7 +4426,7 @@ class Topic {
       me._routePres({
         _noForwarding: true,
         what: 'gone',
-        topic: _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_ME,
+        topic: _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_ME,
         src: this.name
       });
     }
@@ -4429,9 +4436,9 @@ class Topic {
   }
   _updateCachedUser(uid, obj) {
     let cached = this._cacheGetUser(uid);
-    cached = (0,_utils_js__WEBPACK_IMPORTED_MODULE_5__.mergeObj)(cached || {}, obj);
+    cached = (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.mergeObj)(cached || {}, obj);
     this._cachePutUser(uid, cached);
-    return (0,_utils_js__WEBPACK_IMPORTED_MODULE_5__.mergeToCache)(this._users, uid, cached);
+    return (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.mergeToCache)(this._users, uid, cached);
   }
   _getQueuedSeqId() {
     return this._queuedSeqId++;
@@ -4445,7 +4452,7 @@ class Topic {
     return db.readMessages(this.name, {
       since: since,
       before: before,
-      limit: limit || _config_js__WEBPACK_IMPORTED_MODULE_2__.DEFAULT_MESSAGES_PAGE
+      limit: limit || _config_js__WEBPACK_IMPORTED_MODULE_3__.DEFAULT_MESSAGES_PAGE
     }).then(msgs => {
       msgs.forEach(data => {
         if (data.seq > this._maxSeq) {
@@ -4473,7 +4480,7 @@ class Topic {
 }
 class TopicMe extends Topic {
   constructor(callbacks) {
-    super(_config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_ME, callbacks);
+    super(_config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_ME, callbacks);
     _defineProperty(this, "onContactUpdate", void 0);
     if (callbacks) {
       this.onContactUpdate = callbacks.onContactUpdate;
@@ -4481,7 +4488,7 @@ class TopicMe extends Topic {
   }
   _processMetaDesc(desc) {
     const turnOff = desc.acs && !desc.acs.isPresencer() && this.acs && this.acs.isPresencer();
-    (0,_utils_js__WEBPACK_IMPORTED_MODULE_5__.mergeObj)(this, desc);
+    (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.mergeObj)(this, desc);
     this._tinode._db.updTopic(this);
     this._updateCachedUser(this._tinode._myUID, desc);
     if (turnOff) {
@@ -4503,7 +4510,7 @@ class TopicMe extends Topic {
     let updateCount = 0;
     subs.forEach(sub => {
       const topicName = sub.topic;
-      if (topicName == _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_FND || topicName == _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_ME) {
+      if (topicName == _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_FND || topicName == _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_ME) {
         return;
       }
       sub.online = !!sub.online;
@@ -4523,7 +4530,7 @@ class TopicMe extends Topic {
         if (topic._new) {
           delete topic._new;
         }
-        cont = (0,_utils_js__WEBPACK_IMPORTED_MODULE_5__.mergeObj)(topic, sub);
+        cont = (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.mergeObj)(topic, sub);
         this._tinode._db.updTopic(cont);
         if (Topic.isP2PTopicName(topicName)) {
           this._cachePutUser(topicName, cont);
@@ -4548,7 +4555,7 @@ class TopicMe extends Topic {
     }
   }
   _processMetaCreds(creds, upd) {
-    if (creds.length == 1 && creds[0] == _config_js__WEBPACK_IMPORTED_MODULE_2__.DEL_CHAR) {
+    if (creds.length == 1 && creds[0] == _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR) {
       creds = [];
     }
     if (upd) {
@@ -4591,7 +4598,7 @@ class TopicMe extends Topic {
       this._resetSub();
       return;
     }
-    if (pres.what == 'upd' && pres.src == _config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_ME) {
+    if (pres.what == 'upd' && pres.src == _config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_ME) {
       this.getMeta(this.startMetaQuery().withDesc().build());
       return;
     }
@@ -4731,7 +4738,7 @@ class TopicMe extends Topic {
 }
 class TopicFnd extends Topic {
   constructor(callbacks) {
-    super(_config_js__WEBPACK_IMPORTED_MODULE_2__.TOPIC_FND, callbacks);
+    super(_config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_FND, callbacks);
     _defineProperty(this, "_contacts", {});
   }
   _processMetaSub(subs) {
@@ -4740,7 +4747,7 @@ class TopicFnd extends Topic {
     for (let idx in subs) {
       let sub = subs[idx];
       const indexBy = sub.topic ? sub.topic : sub.user;
-      sub = (0,_utils_js__WEBPACK_IMPORTED_MODULE_5__.mergeToCache)(this._contacts, indexBy, sub);
+      sub = (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.mergeToCache)(this._contacts, indexBy, sub);
       updateCount++;
       if (this.onMetaSub) {
         this.onMetaSub(sub);
@@ -6275,6 +6282,7 @@ Tinode.MESSAGE_STATUS_NONE = _config_js__WEBPACK_IMPORTED_MODULE_1__.MESSAGE_STA
 Tinode.MESSAGE_STATUS_QUEUED = _config_js__WEBPACK_IMPORTED_MODULE_1__.MESSAGE_STATUS_QUEUED;
 Tinode.MESSAGE_STATUS_SENDING = _config_js__WEBPACK_IMPORTED_MODULE_1__.MESSAGE_STATUS_SENDING;
 Tinode.MESSAGE_STATUS_FAILED = _config_js__WEBPACK_IMPORTED_MODULE_1__.MESSAGE_STATUS_FAILED;
+Tinode.MESSAGE_STATUS_FATAL = _config_js__WEBPACK_IMPORTED_MODULE_1__.MESSAGE_STATUS_FATAL;
 Tinode.MESSAGE_STATUS_SENT = _config_js__WEBPACK_IMPORTED_MODULE_1__.MESSAGE_STATUS_SENT;
 Tinode.MESSAGE_STATUS_RECEIVED = _config_js__WEBPACK_IMPORTED_MODULE_1__.MESSAGE_STATUS_RECEIVED;
 Tinode.MESSAGE_STATUS_READ = _config_js__WEBPACK_IMPORTED_MODULE_1__.MESSAGE_STATUS_READ;
