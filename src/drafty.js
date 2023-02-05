@@ -443,7 +443,7 @@ const DECORATORS = {
   VD: {
     open: data => {
       const tmpPreviewUrl = base64toDataUrl(data._tempPreview, data.mime);
-      const previewUrl = data.ref || base64toObjectUrl(data.preview, data.premime || 'image/json', Drafty.logger);
+      const previewUrl = data.ref || base64toObjectUrl(data.preview, data.premime || 'image/jpeg', Drafty.logger);
       return '<img src="' + (tmpPreviewUrl || previewUrl) + '"' +
         (data.width ? ' width="' + data.width + '"' : '') +
         (data.height ? ' height="' + data.height + '"' : '') + ' border="0" />';
@@ -451,14 +451,15 @@ const DECORATORS = {
     close: _ => '',
     props: data => {
       if (!data) return null;
+      const poster = data.preref || base64toObjectUrl(data.preview, data.premime || 'image/jpeg', Drafty.logger);
       return {
         // Embedded data or external link.
-        src: data.preref || base64toObjectUrl(data.preview, data.premime || 'image/json', Drafty.logger),
+        src: poster,
         'data-src': data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
         'data-width': data.width,
         'data-height': data.height,
         'data-preload': data.ref ? 'metadata' : 'auto',
-        'data-preview': base64toObjectUrl(data.preview, data.premime || 'image/json', Drafty.logger),
+        'data-preview': poster,
         'data-duration': data.duration | 0,
         'data-name': data.name,
         'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
