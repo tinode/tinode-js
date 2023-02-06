@@ -1,7 +1,7 @@
 /**
  * @file Utilities for uploading and downloading files.
  *
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2023 Tinode LLC.
  */
 'use strict';
 
@@ -28,26 +28,18 @@ export default class LargeFileHelper {
 
     this._apiKey = tinode._apiKey;
     this._authToken = tinode.getAuthToken();
-    this._reqId = tinode.getNextUniqueId();
-    this.xhr = new XHRProvider();
 
-    // Promise
-    this.toResolve = null;
-    this.toReject = null;
-
-    // Callbacks
-    this.onProgress = null;
-    this.onSuccess = null;
-    this.onFailure = null;
+    // Ongoing requests.
+    this.xhr = [];
   }
 
   /**
-   * Start uploading the file to a non-default endpoint.
+   * Start uploading the file to an endpoint at baseUrl.
    *
    * @memberof Tinode.LargeFileHelper#
    *
-   * @param {string} baseUrl alternative base URL of upload server.
-   * @param {File|Blob} data to upload.
+   * @param {string} baseUrl base URL of upload server.
+   * @param {File|Blob} data data to upload.
    * @param {string} avatarFor topic name if the upload represents an avatar.
    * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
    * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
@@ -56,8 +48,6 @@ export default class LargeFileHelper {
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
   uploadWithBaseUrl(baseUrl, data, avatarFor, onProgress, onSuccess, onFailure) {
-    const instance = this;
-
     let url = `/v${this._version}/file/u/`;
     if (baseUrl) {
       let base = baseUrl;
@@ -71,27 +61,37 @@ export default class LargeFileHelper {
         throw new Error(`Invalid base URL '${baseUrl}'`);
       }
     }
-    this.xhr.open('POST', url, true);
-    this.xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
+
+    const instance = this;
+    const xhr = new XHRProvider();
+    this.xhr.push(xhr);
+
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
     if (this._authToken) {
-      this.xhr.setRequestHeader('X-Tinode-Auth', `Token ${this._authToken.token}`);
+      xhr.setRequestHeader('X-Tinode-Auth', `Token ${this._authToken.token}`);
     }
+
+    let toResolve = null;
+    let toReject = null;
+
     const result = new Promise((resolve, reject) => {
-      this.toResolve = resolve;
-      this.toReject = reject;
+      toResolve = resolve;
+      toReject = reject;
     });
 
-    this.onProgress = onProgress;
-    this.onSuccess = onSuccess;
-    this.onFailure = onFailure;
-
-    this.xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && instance.onProgress) {
-        instance.onProgress(e.loaded / e.total);
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        if (onProgress) {
+          onProgress(e.loaded / e.total);
+        }
+        if (this.onProgress) {
+          this.onProgress(e.loaded / e.total);
+        }
       }
     };
 
-    this.xhr.onload = function() {
+    xhr.onload = function() {
       let pkt;
       try {
         pkt = JSON.parse(this.response, jsonParseHelper);
@@ -106,56 +106,56 @@ export default class LargeFileHelper {
       }
 
       if (this.status >= 200 && this.status < 300) {
-        if (instance.toResolve) {
-          instance.toResolve(pkt.ctrl.params.url);
+        if (toResolve) {
+          toResolve(pkt.ctrl.params.url);
         }
-        if (instance.onSuccess) {
-          instance.onSuccess(pkt.ctrl);
+        if (onSuccess) {
+          onSuccess(pkt.ctrl);
         }
       } else if (this.status >= 400) {
-        if (instance.toReject) {
-          instance.toReject(new CommError(pkt.ctrl.text, pkt.ctrl.code));
+        if (toReject) {
+          toReject(new CommError(pkt.ctrl.text, pkt.ctrl.code));
         }
-        if (instance.onFailure) {
-          instance.onFailure(pkt.ctrl);
+        if (onFailure) {
+          onFailure(pkt.ctrl);
         }
       } else {
         instance._tinode.logger("ERROR: Unexpected server response status", this.status, this.response);
       }
     };
 
-    this.xhr.onerror = function(e) {
-      if (instance.toReject) {
-        instance.toReject(e || new Error("failed"));
+    xhr.onerror = function(e) {
+      if (toReject) {
+        toReject(e || new Error("failed"));
       }
-      if (instance.onFailure) {
-        instance.onFailure(null);
+      if (onFailure) {
+        onFailure(null);
       }
     };
 
-    this.xhr.onabort = function(e) {
-      if (instance.toReject) {
-        instance.toReject(new Error("upload cancelled by user"));
+    xhr.onabort = function(e) {
+      if (toReject) {
+        toReject(new Error("upload cancelled by user"));
       }
-      if (instance.onFailure) {
-        instance.onFailure(null);
+      if (onFailure) {
+        onFailure(null);
       }
     };
 
     try {
       const form = new FormData();
       form.append('file', data);
-      form.set('id', this._reqId);
+      form.set('id', this._tinode.getNextUniqueId());
       if (avatarFor) {
         form.set('topic', avatarFor);
       }
-      this.xhr.send(form);
+      xhr.send(form);
     } catch (err) {
-      if (this.toReject) {
-        this.toReject(err);
+      if (toReject) {
+        toReject(err);
       }
-      if (this.onFailure) {
-        this.onFailure(null);
+      if (onFailure) {
+        onFailure(null);
       }
     }
 
@@ -203,29 +203,35 @@ export default class LargeFileHelper {
       return;
     }
     const instance = this;
-    // Get data as blob (stored by the browser as a temporary file).
-    this.xhr.open('GET', relativeUrl, true);
-    this.xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
-    this.xhr.setRequestHeader('X-Tinode-Auth', 'Token ' + this._authToken.token);
-    this.xhr.responseType = 'blob';
 
-    this.onProgress = onProgress;
-    this.xhr.onprogress = function(e) {
-      if (instance.onProgress) {
+    const xhr = new XHRProvider();
+    this.xhr.push(xhr);
+
+    // Get data as blob (stored by the browser as a temporary file).
+    xhr.open('GET', relativeUrl, true);
+    xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
+    xhr.setRequestHeader('X-Tinode-Auth', 'Token ' + this._authToken.token);
+    xhr.responseType = 'blob';
+
+    xhr.onprogress = function(e) {
+      if (onProgress) {
         // Passing e.loaded instead of e.loaded/e.total because e.total
         // is always 0 with gzip compression enabled by the server.
-        instance.onProgress(e.loaded);
+        onProgress(e.loaded);
       }
     };
 
+    let toResolve = null;
+    let toReject = null;
+
     const result = new Promise((resolve, reject) => {
-      this.toResolve = resolve;
-      this.toReject = reject;
+      toResolve = resolve;
+      toReject = reject;
     });
 
     // The blob needs to be saved as file. There is no known way to
     // save the blob as file other than to fake a click on an <a href... download=...>.
-    this.xhr.onload = function() {
+    xhr.onload = function() {
       if (this.status == 200) {
         const link = document.createElement('a');
         // URL.createObjectURL is not available in non-browser environment. This call will fail.
@@ -238,10 +244,10 @@ export default class LargeFileHelper {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(link.href);
-        if (instance.toResolve) {
-          instance.toResolve();
+        if (toResolve) {
+          toResolve();
         }
-      } else if (this.status >= 400 && instance.toReject) {
+      } else if (this.status >= 400 && toReject) {
         // The this.responseText is undefined, must use this.response which is a blob.
         // Need to convert this.response to JSON. The blob can only be accessed by the
         // FileReader.
@@ -249,55 +255,54 @@ export default class LargeFileHelper {
         reader.onload = function() {
           try {
             const pkt = JSON.parse(this.result, jsonParseHelper);
-            instance.toReject(new CommError(pkt.ctrl.text, pkt.ctrl.code));
+            toReject(new CommError(pkt.ctrl.text, pkt.ctrl.code));
           } catch (err) {
             instance._tinode.logger("ERROR: Invalid server response in LargeFileHelper", this.result);
-            instance.toReject(err);
+            toReject(err);
           }
         };
         reader.readAsText(this.response);
       }
     };
 
-    this.xhr.onerror = function(e) {
-      if (instance.toReject) {
-        instance.toReject(new Error("failed"));
+    xhr.onerror = function(e) {
+      if (toReject) {
+        toReject(new Error("failed"));
+      }
+      if (onError) {
+        onError(e);
       }
     };
 
-    this.xhr.onabort = function() {
-      if (instance.toReject) {
-        instance.toReject(null);
+    xhr.onabort = function() {
+      if (toReject) {
+        toReject(null);
       }
     };
 
     try {
-      this.xhr.send();
+      xhr.send();
     } catch (err) {
-      if (this.toReject) {
-        this.toReject(err);
+      if (toReject) {
+        toReject(err);
+      }
+      if (onError) {
+        onError(err);
       }
     }
 
     return result;
   }
   /**
-   * Try to cancel an ongoing upload or download.
+   * Try to cancel all ongoing uploads or downloads.
    * @memberof Tinode.LargeFileHelper#
    */
   cancel() {
-    if (this.xhr && this.xhr.readyState < 4) {
-      this.xhr.abort();
-    }
-  }
-  /**
-   * Get unique id of this request.
-   * @memberof Tinode.LargeFileHelper#
-   *
-   * @returns {string} unique id
-   */
-  getId() {
-    return this._reqId;
+    this.xhr.forEach(req => {
+      if (req.readyState < 4) {
+        req.abort();
+      }
+    });
   }
   /**
    * To use LargeFileHelper in a non browser context, supply XMLHttpRequest provider.

@@ -3034,16 +3034,9 @@ class LargeFileHelper {
     this._version = version;
     this._apiKey = tinode._apiKey;
     this._authToken = tinode.getAuthToken();
-    this._reqId = tinode.getNextUniqueId();
-    this.xhr = new XHRProvider();
-    this.toResolve = null;
-    this.toReject = null;
-    this.onProgress = null;
-    this.onSuccess = null;
-    this.onFailure = null;
+    this.xhr = [];
   }
   uploadWithBaseUrl(baseUrl, data, avatarFor, onProgress, onSuccess, onFailure) {
-    const instance = this;
     let url = `/v${this._version}/file/u/`;
     if (baseUrl) {
       let base = baseUrl;
@@ -3056,24 +3049,31 @@ class LargeFileHelper {
         throw new Error(`Invalid base URL '${baseUrl}'`);
       }
     }
-    this.xhr.open('POST', url, true);
-    this.xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
+    const instance = this;
+    const xhr = new XHRProvider();
+    this.xhr.push(xhr);
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
     if (this._authToken) {
-      this.xhr.setRequestHeader('X-Tinode-Auth', `Token ${this._authToken.token}`);
+      xhr.setRequestHeader('X-Tinode-Auth', `Token ${this._authToken.token}`);
     }
+    let toResolve = null;
+    let toReject = null;
     const result = new Promise((resolve, reject) => {
-      this.toResolve = resolve;
-      this.toReject = reject;
+      toResolve = resolve;
+      toReject = reject;
     });
-    this.onProgress = onProgress;
-    this.onSuccess = onSuccess;
-    this.onFailure = onFailure;
-    this.xhr.upload.onprogress = e => {
-      if (e.lengthComputable && instance.onProgress) {
-        instance.onProgress(e.loaded / e.total);
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        if (onProgress) {
+          onProgress(e.loaded / e.total);
+        }
+        if (this.onProgress) {
+          this.onProgress(e.loaded / e.total);
+        }
       }
     };
-    this.xhr.onload = function () {
+    xhr.onload = function () {
       let pkt;
       try {
         pkt = JSON.parse(this.response, _utils_js__WEBPACK_IMPORTED_MODULE_1__.jsonParseHelper);
@@ -3087,53 +3087,53 @@ class LargeFileHelper {
         };
       }
       if (this.status >= 200 && this.status < 300) {
-        if (instance.toResolve) {
-          instance.toResolve(pkt.ctrl.params.url);
+        if (toResolve) {
+          toResolve(pkt.ctrl.params.url);
         }
-        if (instance.onSuccess) {
-          instance.onSuccess(pkt.ctrl);
+        if (onSuccess) {
+          onSuccess(pkt.ctrl);
         }
       } else if (this.status >= 400) {
-        if (instance.toReject) {
-          instance.toReject(new _comm_error_js__WEBPACK_IMPORTED_MODULE_0__["default"](pkt.ctrl.text, pkt.ctrl.code));
+        if (toReject) {
+          toReject(new _comm_error_js__WEBPACK_IMPORTED_MODULE_0__["default"](pkt.ctrl.text, pkt.ctrl.code));
         }
-        if (instance.onFailure) {
-          instance.onFailure(pkt.ctrl);
+        if (onFailure) {
+          onFailure(pkt.ctrl);
         }
       } else {
         instance._tinode.logger("ERROR: Unexpected server response status", this.status, this.response);
       }
     };
-    this.xhr.onerror = function (e) {
-      if (instance.toReject) {
-        instance.toReject(e || new Error("failed"));
+    xhr.onerror = function (e) {
+      if (toReject) {
+        toReject(e || new Error("failed"));
       }
-      if (instance.onFailure) {
-        instance.onFailure(null);
+      if (onFailure) {
+        onFailure(null);
       }
     };
-    this.xhr.onabort = function (e) {
-      if (instance.toReject) {
-        instance.toReject(new Error("upload cancelled by user"));
+    xhr.onabort = function (e) {
+      if (toReject) {
+        toReject(new Error("upload cancelled by user"));
       }
-      if (instance.onFailure) {
-        instance.onFailure(null);
+      if (onFailure) {
+        onFailure(null);
       }
     };
     try {
       const form = new FormData();
       form.append('file', data);
-      form.set('id', this._reqId);
+      form.set('id', this._tinode.getNextUniqueId());
       if (avatarFor) {
         form.set('topic', avatarFor);
       }
-      this.xhr.send(form);
+      xhr.send(form);
     } catch (err) {
-      if (this.toReject) {
-        this.toReject(err);
+      if (toReject) {
+        toReject(err);
       }
-      if (this.onFailure) {
-        this.onFailure(null);
+      if (onFailure) {
+        onFailure(null);
       }
     }
     return result;
@@ -3156,21 +3156,24 @@ class LargeFileHelper {
       return;
     }
     const instance = this;
-    this.xhr.open('GET', relativeUrl, true);
-    this.xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
-    this.xhr.setRequestHeader('X-Tinode-Auth', 'Token ' + this._authToken.token);
-    this.xhr.responseType = 'blob';
-    this.onProgress = onProgress;
-    this.xhr.onprogress = function (e) {
-      if (instance.onProgress) {
-        instance.onProgress(e.loaded);
+    const xhr = new XHRProvider();
+    this.xhr.push(xhr);
+    xhr.open('GET', relativeUrl, true);
+    xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
+    xhr.setRequestHeader('X-Tinode-Auth', 'Token ' + this._authToken.token);
+    xhr.responseType = 'blob';
+    xhr.onprogress = function (e) {
+      if (onProgress) {
+        onProgress(e.loaded);
       }
     };
+    let toResolve = null;
+    let toReject = null;
     const result = new Promise((resolve, reject) => {
-      this.toResolve = resolve;
-      this.toReject = reject;
+      toResolve = resolve;
+      toReject = reject;
     });
-    this.xhr.onload = function () {
+    xhr.onload = function () {
       if (this.status == 200) {
         const link = document.createElement('a');
         link.href = window.URL.createObjectURL(new Blob([this.response], {
@@ -3182,49 +3185,54 @@ class LargeFileHelper {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(link.href);
-        if (instance.toResolve) {
-          instance.toResolve();
+        if (toResolve) {
+          toResolve();
         }
-      } else if (this.status >= 400 && instance.toReject) {
+      } else if (this.status >= 400 && toReject) {
         const reader = new FileReader();
         reader.onload = function () {
           try {
             const pkt = JSON.parse(this.result, _utils_js__WEBPACK_IMPORTED_MODULE_1__.jsonParseHelper);
-            instance.toReject(new _comm_error_js__WEBPACK_IMPORTED_MODULE_0__["default"](pkt.ctrl.text, pkt.ctrl.code));
+            toReject(new _comm_error_js__WEBPACK_IMPORTED_MODULE_0__["default"](pkt.ctrl.text, pkt.ctrl.code));
           } catch (err) {
             instance._tinode.logger("ERROR: Invalid server response in LargeFileHelper", this.result);
-            instance.toReject(err);
+            toReject(err);
           }
         };
         reader.readAsText(this.response);
       }
     };
-    this.xhr.onerror = function (e) {
-      if (instance.toReject) {
-        instance.toReject(new Error("failed"));
+    xhr.onerror = function (e) {
+      if (toReject) {
+        toReject(new Error("failed"));
+      }
+      if (onError) {
+        onError(e);
       }
     };
-    this.xhr.onabort = function () {
-      if (instance.toReject) {
-        instance.toReject(null);
+    xhr.onabort = function () {
+      if (toReject) {
+        toReject(null);
       }
     };
     try {
-      this.xhr.send();
+      xhr.send();
     } catch (err) {
-      if (this.toReject) {
-        this.toReject(err);
+      if (toReject) {
+        toReject(err);
+      }
+      if (onError) {
+        onError(err);
       }
     }
     return result;
   }
   cancel() {
-    if (this.xhr && this.xhr.readyState < 4) {
-      this.xhr.abort();
-    }
-  }
-  getId() {
-    return this._reqId;
+    this.xhr.forEach(req => {
+      if (req.readyState < 4) {
+        req.abort();
+      }
+    });
   }
   static setNetworkProvider(xhrProvider) {
     XHRProvider = xhrProvider;
@@ -6292,6 +6300,7 @@ Tinode.MAX_MESSAGE_SIZE = 'maxMessageSize';
 Tinode.MAX_SUBSCRIBER_COUNT = 'maxSubscriberCount';
 Tinode.MAX_TAG_COUNT = 'maxTagCount';
 Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
+Tinode.REQ_CRED_VALIDATORS = 'reqCred';
 })();
 
 /******/ 	return __webpack_exports__;
