@@ -352,8 +352,13 @@ export class Topic {
     if (Drafty.hasEntities(pub.content)) {
       attachments = [];
       Drafty.entities(pub.content, data => {
-        if (data && data.ref) {
-          attachments.push(data.ref);
+        if (data) {
+          if (data.ref) {
+            attachments.push(data.ref);
+          }
+          if (data.preref) {
+            attachments.push(data.preref);
+          }
         }
       });
       if (attachments.length == 0) {
