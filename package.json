@@ -19,7 +19,9 @@
   },
   "files": [
     "umd/tinode.dev.js",
+    "umd/tinode.dev.js.map",
     "umd/tinode.prod.js",
+    "umd/tinode.prod.js.map",
     "version.json"
   ],
   "keywords": [
