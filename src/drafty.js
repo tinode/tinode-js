@@ -687,19 +687,20 @@ Drafty.append = function(first, second) {
 }
 
 /**
- * @typedef Drafty.ImageDesc
+ * Description of an image to attach.
+ * @typedef {Object} ImageDesc
  * @memberof Drafty
- * @type Object
- * @param {string} mime - mime-type of the image, e.g. "image/png".
- * @param {string} refurl - reference to the content. Could be null/undefined.
- * @param {string} bits - base64-encoded image content. Could be null/undefined.
- * @param {string} preview - base64-encoded thumbnail of the image.
- * @param {integer} width - width of the image.
- * @param {integer} height - height of the image.
- * @param {string} filename - file name suggestion for downloading the image.
- * @param {integer} size - size of the image in bytes. Treat is as an untrusted hint.
- * @param {string} _tempPreview - base64-encoded image preview used during upload process; not serializable.
- * @param {Promise} urlPromise - Promise which returns content URL when resolved.
+ *
+ * @property {string} mime - mime-type of the image, e.g. "image/png".
+ * @property {string} refurl - reference to the content. Could be null/undefined.
+ * @property {string} bits - base64-encoded image content. Could be null/undefined.
+ * @property {string} preview - base64-encoded thumbnail of the image.
+ * @property {integer} width - width of the image.
+ * @property {integer} height - height of the image.
+ * @property {string} filename - file name suggestion for downloading the image.
+ * @property {integer} size - size of the image in bytes. Treat is as an untrusted hint.
+ * @property {string} _tempPreview - base64-encoded image preview used during upload process; not serializable.
+ * @property {Promise} urlPromise - Promise which returns content URL when resolved.
  */
 
 /**
@@ -761,21 +762,22 @@ Drafty.insertImage = function(content, at, imageDesc) {
 }
 
 /**
- * @typedef Drafty.VideoDesc
+ * Description of a video to attach.
+ * @typedef {Object} VideoDesc
  * @memberof Drafty
- * @type Object
- * @param {string} mime - mime-type of the video, e.g. "video/mpeg".
- * @param {string} refurl - reference to the content. Could be null/undefined.
- * @param {string} bits - in-band base64-encoded image data. Could be null/undefined.
- * @param {string} preview - base64-encoded screencapture from the video. Could be null/undefined.
- * @param {string} preref - reference to screencapture from the video. Could be null/undefined.
- * @param {integer} width - width of the video.
- * @param {integer} height - height of the video.
- * @param {integer} duration - duration of the video.
- * @param {string} filename - file name suggestion for downloading the video.
- * @param {integer} size - size of the video in bytes. Treat is as an untrusted hint.
- * @param {string} _tempPreview - base64-encoded screencapture used during upload process; not serializable.
- * @param {Promise} urlPromise - array of two promises, which return URLs of video and preview uploads correspondingly
+ *
+ * @property {string} mime - mime-type of the video, e.g. "video/mpeg".
+ * @property {string} refurl - reference to the content. Could be null/undefined.
+ * @property {string} bits - in-band base64-encoded image data. Could be null/undefined.
+ * @property {string} preview - base64-encoded screencapture from the video. Could be null/undefined.
+ * @property {string} preref - reference to screencapture from the video. Could be null/undefined.
+ * @property {integer} width - width of the video.
+ * @property {integer} height - height of the video.
+ * @property {integer} duration - duration of the video.
+ * @property {string} filename - file name suggestion for downloading the video.
+ * @property {integer} size - size of the video in bytes. Treat is as an untrusted hint.
+ * @property {string} _tempPreview - base64-encoded screencapture used during upload process; not serializable.
+ * @property {Promise} urlPromise - array of two promises, which return URLs of video and preview uploads correspondingly
  *        (either could be null).
  */
 
@@ -842,17 +844,18 @@ Drafty.insertVideo = function(content, at, videoDesc) {
 }
 
 /**
- * @typedef Drafty.AudioDesc
+ * Description of an audio recording to attach.
+ * @typedef {Object} AudioDesc
  * @memberof Drafty
- * @type Object
- * @param {string} mime - mime-type of the audio, e.g. "audio/ogg".
- * @param {string} refurl - reference to the content. Could be null/undefined.
- * @param {string} bits - base64-encoded audio content. Could be null/undefined.
- * @param {integer} duration - duration of the record in milliseconds.
- * @param {string} preview - base64 encoded short array of amplitude values 0..100.
- * @param {string} filename - file name suggestion for downloading the audio.
- * @param {integer} size - size of the recording in bytes. Treat is as an untrusted hint.
- * @param {Promise} urlPromise - Promise which returns content URL when resolved.
+ *
+ * @property {string} mime - mime-type of the audio, e.g. "audio/ogg".
+ * @property {string} refurl - reference to the content. Could be null/undefined.
+ * @property {string} bits - base64-encoded audio content. Could be null/undefined.
+ * @property {integer} duration - duration of the record in milliseconds.
+ * @property {string} preview - base64 encoded short array of amplitude values 0..100.
+ * @property {string} filename - file name suggestion for downloading the audio.
+ * @property {integer} size - size of the recording in bytes. Treat is as an untrusted hint.
+ * @property {Promise} urlPromise - Promise which returns content URL when resolved.
  */
 
 /**
@@ -1098,15 +1101,16 @@ Drafty.appendAudio = function(content, audioDesc) {
 }
 
 /**
- * @typedef Drafty.AttachmentDesc
+ * Description of a file to attach.
+ * @typedef {Object} AttachmentDesc
  * @memberof Drafty
- * @type Object
- * @param {string} mime - mime-type of the attachment, e.g. "application/octet-stream"
- * @param {string} data - base64-encoded in-band content of small attachments. Could be null/undefined.
- * @param {string} filename - file name suggestion for downloading the attachment.
- * @param {integer} size - size of the file in bytes. Treat is as an untrusted hint.
- * @param {string} refurl - reference to the out-of-band content. Could be null/undefined.
- * @param {Promise} urlPromise - Promise which returns content URL when resolved.
+ *
+ * @property {string} mime - mime-type of the attachment, e.g. "application/octet-stream"
+ * @property {string} data - base64-encoded in-band content of small attachments. Could be null/undefined.
+ * @property {string} filename - file name suggestion for downloading the attachment.
+ * @property {integer} size - size of the file in bytes. Treat is as an untrusted hint.
+ * @property {string} refurl - reference to the out-of-band content. Could be null/undefined.
+ * @property {Promise} urlPromise - Promise which returns content URL when resolved.
  */
 
 /**
