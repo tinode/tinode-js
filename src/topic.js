@@ -1167,6 +1167,15 @@ export class Topic {
     return this._maxSeq;
   }
   /**
+   * Get the minimum cached seq ID.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {number} the smallest seq ID in cache or 0.
+   */
+  minMsgSeq() {
+    return this._minSeq;
+  }
+  /**
    * Get the maximum deletion ID.
    * @memberof Tinode.Topic#
    *
