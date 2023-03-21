@@ -17,19 +17,20 @@ import {
   normalizeArray
 } from './utils.js';
 
+/**
+ * Topic is a class representing a logical communication channel.
+ */
 export class Topic {
   /**
-   * @callback Tinode.Topic.onData
+   * @callback onData
    * @param {Data} data - Data packet
    */
+
   /**
-   * Topic is a class representing a logical communication channel.
-   * @class Topic
-   * @memberof Tinode
-   *
+   * Create topic.
    * @param {string} name - Name of the topic to create.
    * @param {Object=} callbacks - Object with various event callbacks.
-   * @param {Tinode.Topic.onData} callbacks.onData - Callback which receives a <code>{data}</code> message.
+   * @param {onData} callbacks.onData - Callback which receives a <code>{data}</code> message.
    * @param {callback} callbacks.onMeta - Callback which receives a <code>{meta}</code> message.
    * @param {callback} callbacks.onPres - Callback which receives a <code>{pres}</code> message.
    * @param {callback} callbacks.onInfo - Callback which receives an <code>{info}</code> message.
@@ -127,8 +128,6 @@ export class Topic {
 
   /**
    * Determine topic type from topic's name: grp, p2p, me, fnd, sys.
-   * @memberof Tinode.Topic#
-   * @static
    *
    * @param {string} name - Name of the topic to test.
    * @returns {string} One of <code>"me"</code>, <code>"fnd"</code>, <code>"sys"</code>, <code>"grp"</code>,
@@ -150,8 +149,6 @@ export class Topic {
 
   /**
    * Check if the given topic name is a name of a 'me' topic.
-   * @memberof Tinode.Topic#
-   * @static
    *
    * @param {string} name - Name of the topic to test.
    * @returns {boolean} <code>true</code> if the name is a name of a 'me' topic, <code>false</code> otherwise.
@@ -162,7 +159,6 @@ export class Topic {
 
   /**
    * Check if the given topic name is a name of a group topic.
-   * @memberof Tinode.Topic#
    * @static
    *
    * @param {string} name - Name of the topic to test.
@@ -174,7 +170,6 @@ export class Topic {
 
   /**
    * Check if the given topic name is a name of a p2p topic.
-   * @memberof Tinode.Topic#
    * @static
    *
    * @param {string} name - Name of the topic to test.
@@ -186,7 +181,6 @@ export class Topic {
 
   /**
    * Check if the given topic name is a name of a communication topic, i.e. P2P or group.
-   * @memberof Tinode.Topic#
    * @static
    *
    * @param {string} name - Name of the topic to test.
@@ -198,7 +192,6 @@ export class Topic {
 
   /**
    * Check if the topic name is a name of a new topic.
-   * @memberof Tinode.Topic#
    * @static
    *
    * @param {string} name - topic name to check.
@@ -211,7 +204,6 @@ export class Topic {
 
   /**
    * Check if the topic name is a name of a channel.
-   * @memberof Tinode.Topic#
    * @static
    *
    * @param {string} name - topic name to check.
@@ -224,7 +216,6 @@ export class Topic {
 
   /**
    * Check if the topic is subscribed.
-   * @memberof Tinode.Topic#
    * @returns {boolean} True is topic is attached/subscribed, false otherwise.
    */
   isSubscribed() {
@@ -233,7 +224,6 @@ export class Topic {
 
   /**
    * Request topic to subscribe. Wrapper for {@link Tinode#subscribe}.
-   * @memberof Tinode.Topic#
    *
    * @param {Tinode.GetQuery=} getParams - get query parameters.
    * @param {Tinode.SetParams=} setParams - set parameters.
@@ -1936,14 +1926,6 @@ export class Topic {
  *
  * @param {TopicMe.Callbacks} callbacks - Callbacks to receive various events.
  */
-/**
- * @class TopicMe - special case of {@link Tinode.Topic} for
- * managing data of the current user, including contact list.
- * @extends Tinode.Topic
- * @memberof Tinode
- *
- * @param {TopicMe.Callbacks} callbacks - Callbacks to receive various events.
- */
 export class TopicMe extends Topic {
   onContactUpdate;
 
@@ -2332,17 +2314,19 @@ export class TopicMe extends Topic {
 }
 
 /**
- * @class TopicFnd - special case of {@link Tinode.Topic} for searching for
- * contacts and group topics.
+ * Special case of {@link Tinode.Topic} for searching for contacts and group topics
  * @extends Tinode.Topic
- * @memberof Tinode
  *
- * @param {TopicFnd.Callbacks} callbacks - Callbacks to receive various events.
  */
 export class TopicFnd extends Topic {
   // List of users and topics uid or topic_name -> Contact object)
   _contacts = {};
 
+  /**
+   * Create TopicFnd.
+   *
+   * @param {TopicFnd.Callbacks} callbacks - Callbacks to receive various events.
+   */
   constructor(callbacks) {
     super(Const.TOPIC_FND, callbacks);
   }
