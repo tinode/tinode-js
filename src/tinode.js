@@ -810,7 +810,7 @@ export class Tinode {
             'desc': {},
             'sub': {},
             'tags': [],
-            'ephemeral': {}
+            'aux': {}
           }
         };
 
@@ -1448,6 +1448,8 @@ export class Tinode {
    * @type {Object}
    * @property {SetDesc=} desc - Topic initialization parameters when creating a new topic or a new subscription.
    * @property {SetSub=} sub - Subscription initialization parameters.
+   * @property {Array.<string>=} tags - Search tags.
+   * @property {Object} aux - Auxiliary topic data.
    * @property {Array.<string>=} attachments - URLs of out of band attachments used in parameters.
    */
   /**
@@ -1508,6 +1510,9 @@ export class Tinode {
 
       if (setParams.tags) {
         pkt.sub.set.tags = setParams.tags;
+      }
+      if (setParams.aux) {
+        pkt.sub.set.aux = setParams.aux;
       }
     }
     return this.#send(pkt, pkt.sub.id);
@@ -1747,7 +1752,7 @@ export class Tinode {
     const what = [];
 
     if (params) {
-      ['desc', 'sub', 'tags', 'cred', 'ephemeral'].forEach(function(key) {
+      ['desc', 'sub', 'tags', 'cred', 'aux'].forEach(key => {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];

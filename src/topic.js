@@ -84,6 +84,9 @@ export class Topic {
     this._tags = [];
     // Credentials such as email or phone number.
     this._credentials = [];
+    // Auxiliary data
+    this._aux = {};
+
     // Message versions cache (e.g. for edited messages).
     // Keys: original message seq ID.
     // Values: CBuffers containing newer versions of the original message
@@ -119,6 +122,7 @@ export class Topic {
       this.onSubsUpdated = callbacks.onSubsUpdated;
       this.onTagsUpdated = callbacks.onTagsUpdated;
       this.onCredsUpdated = callbacks.onCredsUpdated;
+      this.onAuxUpdated = callbacks.onAuxUpdated;
       this.onDeleteTopic = callbacks.onDeleteTopic;
       this.onAllMessagesReceived = callbacks.onAllMessagesReceived;
     }
@@ -579,6 +583,9 @@ export class Topic {
         if (params.cred) {
           this._processMetaCreds([params.cred], true);
         }
+        if (params.aux) {
+          this._processMetaAux([params.aux], true);
+        }
 
         return ctrl;
       });
@@ -1030,6 +1037,15 @@ export class Topic {
   tags() {
     // Return a copy.
     return this._tags.slice(0);
+  }
+  /**
+   * Get auxiliary entry by key.
+   * @memberof Tinode.Topic#
+   * @param {string} key - auxiliary data key to retrieve.
+   * @return {Object} value for the <code>key</code> or <code>undefined</code>.
+   */
+  aux(key) {
+    return this._aux[key];
   }
   /**
    * Get cached subscription for the given user ID.
@@ -1602,6 +1618,9 @@ export class Topic {
     if (meta.cred) {
       this._processMetaCreds(meta.cred);
     }
+    if (meta.aux) {
+      this._processMetaAux(meta.aux);
+    }
     if (this.onMeta) {
       this.onMeta(meta);
     }
@@ -1786,7 +1805,7 @@ export class Topic {
   }
   // Called by Tinode when meta.tags is recived.
   _processMetaTags(tags) {
-    if (tags.length == 1 && tags[0] == Const.DEL_CHAR) {
+    if (tags == Const.DEL_CHAR || (tags.length == 1 && tags[0] == Const.DEL_CHAR)) {
       tags = [];
     }
     this._tags = tags;
@@ -1796,6 +1815,16 @@ export class Topic {
   }
   // Do nothing for topics other than 'me'
   _processMetaCreds(creds) {}
+
+  // Called by Tinode when meta.aux is recived.
+  _processMetaAux(aux) {
+    aux = !aux || aux == Const.DEL_CHAR ? {} : aux;
+    mergeObj(this._aux, aux);
+    if (this.onAuxUpdated) {
+      this.onAuxUpdated(this._aux);
+    }
+  }
+
   // Delete cached messages and update cached transaction IDs
   _processDelMessages(clear, delseq) {
     this._maxDel = Math.max(clear, this._maxDel);

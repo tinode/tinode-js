@@ -3419,6 +3419,7 @@ class Topic {
     this._recvNotificationTimer = null;
     this._tags = [];
     this._credentials = [];
+    this._aux = {};
     this._messageVersions = {};
     this._messages = new _cbuffer_js__WEBPACK_IMPORTED_MODULE_1__["default"]((a, b) => {
       return a.seq - b.seq;
@@ -3438,6 +3439,7 @@ class Topic {
       this.onSubsUpdated = callbacks.onSubsUpdated;
       this.onTagsUpdated = callbacks.onTagsUpdated;
       this.onCredsUpdated = callbacks.onCredsUpdated;
+      this.onAuxUpdated = callbacks.onAuxUpdated;
       this.onDeleteTopic = callbacks.onDeleteTopic;
       this.onAllMessagesReceived = callbacks.onAllMessagesReceived;
     }
@@ -3681,6 +3683,9 @@ class Topic {
       }
       if (params.cred) {
         this._processMetaCreds([params.cred], true);
+      }
+      if (params.aux) {
+        this._processMetaAux([params.aux], true);
       }
       return ctrl;
     });
@@ -3943,6 +3948,9 @@ class Topic {
   }
   tags() {
     return this._tags.slice(0);
+  }
+  aux(key) {
+    return this._aux[key];
   }
   subscriber(uid) {
     return this._users[uid];
@@ -4244,6 +4252,9 @@ class Topic {
     if (meta.cred) {
       this._processMetaCreds(meta.cred);
     }
+    if (meta.aux) {
+      this._processMetaAux(meta.aux);
+    }
     if (this.onMeta) {
       this.onMeta(meta);
     }
@@ -4385,7 +4396,7 @@ class Topic {
     }
   }
   _processMetaTags(tags) {
-    if (tags.length == 1 && tags[0] == _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR) {
+    if (tags == _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR || tags.length == 1 && tags[0] == _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR) {
       tags = [];
     }
     this._tags = tags;
@@ -4394,6 +4405,13 @@ class Topic {
     }
   }
   _processMetaCreds(creds) {}
+  _processMetaAux(aux) {
+    aux = !aux || aux == _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR ? {} : aux;
+    this._aux = aux;
+    if (this.onAuxUpdated) {
+      this.onAuxUpdated(aux);
+    }
+  }
   _processDelMessages(clear, delseq) {
     this._maxDel = Math.max(clear, this._maxDel);
     this.clear = Math.max(clear, this.clear);
