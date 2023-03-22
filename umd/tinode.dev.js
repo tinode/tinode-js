@@ -4407,9 +4407,9 @@ class Topic {
   _processMetaCreds(creds) {}
   _processMetaAux(aux) {
     aux = !aux || aux == _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR ? {} : aux;
-    this._aux = aux;
+    (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.mergeObj)(this._aux, aux);
     if (this.onAuxUpdated) {
-      this.onAuxUpdated(aux);
+      this.onAuxUpdated(this._aux);
     }
   }
   _processDelMessages(clear, delseq) {
@@ -4962,7 +4962,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   "PACKAGE_VERSION": () => (/* binding */ PACKAGE_VERSION)
 /* harmony export */ });
-const PACKAGE_VERSION = "0.22.1";
+const PACKAGE_VERSION = "0.23.0-rc1";
 
 /***/ })
 
@@ -5682,6 +5682,9 @@ class Tinode {
       if (setParams.tags) {
         pkt.sub.set.tags = setParams.tags;
       }
+      if (setParams.aux) {
+        pkt.sub.set.aux = setParams.aux;
+      }
     }
     return _classPrivateMethodGet(this, _send, _send2).call(this, pkt, pkt.sub.id);
   }
@@ -5796,7 +5799,7 @@ class Tinode {
     const pkt = _classPrivateMethodGet(this, _initPacket, _initPacket2).call(this, 'set', topic);
     const what = [];
     if (params) {
-      ['desc', 'sub', 'tags', 'cred', 'ephemeral'].forEach(function (key) {
+      ['desc', 'sub', 'tags', 'cred', 'aux'].forEach(key => {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];
@@ -6222,7 +6225,7 @@ function _initPacket2(type, topic) {
           'desc': {},
           'sub': {},
           'tags': [],
-          'ephemeral': {}
+          'aux': {}
         }
       };
     case 'del':
