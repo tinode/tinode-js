@@ -572,8 +572,8 @@ export default class DB {
   // Private methods.
 
   // Serializable topic fields.
-  static #topic_fields = ['created', 'updated', 'deleted', 'read', 'recv', 'seq', 'clear', 'defacs',
-    'creds', 'public', 'trusted', 'private', 'touched', '_deleted'
+  static #topic_fields = ['created', 'updated', 'deleted', 'touched', 'read', 'recv', 'seq',
+    'clear', 'defacs', 'creds', 'public', 'trusted', 'private', 'tags', 'aux', '_deleted'
   ];
 
   // Copy data from src to Topic object.

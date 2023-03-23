@@ -1306,7 +1306,7 @@ function _serializeMessage(dst, msg) {
 }
 var _topic_fields = {
   writable: true,
-  value: ['created', 'updated', 'deleted', 'read', 'recv', 'seq', 'clear', 'defacs', 'creds', 'public', 'trusted', 'private', 'touched', '_deleted']
+  value: ['created', 'updated', 'deleted', 'touched', 'read', 'recv', 'seq', 'clear', 'defacs', 'creds', 'public', 'trusted', 'private', 'tags', 'aux', '_deleted']
 };
 
 /***/ }),
@@ -3685,7 +3685,7 @@ class Topic {
         this._processMetaCreds([params.cred], true);
       }
       if (params.aux) {
-        this._processMetaAux([params.aux], true);
+        this._processMetaAux(params.aux, true);
       }
       return ctrl;
     });
@@ -5799,6 +5799,7 @@ class Tinode {
     const pkt = _classPrivateMethodGet(this, _initPacket, _initPacket2).call(this, 'set', topic);
     const what = [];
     if (params) {
+      console.log("setMeta, params=", params);
       ['desc', 'sub', 'tags', 'cred', 'aux'].forEach(key => {
         if (params.hasOwnProperty(key)) {
           what.push(key);

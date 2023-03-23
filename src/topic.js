@@ -584,7 +584,7 @@ export class Topic {
           this._processMetaCreds([params.cred], true);
         }
         if (params.aux) {
-          this._processMetaAux([params.aux], true);
+          this._processMetaAux(params.aux, true);
         }
 
         return ctrl;
