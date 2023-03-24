@@ -1752,7 +1752,6 @@ export class Tinode {
     const what = [];
 
     if (params) {
-      console.log("setMeta, params=", params);
       ['desc', 'sub', 'tags', 'cred', 'aux'].forEach(key => {
         if (params.hasOwnProperty(key)) {
           what.push(key);
