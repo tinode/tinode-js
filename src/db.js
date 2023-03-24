@@ -573,7 +573,7 @@ export default class DB {
 
   // Serializable topic fields.
   static #topic_fields = ['created', 'updated', 'deleted', 'touched', 'read', 'recv', 'seq',
-    'clear', 'defacs', 'creds', 'public', 'trusted', 'private', 'tags', 'aux', '_deleted'
+    'clear', 'defacs', 'creds', 'public', 'trusted', 'private', '_aux', '_deleted'
   ];
 
   // Copy data from src to Topic object.
@@ -599,7 +599,7 @@ export default class DB {
     const res = dst || {
       name: src.name
     };
-    DB.#topic_fields.forEach((f) => {
+    DB.#topic_fields.forEach(f => {
       if (src.hasOwnProperty(f)) {
         res[f] = src[f];
       }

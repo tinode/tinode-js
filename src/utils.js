@@ -159,7 +159,7 @@ export function normalizeArray(arr) {
         }
       }
     }
-    out.sort().filter(function(item, pos, ary) {
+    out.sort().filter((item, pos, ary) => {
       return !pos || item != ary[pos - 1];
     });
   }

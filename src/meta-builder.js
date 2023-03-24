@@ -175,6 +175,16 @@ export default class MetaGetBuilder {
     return this;
   }
   /**
+   * Add query parameters to fetch topic tags.
+   * @memberof Tinode.MetaGetBuilder#
+   *
+   * @returns {Tinode.MetaGetBuilder} <code>this</code> object.
+   */
+  withAux() {
+    this.what['aux'] = true;
+    return this;
+  }
+  /**
    * Add query parameters to fetch deleted messages within explicit limits. Any/all parameters can be null.
    * @memberof Tinode.MetaGetBuilder#
    *
@@ -225,7 +235,7 @@ export default class MetaGetBuilder {
   build() {
     const what = [];
     let params = {};
-    ['data', 'sub', 'desc', 'tags', 'cred', 'del'].forEach((key) => {
+    ['data', 'sub', 'desc', 'tags', 'cred', 'aux', 'del'].forEach((key) => {
       if (this.what.hasOwnProperty(key)) {
         what.push(key);
         if (Object.getOwnPropertyNames(this.what[key]).length > 0) {

@@ -584,7 +584,7 @@ export class Topic {
           this._processMetaCreds([params.cred], true);
         }
         if (params.aux) {
-          this._processMetaAux(params.aux, true);
+          this._processMetaAux(params.aux);
         }
 
         return ctrl;
@@ -647,6 +647,44 @@ export class Topic {
         }
       }
     });
+  }
+  /**
+   * Set message as pinned or unpinned by adding it to aux.pins array. Wrapper for {@link Tinode#setMeta}.
+   * @memberof Tinode.Topic#
+   *
+   * @param {number} seq - seq ID of the message to pin or un-pin.
+   * @param {boolean} pin - true to pin the message, false to un-pin.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+   */
+  pinMessage(seq, pin) {
+    let pinned = this.aux('pins');
+    if (!Array.isArray(pinned)) {
+      pinned = [];
+    }
+    let changed = false;
+    if (pin) {
+      if (!pinned.includes(seq)) {
+        changed = true;
+        pinned.push(seq);
+      }
+    } else {
+      if (pinned.includes(seq)) {
+        changed = true;
+        pinned = pinned.filter(id => id != seq);
+        if (pinned.length == 0) {
+          pinned = Const.DEL_CHAR;
+        }
+      }
+    }
+    if (changed) {
+      return this.setMeta({
+        aux: {
+          pins: pinned
+        }
+      });
+    }
+    return Promise.resolve();
   }
   /**
    * Delete messages. Hard-deleting messages requires Owner permission.
@@ -1655,6 +1693,10 @@ export class Topic {
           this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
         }
         break;
+      case 'aux':
+        // Auxiliary data updated.
+        this.getMeta(this.startMetaQuery().withAux().build());
+        break;
       case 'acs':
         uid = pres.src || this._tinode.getCurrentUserID();
         user = this._users[uid];
@@ -1809,6 +1851,7 @@ export class Topic {
       tags = [];
     }
     this._tags = tags;
+    this._tinode._db.updTopic(this);
     if (this.onTagsUpdated) {
       this.onTagsUpdated(tags);
     }
@@ -1818,8 +1861,9 @@ export class Topic {
 
   // Called by Tinode when meta.aux is recived.
   _processMetaAux(aux) {
-    aux = !aux || aux == Const.DEL_CHAR ? {} : aux;
-    mergeObj(this._aux, aux);
+    aux = (!aux || aux == Const.DEL_CHAR) ? {} : aux;
+    this._aux = mergeObj(this._aux, aux);
+    this._tinode._db.updTopic(this);
     if (this.onAuxUpdated) {
       this.onAuxUpdated(this._aux);
     }
@@ -1832,7 +1876,7 @@ export class Topic {
     const topic = this;
     let count = 0;
     if (Array.isArray(delseq)) {
-      delseq.forEach(function(range) {
+      delseq.forEach(range => {
         if (!range.hi) {
           count++;
           topic.flushMessage(range.low);
