@@ -666,6 +666,9 @@ export class Topic {
     if (pin) {
       if (!pinned.includes(seq)) {
         changed = true;
+        if (pinned.length == Const.MAX_PINNED_COUNT) {
+          pinned.shift();
+        }
         pinned.push(seq);
       }
     } else {

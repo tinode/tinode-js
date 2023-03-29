@@ -52,3 +52,6 @@ export const DEFAULT_MESSAGES_PAGE = 24;
 
 // Unicode DEL character indicating data was deleted.
 export const DEL_CHAR = '\u2421';
+
+// Maximum number of pinnned messages;
+export const MAX_PINNED_COUNT = 5;
