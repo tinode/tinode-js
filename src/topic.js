@@ -1169,7 +1169,7 @@ export class Topic {
     }
   }
   /**
-   * Get the message from cache by <code>seq</code>.
+   * Get the message from cache by literal <code>seq</code> (does not resolve message edits).
    * @memberof Tinode.Topic#
    *
    * @param {number} seq - message seqId to search for.
