@@ -13,6 +13,12 @@ import {
 
 let XHRProvider;
 
+function addURLParam(relUrl, key, value) {
+  const url = new URL(relUrl, window.location.origin);
+  url.searchParams.append(key, value);
+  return url.toString().substring(window.location.origin.length);
+}
+
 /**
  * @class LargeFileHelper - utilities for uploading and downloading files out of band.
  * Don't instantiate this class directly. Use {Tinode.getLargeFileHelper} instead.
@@ -206,6 +212,9 @@ export default class LargeFileHelper {
 
     const xhr = new XHRProvider();
     this.xhr.push(xhr);
+
+    // Add '&asatt=1' to URL to request 'Content-Disposition: attachment' response header.
+    relativeUrl = addURLParam(relativeUrl, 'asatt', '1');
 
     // Get data as blob (stored by the browser as a temporary file).
     xhr.open('GET', relativeUrl, true);
