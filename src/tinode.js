@@ -56,11 +56,9 @@ import DBCache from './db.js';
 import Drafty from './drafty.js';
 import LargeFileHelper from './large-file.js';
 import MetaGetBuilder from './meta-builder.js';
-import {
-  Topic,
-  TopicMe,
-  TopicFnd
-} from './topic.js';
+import Topic from './topic.js';
+import TopicFnd from './fnd-topic.js';
+import TopicMe from './me-topic.js';
 
 import {
   isUrlRelative,
