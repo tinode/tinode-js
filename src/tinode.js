@@ -1700,14 +1700,6 @@ export class Tinode {
   }
 
   /**
-   * @typedef GetQuery
-   * @type {Object}
-   * @property {GetOptsType=} desc - If provided (even if empty), fetch topic description.
-   * @property {GetOptsType=} sub - If provided (even if empty), fetch topic subscriptions.
-   * @property {GetDataType=} data - If provided (even if empty), get messages.
-   */
-
-  /**
    * @typedef GetOptsType
    * @type {Object}
    * @property {Date=} ims - "If modified since", fetch data only it was was modified since stated date.
@@ -1717,9 +1709,18 @@ export class Tinode {
   /**
    * @typedef GetDataType
    * @type {Object}
-   * @property {number=} since - Load messages with seq id equal or greater than this value.
-   * @property {number=} before - Load messages with seq id lower than this number.
+   * @property {number=} since - Load messages with seq ID equal or greater than this value.
+   * @property {number=} before - Load messages with seq ID lower than this number.
    * @property {number=} limit - Maximum number of results to return.
+   * @property {Array.<SeqRange>=} range - Ranges of seq IDs to fetch.
+   */
+
+  /**
+   * @typedef GetQuery
+   * @type {Object}
+   * @property {GetOptsType=} desc - If provided (even if empty), fetch topic description.
+   * @property {GetOptsType=} sub - If provided (even if empty), fetch topic subscriptions.
+   * @property {GetDataType=} data - If provided (even if empty), get messages.
    */
 
   /**
@@ -1772,9 +1773,9 @@ export class Tinode {
   }
 
   /**
-   * Range of message IDs to delete.
+   * Range of message IDs.
    *
-   * @typedef DelRange
+   * @typedef SeqRange
    * @type {Object}
    * @property {number} low - low end of the range, inclusive (closed).
    * @property {number=} hi - high end of the range, exclusive (open).
@@ -1783,7 +1784,7 @@ export class Tinode {
    * Delete some or all messages in a topic.
    *
    * @param {string} topic - Topic name to delete messages from.
-   * @param {DelRange[]} list - Ranges of message IDs to delete.
+   * @param {Array.<SeqRange>} list - Ranges of message IDs to delete.
    * @param {boolean=} hard - Hard or soft delete
    *
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.

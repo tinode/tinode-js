@@ -507,10 +507,10 @@ export default class DB {
       const range = to > 0 ? IDBKeyRange.bound([topicName, from], [topicName, to], false, true) :
         IDBKeyRange.only([topicName, from]);
       const trx = this.db.transaction(['message'], 'readwrite');
-      trx.onsuccess = (event) => {
+      trx.onsuccess = event => {
         resolve(event.target.result);
       };
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'remMessages', event.target.error);
         reject(event.target.error);
       };
@@ -524,10 +524,8 @@ export default class DB {
    * @memberOf DB
    * @param {string} topicName - name of the topic to retrieve messages from.
    * @param {function} callback to call for each retrieved message.
-   * @param {Object} query - parameters of the message range to retrieve.
-   * @param {number=} query.since - the least message ID to retrieve (inclusive).
-   * @param {number=} query.before - the greatest message ID to retrieve (exclusive).
-   * @param {number=} query.limit - the maximum number of messages to retrieve.
+   * @param {GetDataType} query - parameters of the message range to retrieve.
+   *
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   readMessages(topicName, query, callback, context) {
@@ -536,19 +534,50 @@ export default class DB {
         Promise.resolve([]) :
         Promise.reject(new Error("not initialized"));
     }
+
+    const trx = this.db.transaction(['message']);
+    const result = [];
+
+    // Handle individual message ranges.
+    if (Array.isArray(query.ranges)) {
+      return new Promise((resolve, reject) => {
+        trx.onerror = event => {
+          this.#logger('PCache', 'readMessages', event.target.error);
+          reject(event.target.error);
+        };
+
+        let count = 0;
+        query.ranges.forEach(range => {
+          const key = range.hi ? IDBKeyRange.bound([topicName, range.low], [topicName, range.Hi], false, true) :
+            IDBKeyRange.only([topicName, range.low])
+          const req = trx.objectStore('message').get(key);
+          req.onsuccess = event => {
+            count++;
+            if (Array.isArray(event.target.result)) {
+              result.concat(event.target.result);
+            } else {
+              result.push(event.target.result);
+            }
+            if (count == query.ranges.length) {
+              resolve(result);
+            }
+          };
+        });
+      });
+    }
+
     return new Promise((resolve, reject) => {
       query = query || {};
       const since = query.since > 0 ? query.since : 0;
       const before = query.before > 0 ? query.before : Number.MAX_SAFE_INTEGER;
       const limit = query.limit | 0;
 
-      const result = [];
-      const range = IDBKeyRange.bound([topicName, since], [topicName, before], false, true);
-      const trx = this.db.transaction(['message']);
-      trx.onerror = (event) => {
+      trx.onerror = event => {
         this.#logger('PCache', 'readMessages', event.target.error);
         reject(event.target.error);
       };
+
+      const range = IDBKeyRange.bound([topicName, since], [topicName, before], false, true);
       // Iterate in descending order.
       trx.objectStore('message').openCursor(range, 'prev').onsuccess = (event) => {
         const cursor = event.target.result;

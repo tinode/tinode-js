@@ -7,7 +7,8 @@
 
 import AccessMode from './access-mode.js';
 import {
-  DEL_CHAR
+  DEL_CHAR,
+  LOCAL_SEQID
 } from './config.js';
 
 // Attempt to convert date and AccessMode strings to objects.
@@ -169,4 +170,65 @@ export function normalizeArray(arr) {
     out.push(DEL_CHAR);
   }
   return out;
+}
+
+// Convert input to valid ranges of IDs.
+export function normalizeRanges(ranges, maxSeq) {
+  if (!Array.isArray(ranges)) {
+    return [];
+  }
+
+  // Sort ranges in accending order by low, then descending by hi.
+  ranges.sort((r1, r2) => {
+    if (r1.low < r2.low) {
+      return true;
+    }
+    if (r1.low == r2.low) {
+      return !r2.hi || (r1.hi >= r2.hi);
+    }
+    return false;
+  });
+
+  // Remove pending messages from ranges possibly clipping some ranges.
+  return ranges.reduce((out, r) => {
+    if (r.low < LOCAL_SEQID && r.low > 0) {
+      if (!r.hi || r.hi < LOCAL_SEQID) {
+        out.push(r);
+      } else {
+        // Clip hi to max allowed value.
+        out.push({
+          low: r.low,
+          hi: maxSeq + 1
+        });
+      }
+    }
+    return out;
+  }, []);
+}
+
+// Convert array of IDs to array of ranges.
+export function listToRanges(list) {
+  // Sort the list in ascending order
+  list.sort((a, b) => a - b);
+  // Convert the array of IDs to ranges.
+  return list.reduce((out, id) => {
+    if (out.length == 0) {
+      // First element.
+      out.push({
+        low: id
+      });
+    } else {
+      let prev = out[out.length - 1];
+      if ((!prev.hi && (id != prev.low + 1)) || (id > prev.hi)) {
+        // New range.
+        out.push({
+          low: id
+        });
+      } else {
+        // Expand existing range.
+        prev.hi = prev.hi ? Math.max(prev.hi, id + 1) : id + 1;
+      }
+    }
+    return out;
+  }, []);
 }

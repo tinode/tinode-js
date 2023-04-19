@@ -1119,18 +1119,42 @@ class DB {
     if (!this.isReady()) {
       return this.disabled ? Promise.resolve([]) : Promise.reject(new Error("not initialized"));
     }
+    const trx = this.db.transaction(['message']);
+    const result = [];
+    if (Array.isArray(query.ranges)) {
+      return new Promise((resolve, reject) => {
+        trx.onerror = event => {
+          this.#logger('PCache', 'readMessages', event.target.error);
+          reject(event.target.error);
+        };
+        let count = 0;
+        query.ranges.forEach(range => {
+          const key = range.hi ? IDBKeyRange.bound([topicName, range.low], [topicName, range.Hi], false, true) : IDBKeyRange.only([topicName, range.low]);
+          const req = trx.objectStore('message').get(key);
+          req.onsuccess = event => {
+            count++;
+            if (Array.isArray(event.target.result)) {
+              result.concat(event.target.result);
+            } else {
+              result.push(event.target.result);
+            }
+            if (count == query.ranges.length) {
+              resolve(result);
+            }
+          };
+        });
+      });
+    }
     return new Promise((resolve, reject) => {
       query = query || {};
       const since = query.since > 0 ? query.since : 0;
       const before = query.before > 0 ? query.before : Number.MAX_SAFE_INTEGER;
       const limit = query.limit | 0;
-      const result = [];
-      const range = IDBKeyRange.bound([topicName, since], [topicName, before], false, true);
-      const trx = this.db.transaction(['message']);
       trx.onerror = event => {
         this.#logger('PCache', 'readMessages', event.target.error);
         reject(event.target.error);
       };
+      const range = IDBKeyRange.bound([topicName, since], [topicName, before], false, true);
       trx.objectStore('message').openCursor(range, 'prev').onsuccess = event => {
         const cursor = event.target.result;
         if (cursor) {
@@ -3226,6 +3250,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _access_mode_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./access-mode.js */ "./src/access-mode.js");
 /* harmony import */ var _config_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./config.js */ "./src/config.js");
 /* harmony import */ var _topic_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./topic.js */ "./src/topic.js");
+/* harmony import */ var _utils_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./utils.js */ "./src/utils.js");
+
 
 
 
@@ -3241,7 +3267,7 @@ class TopicMe extends _topic_js__WEBPACK_IMPORTED_MODULE_2__["default"] {
   }
   _processMetaDesc(desc) {
     const turnOff = desc.acs && !desc.acs.isPresencer() && this.acs && this.acs.isPresencer();
-    mergeObj(this, desc);
+    (0,_utils_js__WEBPACK_IMPORTED_MODULE_3__.mergeObj)(this, desc);
     this._tinode._db.updTopic(this);
     this._updateCachedUser(this._tinode._myUID, desc);
     if (turnOff) {
@@ -3283,7 +3309,7 @@ class TopicMe extends _topic_js__WEBPACK_IMPORTED_MODULE_2__["default"] {
         if (topic._new) {
           delete topic._new;
         }
-        cont = mergeObj(topic, sub);
+        cont = (0,_utils_js__WEBPACK_IMPORTED_MODULE_3__.mergeObj)(topic, sub);
         this._tinode._db.updTopic(cont);
         if (_topic_js__WEBPACK_IMPORTED_MODULE_2__["default"].isP2PTopicName(topicName)) {
           this._cachePutUser(topicName, cont);
@@ -3502,6 +3528,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   "default": () => (/* binding */ MetaGetBuilder)
 /* harmony export */ });
+/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./utils */ "./src/utils.js");
+
+
 
 class MetaGetBuilder {
   constructor(parent) {
@@ -3527,6 +3556,15 @@ class MetaGetBuilder {
   }
   withLaterData(limit) {
     return this.withData(this.topic._maxSeq > 0 ? this.topic._maxSeq + 1 : undefined, undefined, limit);
+  }
+  withDataRanges(ranges) {
+    this.what['data'] = {
+      ranges: (0,_utils__WEBPACK_IMPORTED_MODULE_0__.normalizeRanges)(ranges, this.topic._maxSeq)
+    };
+    return this;
+  }
+  withDataList(list) {
+    return this.withDataRanges((0,_utils__WEBPACK_IMPORTED_MODULE_0__.listToRanges)(list));
   }
   withEarlierData(limit) {
     return this.withData(undefined, this.topic._minSeq > 0 ? this.topic._minSeq : undefined, limit);
@@ -3623,7 +3661,6 @@ class MetaGetBuilder {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   "TopicFnd": () => (/* binding */ TopicFnd),
 /* harmony export */   "default": () => (/* binding */ Topic)
 /* harmony export */ });
 /* harmony import */ var _access_mode_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./access-mode.js */ "./src/access-mode.js");
@@ -3892,6 +3929,35 @@ class Topic {
       return promise;
     });
   }
+  getPinnedMessages() {
+    const pins = this.aux('pins');
+    if (!Array.isArray(pins)) {
+      return Promise.resolve(0);
+    }
+    const loaded = [];
+    return this._tinode._db.readMessages(this.name, {
+      ranges: (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.listToRanges)(pins)
+    }).then(msgs => {
+      msgs.forEach(data => {
+        loaded.push(data.seq);
+        this._messages.put(data);
+        this._maybeUpdateMessageVersionsCache(data);
+      });
+      return msgs.length;
+    }).then(count => {
+      if (count == pins.length) {
+        return Promise.resolve({
+          topic: this.name,
+          code: 200,
+          params: {
+            count: count
+          }
+        });
+      }
+      const remains = pins.filter(seq => !loaded.includes(seq));
+      return this.getMeta(this.startMetaQuery().withDataList(remains).build());
+    });
+  }
   setMeta(params) {
     if (params.tags) {
       params.tags = (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.normalizeArray)(params.tags);
@@ -4000,28 +4066,7 @@ class Topic {
     if (!this._attached) {
       return Promise.reject(new Error("Cannot delete messages in inactive topic"));
     }
-    ranges.sort((r1, r2) => {
-      if (r1.low < r2.low) {
-        return true;
-      }
-      if (r1.low == r2.low) {
-        return !r2.hi || r1.hi >= r2.hi;
-      }
-      return false;
-    });
-    let tosend = ranges.reduce((out, r) => {
-      if (r.low < _config_js__WEBPACK_IMPORTED_MODULE_3__.LOCAL_SEQID) {
-        if (!r.hi || r.hi < _config_js__WEBPACK_IMPORTED_MODULE_3__.LOCAL_SEQID) {
-          out.push(r);
-        } else {
-          out.push({
-            low: r.low,
-            hi: this._maxSeq + 1
-          });
-        }
-      }
-      return out;
-    }, []);
+    const tosend = (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.normalizeRanges)(ranges, this._maxSeq);
     let result;
     if (tosend.length > 0) {
       result = this._tinode.delMessages(this.name, tosend, hard);
@@ -4034,7 +4079,8 @@ class Topic {
     }
     return result.then(ctrl => {
       if (ctrl.params.del > this._maxDel) {
-        this._maxDel = ctrl.params.del;
+        this._maxDel = Math.max(ctrl.params.del, this._maxDel);
+        this.clear = Math.max(ctrl.params.del, this.clear);
       }
       ranges.forEach(r => {
         if (r.hi) {
@@ -4060,25 +4106,7 @@ class Topic {
     }], hardDel);
   }
   delMessagesList(list, hardDel) {
-    list.sort((a, b) => a - b);
-    let ranges = list.reduce((out, id) => {
-      if (out.length == 0) {
-        out.push({
-          low: id
-        });
-      } else {
-        let prev = out[out.length - 1];
-        if (!prev.hi && id != prev.low + 1 || id > prev.hi) {
-          out.push({
-            low: id
-          });
-        } else {
-          prev.hi = prev.hi ? Math.max(prev.hi, id + 1) : id + 1;
-        }
-      }
-      return out;
-    }, []);
-    return this.delMessages(ranges, hardDel);
+    return this.delMessages((0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.listToRanges)(list), hardDel);
   }
   delMessagesEdits(seq, hardDel) {
     const list = [seq];
@@ -4696,18 +4724,15 @@ class Topic {
   _processDelMessages(clear, delseq) {
     this._maxDel = Math.max(clear, this._maxDel);
     this.clear = Math.max(clear, this.clear);
-    const topic = this;
     let count = 0;
     if (Array.isArray(delseq)) {
       delseq.forEach(range => {
         if (!range.hi) {
           count++;
-          topic.flushMessage(range.low);
+          this.flushMessage(range.low);
         } else {
-          for (let i = range.low; i < range.hi; i++) {
-            count++;
-            topic.flushMessage(i);
-          }
+          count += range.hi - range.low;
+          this.flushMessageRange(range.low, range.hi);
         }
       });
     }
@@ -4793,49 +4818,6 @@ class Topic {
     this._tinode._db.updTopic(this);
   }
 }
-class TopicFnd extends Topic {
-  _contacts = {};
-  constructor(callbacks) {
-    super(_config_js__WEBPACK_IMPORTED_MODULE_3__.TOPIC_FND, callbacks);
-  }
-  _processMetaSub(subs) {
-    let updateCount = Object.getOwnPropertyNames(this._contacts).length;
-    this._contacts = {};
-    for (let idx in subs) {
-      let sub = subs[idx];
-      const indexBy = sub.topic ? sub.topic : sub.user;
-      sub = (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.mergeToCache)(this._contacts, indexBy, sub);
-      updateCount++;
-      if (this.onMetaSub) {
-        this.onMetaSub(sub);
-      }
-    }
-    if (updateCount > 0 && this.onSubsUpdated) {
-      this.onSubsUpdated(Object.keys(this._contacts));
-    }
-  }
-  publish() {
-    return Promise.reject(new Error("Publishing to 'fnd' is not supported"));
-  }
-  setMeta(params) {
-    return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(_ => {
-      if (Object.keys(this._contacts).length > 0) {
-        this._contacts = {};
-        if (this.onSubsUpdated) {
-          this.onSubsUpdated([]);
-        }
-      }
-    });
-  }
-  contacts(callback, context) {
-    const cb = callback || this.onMetaSub;
-    if (cb) {
-      for (let idx in this._contacts) {
-        cb.call(context, this._contacts[idx], idx, this._contacts);
-      }
-    }
-  }
-}
 
 /***/ }),
 
@@ -4849,9 +4831,11 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   "isUrlRelative": () => (/* binding */ isUrlRelative),
 /* harmony export */   "jsonParseHelper": () => (/* binding */ jsonParseHelper),
+/* harmony export */   "listToRanges": () => (/* binding */ listToRanges),
 /* harmony export */   "mergeObj": () => (/* binding */ mergeObj),
 /* harmony export */   "mergeToCache": () => (/* binding */ mergeToCache),
 /* harmony export */   "normalizeArray": () => (/* binding */ normalizeArray),
+/* harmony export */   "normalizeRanges": () => (/* binding */ normalizeRanges),
 /* harmony export */   "rfc3339DateString": () => (/* binding */ rfc3339DateString),
 /* harmony export */   "simplify": () => (/* binding */ simplify)
 /* harmony export */ });
@@ -4971,6 +4955,53 @@ function normalizeArray(arr) {
     out.push(_config_js__WEBPACK_IMPORTED_MODULE_1__.DEL_CHAR);
   }
   return out;
+}
+function normalizeRanges(ranges, maxSeq) {
+  if (!Array.isArray(ranges)) {
+    return [];
+  }
+  ranges.sort((r1, r2) => {
+    if (r1.low < r2.low) {
+      return true;
+    }
+    if (r1.low == r2.low) {
+      return !r2.hi || r1.hi >= r2.hi;
+    }
+    return false;
+  });
+  return ranges.reduce((out, r) => {
+    if (r.low < _config_js__WEBPACK_IMPORTED_MODULE_1__.LOCAL_SEQID && r.low > 0) {
+      if (!r.hi || r.hi < _config_js__WEBPACK_IMPORTED_MODULE_1__.LOCAL_SEQID) {
+        out.push(r);
+      } else {
+        out.push({
+          low: r.low,
+          hi: maxSeq + 1
+        });
+      }
+    }
+    return out;
+  }, []);
+}
+function listToRanges(list) {
+  list.sort((a, b) => a - b);
+  return list.reduce((out, id) => {
+    if (out.length == 0) {
+      out.push({
+        low: id
+      });
+    } else {
+      let prev = out[out.length - 1];
+      if (!prev.hi && id != prev.low + 1 || id > prev.hi) {
+        out.push({
+          low: id
+        });
+      } else {
+        prev.hi = prev.hi ? Math.max(prev.hi, id + 1) : id + 1;
+      }
+    }
+    return out;
+  }, []);
 }
 
 /***/ }),

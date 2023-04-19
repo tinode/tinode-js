@@ -12,9 +12,11 @@ import * as Const from './config.js';
 import Drafty from './drafty.js';
 import MetaGetBuilder from './meta-builder.js';
 import {
+  listToRanges,
   mergeObj,
   mergeToCache,
-  normalizeArray
+  normalizeArray,
+  normalizeRanges
 } from './utils.js';
 
 /**
@@ -477,7 +479,7 @@ export default class Topic {
   }
 
   /**
-   * Request topic metadata from the server.
+   * Request topic metadata from the local cache or from the server.
    * @memberof Tinode.Topic#
    *
    * @param {Tinode.GetQuery} request parameters
@@ -495,6 +497,7 @@ export default class Topic {
    *
    * @param {number} limit number of messages to get.
    * @param {boolean} forward if true, request newer messages.
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   getMessagesPage(limit, forward) {
     let query = forward ?
@@ -503,7 +506,7 @@ export default class Topic {
 
     // First try fetching from DB, then from the server.
     return this._loadMessages(this._tinode._db, query.extract('data'))
-      .then((count) => {
+      .then(count => {
         if (count == limit) {
           // Got enough messages from local cache.
           return Promise.resolve({
@@ -531,6 +534,48 @@ export default class Topic {
         return promise;
       });
   }
+
+  /**
+   * Request to get pinned messages from the local cache or from the server.
+   * @memberof Tinode.Topic#
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+   */
+  getPinnedMessages() {
+    const pins = this.aux('pins');
+    if (!Array.isArray(pins)) {
+      return Promise.resolve(0);
+    }
+
+    const loaded = [];
+    // First try fetching from DB, then from the server.
+    return this._tinode._db.readMessages(this.name, {
+        ranges: listToRanges(pins)
+      })
+      .then(msgs => {
+        msgs.forEach(data => {
+          loaded.push(data.seq);
+          this._messages.put(data);
+          this._maybeUpdateMessageVersionsCache(data);
+        });
+        return msgs.length;
+      })
+      .then(count => {
+        if (count == pins.length) {
+          // Got all pinned messages from the local cache.
+          return Promise.resolve({
+            topic: this.name,
+            code: 200,
+            params: {
+              count: count
+            }
+          });
+        }
+
+        const remains = pins.filter(seq => !loaded.includes(seq));
+        return this.getMeta(this.startMetaQuery().withDataList(remains).build());
+      });
+  }
+
   /**
    * Update topic metadata.
    * @memberof Tinode.Topic#
@@ -694,7 +739,7 @@ export default class Topic {
    * Wrapper for {@link Tinode#delMessages}.
    * @memberof Tinode.Topic#
    *
-   * @param {Tinode.DelRange[]} ranges - Ranges of message IDs to delete.
+   * @param {Tinode.SeqRange[]} ranges - Ranges of message IDs to delete.
    * @param {boolean=} hard - Hard or soft delete
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
@@ -703,32 +748,7 @@ export default class Topic {
       return Promise.reject(new Error("Cannot delete messages in inactive topic"));
     }
 
-    // Sort ranges in accending order by low, the descending by hi.
-    ranges.sort((r1, r2) => {
-      if (r1.low < r2.low) {
-        return true;
-      }
-      if (r1.low == r2.low) {
-        return !r2.hi || (r1.hi >= r2.hi);
-      }
-      return false;
-    });
-
-    // Remove pending messages from ranges possibly clipping some ranges.
-    let tosend = ranges.reduce((out, r) => {
-      if (r.low < Const.LOCAL_SEQID) {
-        if (!r.hi || r.hi < Const.LOCAL_SEQID) {
-          out.push(r);
-        } else {
-          // Clip hi to max allowed value.
-          out.push({
-            low: r.low,
-            hi: this._maxSeq + 1
-          });
-        }
-      }
-      return out;
-    }, []);
+    const tosend = normalizeRanges(ranges, this._maxSeq)
 
     // Send {del} message, return promise
     let result;
@@ -744,10 +764,11 @@ export default class Topic {
     // Update local cache.
     return result.then(ctrl => {
       if (ctrl.params.del > this._maxDel) {
-        this._maxDel = ctrl.params.del;
+        this._maxDel = Math.max(ctrl.params.del, this._maxDel);
+        this.clear = Math.max(ctrl.params.del, this.clear);
       }
 
-      ranges.forEach((r) => {
+      ranges.forEach(r => {
         if (r.hi) {
           this.flushMessageRange(r.low, r.hi);
         } else {
@@ -792,31 +813,8 @@ export default class Topic {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   delMessagesList(list, hardDel) {
-    // Sort the list in ascending order
-    list.sort((a, b) => a - b);
-    // Convert the array of IDs to ranges.
-    let ranges = list.reduce((out, id) => {
-      if (out.length == 0) {
-        // First element.
-        out.push({
-          low: id
-        });
-      } else {
-        let prev = out[out.length - 1];
-        if ((!prev.hi && (id != prev.low + 1)) || (id > prev.hi)) {
-          // New range.
-          out.push({
-            low: id
-          });
-        } else {
-          // Expand existing range.
-          prev.hi = prev.hi ? Math.max(prev.hi, id + 1) : id + 1;
-        }
-      }
-      return out;
-    }, []);
     // Send {del} message, return promise
-    return this.delMessages(ranges, hardDel);
+    return this.delMessages(listToRanges(list), hardDel);
   }
 
   /**
@@ -1876,25 +1874,20 @@ export default class Topic {
   _processDelMessages(clear, delseq) {
     this._maxDel = Math.max(clear, this._maxDel);
     this.clear = Math.max(clear, this.clear);
-    const topic = this;
     let count = 0;
     if (Array.isArray(delseq)) {
       delseq.forEach(range => {
         if (!range.hi) {
           count++;
-          topic.flushMessage(range.low);
+          this.flushMessage(range.low);
         } else {
-          for (let i = range.low; i < range.hi; i++) {
-            count++;
-            topic.flushMessage(i);
-          }
+          count += range.hi - range.low;
+          this.flushMessageRange(range.low, range.hi);
         }
       });
     }
 
     if (count > 0) {
-      // this._updateDeletedRanges();
-
       if (this.onData) {
         this.onData();
       }
@@ -1967,7 +1960,7 @@ export default class Topic {
         limit: limit || Const.DEFAULT_MESSAGES_PAGE
       })
       .then(msgs => {
-        msgs.forEach((data) => {
+        msgs.forEach(data => {
           if (data.seq > this._maxSeq) {
             this._maxSeq = data.seq;
           }
@@ -1980,6 +1973,7 @@ export default class Topic {
         return msgs.length;
       });
   }
+
   // Push or {pres}: message received.
   _updateReceived(seq, act) {
     this.touched = new Date();
@@ -1991,88 +1985,5 @@ export default class Topic {
     }
     this.unread = this.seq - (this.read | 0);
     this._tinode._db.updTopic(this);
-  }
-}
-
-/**
- * Special case of {@link Tinode.Topic} for searching for contacts and group topics
- * @extends Tinode.Topic
- *
- */
-export class TopicFnd extends Topic {
-  // List of users and topics uid or topic_name -> Contact object)
-  _contacts = {};
-
-  /**
-   * Create TopicFnd.
-   *
-   * @param {TopicFnd.Callbacks} callbacks - Callbacks to receive various events.
-   */
-  constructor(callbacks) {
-    super(Const.TOPIC_FND, callbacks);
-  }
-
-  // Override the original Topic._processMetaSub
-  _processMetaSub(subs) {
-    let updateCount = Object.getOwnPropertyNames(this._contacts).length;
-    // Reset contact list.
-    this._contacts = {};
-    for (let idx in subs) {
-      let sub = subs[idx];
-      const indexBy = sub.topic ? sub.topic : sub.user;
-
-      sub = mergeToCache(this._contacts, indexBy, sub);
-      updateCount++;
-
-      if (this.onMetaSub) {
-        this.onMetaSub(sub);
-      }
-    }
-
-    if (updateCount > 0 && this.onSubsUpdated) {
-      this.onSubsUpdated(Object.keys(this._contacts));
-    }
-  }
-
-  /**
-   * Publishing to TopicFnd is not supported. {@link Topic#publish} is overriden and thows an {Error} if called.
-   * @memberof Tinode.TopicFnd#
-   * @throws {Error} Always throws an error.
-   */
-  publish() {
-    return Promise.reject(new Error("Publishing to 'fnd' is not supported"));
-  }
-
-  /**
-   * setMeta to TopicFnd resets contact list in addition to sending the message.
-   * @memberof Tinode.TopicFnd#
-   * @param {Tinode.SetParams} params parameters to update.
-   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
-   */
-  setMeta(params) {
-    return Object.getPrototypeOf(TopicFnd.prototype).setMeta.call(this, params).then(_ => {
-      if (Object.keys(this._contacts).length > 0) {
-        this._contacts = {};
-        if (this.onSubsUpdated) {
-          this.onSubsUpdated([]);
-        }
-      }
-    });
-  }
-
-  /**
-   * Iterate over found contacts. If callback is undefined, use {@link this.onMetaSub}.
-   * @function
-   * @memberof Tinode.TopicFnd#
-   * @param {TopicFnd.ContactCallback} callback - Callback to call for each contact.
-   * @param {Object} context - Context to use for calling the `callback`, i.e. the value of `this` inside the callback.
-   */
-  contacts(callback, context) {
-    const cb = (callback || this.onMetaSub);
-    if (cb) {
-      for (let idx in this._contacts) {
-        cb.call(context, this._contacts[idx], idx, this._contacts);
-      }
-    }
   }
 }

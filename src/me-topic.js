@@ -8,6 +8,9 @@
 import AccessMode from './access-mode.js';
 import * as Const from './config.js';
 import Topic from './topic.js';
+import {
+  mergeObj
+} from './utils.js';
 
 /**
  * @class TopicMe - special case of {@link Tinode.Topic} for

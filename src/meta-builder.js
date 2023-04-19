@@ -1,9 +1,14 @@
 /**
  * @file Helper class for constructing {@link Tinode.GetQuery}.
  *
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2023 Tinode LLC.
  */
 'use strict';
+
+import {
+  listToRanges,
+  normalizeRanges
+} from './utils';
 
 /**
  * Helper class for constructing {@link Tinode.GetQuery}.
@@ -58,6 +63,29 @@ export default class MetaGetBuilder {
    */
   withLaterData(limit) {
     return this.withData(this.topic._maxSeq > 0 ? this.topic._maxSeq + 1 : undefined, undefined, limit);
+  }
+  /**
+   * Add query parameters to fetch messages within ID ranges.
+   * @memberof Tinode.MetaGetBuilder#
+   *
+   * @param {Array.<SeqRange>} ranges - ranges of seq IDs to fetch.
+   * @returns {Tinode.MetaGetBuilder} <code>this</code> object.
+   */
+  withDataRanges(ranges) {
+    this.what['data'] = {
+      ranges: normalizeRanges(ranges, this.topic._maxSeq)
+    };
+    return this;
+  }
+  /**
+   * Add query parameters to fetch messages by an array of IDs.
+   * @memberof Tinode.MetaGetBuilder#
+   *
+   * @param {number[]} list - array of seq IDs to fetch.
+   * @returns {Tinode.MetaGetBuilder} <code>this</code> object.
+   */
+  withDataList(list) {
+    return this.withDataRanges(listToRanges(list));
   }
   /**
    * Add query parameters to fetch messages older than the earliest saved message.
