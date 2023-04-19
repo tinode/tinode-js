@@ -553,11 +553,14 @@ export default class Topic {
       })
       .then(msgs => {
         msgs.forEach(data => {
-          loaded.push(data.seq);
-          this._messages.put(data);
-          this._maybeUpdateMessageVersionsCache(data);
+          // The 'data' could be undefined.
+          if (data) {
+            loaded.push(data.seq);
+            this._messages.put(data);
+            this._maybeUpdateMessageVersionsCache(data);
+          }
         });
-        return msgs.length;
+        return loaded.length;
       })
       .then(count => {
         if (count == pins.length) {
@@ -739,7 +742,7 @@ export default class Topic {
    * Wrapper for {@link Tinode#delMessages}.
    * @memberof Tinode.Topic#
    *
-   * @param {Tinode.SeqRange[]} ranges - Ranges of message IDs to delete.
+   * @param {Array.<Tinode.SeqRange>} ranges - Ranges of message IDs to delete.
    * @param {boolean=} hard - Hard or soft delete
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
@@ -775,6 +778,9 @@ export default class Topic {
           this.flushMessage(r.low);
         }
       });
+
+      // Make a record.
+      this._tinode._db.addDelLog(this.name, ctrl.params.del, ranges);
 
       if (this.onData) {
         // Calling with no parameters to indicate the messages were deleted.
@@ -1885,6 +1891,8 @@ export default class Topic {
           this.flushMessageRange(range.low, range.hi);
         }
       });
+
+      this._tinode._db.addDelLog(this.name, clear, delseq);
     }
 
     if (count > 0) {

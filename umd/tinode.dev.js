@@ -783,7 +783,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "default": () => (/* binding */ DB)
 /* harmony export */ });
 
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 const DB_NAME = 'tinode-web';
 let IDBProvider;
 class DB {
@@ -845,6 +845,12 @@ class DB {
         });
         this.db.createObjectStore('message', {
           keyPath: ['topic', 'seq']
+        });
+        const dellog = this.db.createObjectStore('dellog', {
+          keyPath: ['topic', 'low', 'hi']
+        });
+        dellog.createIndex('topic_clear', ['topic', 'clear'], {
+          unique: false
         });
       };
     });
@@ -1169,6 +1175,75 @@ class DB {
           }
         } else {
           resolve(result);
+        }
+      };
+    });
+  }
+  addDelLog(topicName, delId, ranges) {
+    if (!this.isReady()) {
+      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
+    }
+    return new Promise((resolve, reject) => {
+      const trx = this.db.transaction(['dellog'], 'readwrite');
+      trx.onsuccess = event => {
+        resolve(event.target.result);
+      };
+      trx.onerror = event => {
+        this.#logger('PCache', 'addDelLog', event.target.error);
+        reject(event.target.error);
+      };
+      ranges.forEach(r => trx.objectStore('dellog').add({
+        topic: topicName,
+        clear: delId,
+        low: r.low,
+        hi: r.hi || r.low + 1
+      }));
+      trx.commit();
+    });
+  }
+  readDelLog(topicName, since, before, limit) {
+    if (!this.isReady()) {
+      return this.disabled ? Promise.resolve([]) : Promise.reject(new Error("not initialized"));
+    }
+    return new Promise((resolve, reject) => {
+      const trx = this.db.transaction(['dellog']);
+      trx.onerror = event => {
+        this.#logger('PCache', 'readDelLog', event.target.error);
+        reject(event.target.error);
+      };
+      const result = [];
+      trx.objectStore('dellog').openCursor(IDBKeyRange.bound([topicName, since], [topicName, before], false, true)).onsuccess = event => {
+        const cursor = event.target.result;
+        if (cursor) {
+          result.push({
+            low: cursor.value.low,
+            hi: cursor.value.hi
+          });
+          if (limit <= 0 || result.length < limit) {
+            cursor.continue();
+          } else {
+            resolve(result);
+          }
+        } else {
+          resolve(result);
+        }
+      };
+    });
+  }
+  maxDelId(topicName) {
+    if (!this.isReady()) {
+      return this.disabled ? Promise.resolve(0) : Promise.reject(new Error("not initialized"));
+    }
+    return new Promise((resolve, reject) => {
+      const trx = this.db.transaction(['dellog']);
+      trx.onerror = event => {
+        this.#logger('PCache', 'maxDelId', event.target.error);
+        reject(event.target.error);
+      };
+      const index = trx.objectStore('dellog').index('topic_clear');
+      index.openCursor(IDBKeyRange.bound([topicName, 0], [topicName, Number.MAX_SAFE_INTEGER]), 'prev').onsuccess = event => {
+        if (event.target.result) {
+          resolve(event.target.result.value);
         }
       };
     });
@@ -3939,11 +4014,13 @@ class Topic {
       ranges: (0,_utils_js__WEBPACK_IMPORTED_MODULE_6__.listToRanges)(pins)
     }).then(msgs => {
       msgs.forEach(data => {
-        loaded.push(data.seq);
-        this._messages.put(data);
-        this._maybeUpdateMessageVersionsCache(data);
+        if (data) {
+          loaded.push(data.seq);
+          this._messages.put(data);
+          this._maybeUpdateMessageVersionsCache(data);
+        }
       });
-      return msgs.length;
+      return loaded.length;
     }).then(count => {
       if (count == pins.length) {
         return Promise.resolve({
@@ -4089,6 +4166,7 @@ class Topic {
           this.flushMessage(r.low);
         }
       });
+      this._tinode._db.addDelLog(this.name, ctrl.params.del, ranges);
       if (this.onData) {
         this.onData();
       }
@@ -4735,6 +4813,7 @@ class Topic {
           this.flushMessageRange(range.low, range.hi);
         }
       });
+      this._tinode._db.addDelLog(this.name, clear, delseq);
     }
     if (count > 0) {
       if (this.onData) {
@@ -5415,6 +5494,10 @@ class Tinode {
           this._db.deserializeTopic(topic, data);
           this.#attachCacheToTopic(topic);
           topic._cachePutSelf();
+          this._db.maxDelId(topic.name).then(clear => {
+            console.log("topic=", topic.name, "delID=", clear, "was", topic._maxDel);
+            topic._maxDel = Math.max(topic._maxDel, clear || 0);
+          });
           delete topic._new;
           prom.push(topic._loadMessages(this._db));
         });

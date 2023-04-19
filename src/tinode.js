@@ -412,7 +412,7 @@ export class Tinode {
       const prom = [];
       this._db.initDatabase().then(_ => {
         // First load topics into memory.
-        return this._db.mapTopics((data) => {
+        return this._db.mapTopics(data => {
           let topic = this.#cacheGet('topic', data.name);
           if (topic) {
             return;
@@ -427,6 +427,10 @@ export class Tinode {
           this._db.deserializeTopic(topic, data);
           this.#attachCacheToTopic(topic);
           topic._cachePutSelf();
+          this._db.maxDelId(topic.name).then(clear => {
+            console.log("topic=", topic.name, "delID=", clear, "was", topic._maxDel);
+            topic._maxDel = Math.max(topic._maxDel, clear || 0);
+          });
           // Topic loaded from DB is not new.
           delete topic._new;
           // Request to load messages and save the promise.

@@ -1,7 +1,7 @@
 /**
  * @file Helper methods for dealing with IndexedDB cache of messages, users, and topics.
  *
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2023 Tinode LLC.
  */
 'use strict';
 
@@ -9,7 +9,7 @@
 // Localizable strings should be double quoted "строка на другом языке",
 // non-localizable strings should be single quoted 'non-localized'.
 
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 const DB_NAME = 'tinode-web';
 
 let IDBProvider;
@@ -97,6 +97,14 @@ export default class DB {
         // Messages object store. The primary key is topic name + seq.
         this.db.createObjectStore('message', {
           keyPath: ['topic', 'seq']
+        });
+
+        // Records of deleted message ranges. The primary key is topic name + low seq.
+        const dellog = this.db.createObjectStore('dellog', {
+          keyPath: ['topic', 'low', 'hi']
+        });
+        dellog.createIndex('topic_clear', ['topic', 'clear'], {
+          unique: false
         });
       };
     });
@@ -421,7 +429,6 @@ export default class DB {
   /**
    * Save message to persistent cache.
    * @memberOf DB
-   * @param {string} topicName - name of the topic which owns the message.
    * @param {Object} msg - message to save.
    * @return {Promise} promise resolved/rejected on operation completion.
    */
@@ -579,22 +586,131 @@ export default class DB {
 
       const range = IDBKeyRange.bound([topicName, since], [topicName, before], false, true);
       // Iterate in descending order.
-      trx.objectStore('message').openCursor(range, 'prev').onsuccess = (event) => {
-        const cursor = event.target.result;
-        if (cursor) {
-          if (callback) {
-            callback.call(context, cursor.value);
-          }
-          result.push(cursor.value);
-          if (limit <= 0 || result.length < limit) {
-            cursor.continue();
+      trx.objectStore('message').openCursor(range, 'prev')
+        .onsuccess = event => {
+          const cursor = event.target.result;
+          if (cursor) {
+            if (callback) {
+              callback.call(context, cursor.value);
+            }
+            result.push(cursor.value);
+            if (limit <= 0 || result.length < limit) {
+              cursor.continue();
+            } else {
+              resolve(result);
+            }
           } else {
             resolve(result);
           }
-        } else {
-          resolve(result);
-        }
+        };
+    });
+  }
+
+  // Delete log
+
+  /**
+   * Add records of deleted messages.
+   * @memberOf DB
+   * @param {string} topicName - name of the topic which owns the message.
+   * @param {number} delId - id of the deletion transaction.
+   * @param {Array.<IdRange>} ranges - message to save.
+   * @return {Promise} promise resolved/rejected on operation completion.
+   */
+  addDelLog(topicName, delId, ranges) {
+    if (!this.isReady()) {
+      return this.disabled ?
+        Promise.resolve() :
+        Promise.reject(new Error("not initialized"));
+    }
+    return new Promise((resolve, reject) => {
+      const trx = this.db.transaction(['dellog'], 'readwrite');
+      trx.onsuccess = event => {
+        resolve(event.target.result);
       };
+      trx.onerror = event => {
+        this.#logger('PCache', 'addDelLog', event.target.error);
+        reject(event.target.error);
+      };
+      ranges.forEach(r => trx.objectStore('dellog').add({
+        topic: topicName,
+        clear: delId,
+        low: r.low,
+        hi: r.hi || (r.low + 1)
+      }));
+      trx.commit();
+    });
+  }
+
+  /**
+   * Retrieve deleted message records from persistent store.
+   * @memberOf DB
+   * @param {string} topicName - name of the topic to retrieve records for.
+   * @param {number} since - lower ID limit of records to retrieve (closed).
+   * @param {number} before - upper ID limit of records to retrieve (open).
+   * @param {number} limit - maximum number of records to retrieve.
+   * @return {Promise} promise resolved/rejected on operation completion.
+   */
+  readDelLog(topicName, since, before, limit) {
+    if (!this.isReady()) {
+      return this.disabled ?
+        Promise.resolve([]) :
+        Promise.reject(new Error("not initialized"));
+    }
+
+    return new Promise((resolve, reject) => {
+      const trx = this.db.transaction(['dellog']);
+      trx.onerror = event => {
+        this.#logger('PCache', 'readDelLog', event.target.error);
+        reject(event.target.error);
+      };
+
+      const result = [];
+      trx.objectStore('dellog').openCursor(IDBKeyRange.bound([topicName, since], [topicName, before], false, true))
+        .onsuccess = event => {
+          const cursor = event.target.result;
+          if (cursor) {
+            result.push({
+              low: cursor.value.low,
+              hi: cursor.value.hi
+            });
+            if (limit <= 0 || result.length < limit) {
+              cursor.continue();
+            } else {
+              resolve(result);
+            }
+          } else {
+            resolve(result);
+          }
+        };
+    });
+  }
+
+  /**
+   * Retrieve the latest 'clear' ID for the given topic.
+   * @param {string} topicName
+   * @return {Promise} promise resolved/rejected on operation completion.
+   */
+  maxDelId(topicName) {
+    if (!this.isReady()) {
+      return this.disabled ?
+        Promise.resolve(0) :
+        Promise.reject(new Error("not initialized"));
+    }
+
+    return new Promise((resolve, reject) => {
+      const trx = this.db.transaction(['dellog']);
+      trx.onerror = event => {
+        this.#logger('PCache', 'maxDelId', event.target.error);
+        reject(event.target.error);
+      };
+
+      const index = trx.objectStore('dellog').index('topic_clear');
+      index.openCursor(IDBKeyRange.bound([topicName, 0], [topicName, Number.MAX_SAFE_INTEGER]), 'prev')
+        .onsuccess = event => {
+          if (event.target.result) {
+            resolve(event.target.result.value);
+          }
+        };
     });
   }
 
