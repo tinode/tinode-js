@@ -500,9 +500,12 @@ export default class Topic {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   getMessagesPage(limit, forward) {
-    let query = forward ?
-      this.startMetaQuery().withLaterData(limit) :
-      this.startMetaQuery().withEarlierData(limit);
+    this._tinode._db.missingRanges(this.name, this._maxSeq, limit, forward ? this._maxSeq : undefined)
+      .then(ranges => {
+        let query = forward ?
+          this.startMetaQuery().withLaterData(limit) :
+          this.startMetaQuery().withEarlierData(limit);
+      });
 
     // First try fetching from DB, then from the server.
     return this._loadMessages(this._tinode._db, query.extract('data'))

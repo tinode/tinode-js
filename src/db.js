@@ -606,6 +606,120 @@ export default class DB {
     });
   }
 
+  /**
+   * Get the next missing range of messages.
+   * @memberOf DB
+   * @param {string} topicName - name of the topic to retrieve messages from.
+   * @param {number} from - position to search from.
+   * @param {number} limit - position to search from.
+   * @param {number} maxSeq - if <code>&gt;0</code> find newer missing range upto maxSeq value, older otherwise.
+   *
+   * @return {Promise} promise resolved/rejected on operation completion.
+   */
+  missingRanges(topicName, from, limit, maxSeq) {
+    if (!this.isReady()) {
+      return this.disabled ?
+        Promise.resolve(null) :
+        Promise.reject(new Error("not initialized"));
+    }
+
+    return new Promise((resolve, reject) => {
+      const since = maxSeq > 0 ? from : 0;
+      const before = maxSeq > 0 ? maxSeq + 1 : from;
+
+      const trx = this.db.transaction(['message', 'dellog']);
+      trx.onerror = event => {
+        this.#logger('PCache', 'missingRange', event.target.error);
+        reject(event.target.error);
+      };
+
+      const query = IDBKeyRange.bound([topicName, since], [topicName, before], true, true);
+      let seq = from;
+      const diff = maxSeq > 0 ? 1 : -1;
+      let done = false;
+      let clipped = [];
+      trx.objectStore('message').openCursor(query, maxSeq > 0 ? undefined : 'prev')
+        .onsuccess = event => {
+          const cursor = event.target.result;
+          const msg = cursor && cursor.value;
+          let range;
+          if (msg) {
+            if (msg.seq == seq + diff) {
+              // No gap.
+              seq = msg.seq
+              cursor.continue();
+              return;
+            }
+
+            // Found a gap.
+            range = maxSeq > 0 ? {
+              low: seq + 1,
+              hi: msg.seq
+            } : {
+              low: msg.seq + 1,
+              hi: seq
+            };
+            seq = msg.seq;
+            done = false;
+          } else {
+            // No further results, see if there is a tail or head.
+            if (maxSeq > seq + 1) {
+              range = {
+                low: seq + 1,
+                hi: maxSeq + 1
+              };
+            } else if (seq > 1) {
+              range = {
+                low: 1,
+                hi: seq
+              }
+            }
+
+            if (!range) {
+              // No new range to clip, all done.
+              resolve(clipped);
+              return;
+            }
+            done = true;
+          }
+
+          // See if the found gap is due to messages being deleted.
+          clipped.push(range);
+          trx.objectStore('dellog').openCursor(IDBKeyRange.bound([topicName, 0, range.low + 1],
+              [topicName, range.hi - 1, Number.MAX_SAFE_INTEGER]))
+            .onsuccess = event2 => {
+              const delrange = event2.target.result && event2.target.result.value;
+              if (delrange) {
+                const result = [];
+                clipped.forEach(r => result.push.apply(result, DB.#clipRange(r, delrange)));
+                clipped = result;
+                if (clipped.length > 0) {
+                  // This missing range is not empty. Fetch the next deleted range.
+                  event2.target.result.continue();
+                } else if (done) {
+                  // Current missing range made empty, no new ranges to be found - done.
+                  resolve([]);
+                } else {
+                  // This range is empty, find next missing range.
+                  cursor.continue();
+                }
+              } else if (done) {
+                // No (more) deleted ranges, and no more missing ranges. Done.
+                resolve(clipped);
+              } else {
+                // No (more) deleted ranges. Fetch the next missing range, if necessary.
+                const count = clipped.reduce((acc, r) => acc + r.hi - r.low, 0);
+                if (count >= limit) {
+                  resolve(clipped);
+                } else {
+                  cursor.continue();
+                }
+              }
+            };
+        };
+    });
+  }
+
   // Delete log
 
   /**
@@ -638,50 +752,6 @@ export default class DB {
         hi: r.hi || (r.low + 1)
       }));
       trx.commit();
-    });
-  }
-
-  /**
-   * Retrieve deleted message records from persistent store.
-   * @memberOf DB
-   * @param {string} topicName - name of the topic to retrieve records for.
-   * @param {number} since - lower ID limit of records to retrieve (closed).
-   * @param {number} before - upper ID limit of records to retrieve (open).
-   * @param {number} limit - maximum number of records to retrieve.
-   * @return {Promise} promise resolved/rejected on operation completion.
-   */
-  readDelLog(topicName, since, before, limit) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve([]) :
-        Promise.reject(new Error("not initialized"));
-    }
-
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['dellog']);
-      trx.onerror = event => {
-        this.#logger('PCache', 'readDelLog', event.target.error);
-        reject(event.target.error);
-      };
-
-      const result = [];
-      trx.objectStore('dellog').openCursor(IDBKeyRange.bound([topicName, since], [topicName, before], false, true))
-        .onsuccess = event => {
-          const cursor = event.target.result;
-          if (cursor) {
-            result.push({
-              low: cursor.value.low,
-              hi: cursor.value.hi
-            });
-            if (limit <= 0 || result.length < limit) {
-              cursor.continue();
-            } else {
-              resolve(result);
-            }
-          } else {
-            resolve(result);
-          }
-        };
     });
   }
 
@@ -784,6 +854,42 @@ export default class DB {
       }
     });
     return res;
+  }
+
+  // Cut 'clip' range out of 'src' range.
+  // Returns an array with 0, 1 or 2 elements.
+  static #clipRange(src, clip) {
+    if (clip.hi < src.low || clip.low >= src.hi) {
+      // Clip is completely outside of src, no intersection.
+      return [src];
+    }
+
+    if (clip.low <= src.low) {
+      if (clip.hi >= src.hi) {
+        // The source range is completely inside the clipping range.
+        return [];
+      }
+      // Partial clipping at the top.
+      return [{
+        low: src.low,
+        hi: clip.hi
+      }];
+    }
+
+    // Range on the lower end.
+    const result = [{
+      low: src.low,
+      hi: clip.low
+    }];
+    if (clip.hi < src.hi) {
+      // Maybe a range on the higher end, if clip is completely inside the source.
+      result.push({
+        low: clip.hi,
+        hi: src.hi
+      });
+    }
+
+    return result;
   }
 
   /**
