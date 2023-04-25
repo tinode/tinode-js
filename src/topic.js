@@ -220,6 +220,11 @@ export default class Topic {
       (name.substring(0, 3) == Const.TOPIC_CHAN || name.substring(0, 3) == Const.TOPIC_NEW_CHAN);
   }
 
+  // Returns true if pub is meant to replace another message (e.g. original message was edited).
+  static #isReplacementMsg(pub) {
+    return pub.head && pub.head.replace;
+  }
+
   /**
    * Check if the topic is subscribed.
    * @returns {boolean} True is topic is attached/subscribed, false otherwise.
@@ -500,13 +505,33 @@ export default class Topic {
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   getMessagesPage(limit, forward) {
+    // Find all gaps in cached messages, including gaps due to deletions.
+    const gaps = [];
+    this._messages.forEach((msg, prev) => {
+      const p = prev || {
+        seq: 0
+      };
+      if (msg.seq > p.seq + 1) {
+        gaps.push({
+          low: p.seq + 1,
+          hi: msg.seq
+        });
+      }
+    });
+    console.log("Gaps in cache found:", gaps);
+
+    /*
     this._tinode._db.missingRanges(this.name, this._maxSeq, limit, forward ? this._maxSeq : undefined)
       .then(ranges => {
         let query = forward ?
           this.startMetaQuery().withLaterData(limit) :
           this.startMetaQuery().withEarlierData(limit);
       });
+    */
 
+    let query = forward ?
+      this.startMetaQuery().withLaterData(limit) :
+      this.startMetaQuery().withEarlierData(limit);
     // First try fetching from DB, then from the server.
     return this._loadMessages(this._tinode._db, query.extract('data'))
       .then(count => {
@@ -1149,7 +1174,7 @@ export default class Topic {
         // save displayable messages in a temporary buffer.
         let msgs = [];
         this._messages.forEach((msg, unused1, unused2, i) => {
-          if (this._isReplacementMsg(msg)) {
+          if (Topic.#isReplacementMsg(msg)) {
             // Skip replacements.
             return;
           }
@@ -1559,15 +1584,10 @@ export default class Topic {
     return status;
   }
 
-  // Returns true if pub is meant to replace another message (e.g. original message was edited).
-  _isReplacementMsg(pub) {
-    return pub.head && pub.head.replace;
-  }
-
   // If msg is a replacement for another message, save the msg in the message versions cache
   // as a newer version for the message it's supposed to replace.
   _maybeUpdateMessageVersionsCache(msg) {
-    if (!this._isReplacementMsg(msg)) {
+    if (!Topic.#isReplacementMsg(msg)) {
       // Check if this message is the original in the chain of edits and if so
       // ensure all version have the same sender.
       if (this._messageVersions[msg.seq]) {

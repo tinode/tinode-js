@@ -174,13 +174,13 @@ export default class CBuffer {
    * @memberof Tinode.CBuffer#
    *
    * @param {Tinode.ForEachCallbackType} callback - Function to call for each element.
-   * @param {number} startIdx - Optional index to start iterating from (inclusive).
-   * @param {number} beforeIdx - Optional index to stop iterating before (exclusive).
+   * @param {number} startIdx - Optional index to start iterating from (inclusive), default: 0.
+   * @param {number} beforeIdx - Optional index to stop iterating before (exclusive), default: length of the buffer.
    * @param {Object} context - calling context (i.e. value of <code>this</code> in callback)
    */
   forEach(callback, startIdx, beforeIdx, context) {
-    startIdx = startIdx | 0;
-    beforeIdx = beforeIdx || this.buffer.length;
+    startIdx = Math.max(0, startIdx | 0);
+    beforeIdx = Math.min(beforeIdx || this.buffer.length, this.buffer.length);
 
     for (let i = startIdx; i < beforeIdx; i++) {
       callback.call(context, this.buffer[i],
