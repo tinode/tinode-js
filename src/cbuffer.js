@@ -96,8 +96,9 @@ export default class CBuffer {
   }
 
   /**
-   * Add new element(s) to the buffer. Variadic: takes one or more arguments. If an array is passed as a single
-   * argument, its elements are inserted individually.
+   * Insert new element(s) to the buffer at the correct position according to the sort method.
+   * Variadic: takes one or more arguments. If an array is passed as a single argument, its
+   * elements are inserted individually.
    * @memberof Tinode.CBuffer#
    *
    * @param {...Object|Array} - One or more objects to insert.

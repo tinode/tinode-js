@@ -501,33 +501,12 @@ export default class Topic {
    * @memberof Tinode.Topic#
    *
    * @param {number} limit number of messages to get.
+   * @param {Array.<Range>} gaps - ranges of messages to load.
    * @param {boolean} forward if true, request newer messages.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
-  getMessagesPage(limit, forward) {
-    // Find all gaps in cached messages, including gaps due to deletions.
-    const gaps = [];
-    this._messages.forEach((msg, prev) => {
-      const p = prev || {
-        seq: 0
-      };
-      if (msg.seq > p.seq + 1) {
-        gaps.push({
-          low: p.seq + 1,
-          hi: msg.seq
-        });
-      }
-    });
-    console.log("Gaps in cache found:", gaps);
-
-    /*
-    this._tinode._db.missingRanges(this.name, this._maxSeq, limit, forward ? this._maxSeq : undefined)
-      .then(ranges => {
-        let query = forward ?
-          this.startMetaQuery().withLaterData(limit) :
-          this.startMetaQuery().withEarlierData(limit);
-      });
-    */
+  getMessagesPage(limit, gaps, forward) {
+    console.log("getMessagesPage", gaps, forward);
 
     let query = forward ?
       this.startMetaQuery().withLaterData(limit) :
@@ -1178,6 +1157,10 @@ export default class Topic {
             // Skip replacements.
             return;
           }
+          if (msg._deleted) {
+            // Skip deleted ranges.
+            return;
+          }
           // In case the massage was edited, replace timestamp of the version with the original's timestamp.
           const latest = this.latestMsgVersion(msg.seq) || msg;
           if (!latest._origTs) {
@@ -1334,12 +1317,46 @@ export default class Topic {
    * Check if cached message IDs indicate that the server may have more messages.
    * @memberof Tinode.Topic#
    *
+   * @param {number} min - smallest seq ID loaded range.
+   * @param {number} max - greatest seq ID in loaded range.
    * @param {boolean} newer - if <code>true</code>, check for newer messages only.
+   * @returns {Array.<Range>} - missing ranges in the selected direction.
    */
-  msgHasMoreMessages(newer) {
-    return newer ? this.seq > this._maxSeq :
-      // _minSeq could be more than 1, but earlier messages could have been deleted.
-      (this._minSeq > 1 && !this._noEarlierMsgs);
+  msgHasMoreMessages(min, max, newer) {
+    // Find gaps in cached messages.
+    const gaps = [];
+    let maxSeq = 0;
+    let gap;
+    this._messages.forEach((msg, prev) => {
+      const p = prev || {
+        seq: 0
+      };
+      const expected = p._deleted ? p.hi : p.seq + 1;
+      if (msg.seq > expected) {
+        gap = {
+          low: expected,
+          hi: msg.seq
+        };
+      } else {
+        gap = null;
+      }
+      if (gap && (newer ? gap.hi >= min : gap.low < max)) {
+        gaps.push(gap);
+      }
+      maxSeq = expected;
+    });
+
+    if (maxSeq < this.seq) {
+      gap = {
+        low: maxSeq + 1,
+        hi: this.seq + 1
+      };
+      if (newer ? gap.hi >= min : gap.low < max) {
+        gaps.push(gap);
+      }
+    }
+    console.log("Gaps in cache found:", gaps, "min/max:", min, max, "haveMore:", gaps.length > 0);
+    return gaps;
   }
   /**
    * Check if the given seq Id is id of the most recent message.
@@ -1979,17 +1996,20 @@ export default class Topic {
   }
 
   // Load most recent messages from persistent cache.
-  _loadMessages(db, params) {
-    const {
-      since,
-      before,
-      limit
-    } = params || {};
-    return db.readMessages(this.name, {
-        since: since,
-        before: before,
-        limit: limit || Const.DEFAULT_MESSAGES_PAGE
-      })
+  _loadMessages(db, query) {
+    query = query || {};
+    query.limit = query.limit || Const.DEFAULT_MESSAGES_PAGE;
+
+    /*
+    this._tinode._db.missingRanges(this.name, this._maxSeq, limit, forward ? this._maxSeq : undefined)
+      .then(ranges => {
+        let query = forward ?
+          this.startMetaQuery().withLaterData(limit) :
+          this.startMetaQuery().withEarlierData(limit);
+      });
+    */
+
+    return db.readMessages(this.name, query)
       .then(msgs => {
         msgs.forEach(data => {
           if (data.seq > this._maxSeq) {
@@ -2002,6 +2022,21 @@ export default class Topic {
           this._maybeUpdateMessageVersionsCache(data);
         });
         return msgs.length;
+      })
+      .then(_ => db.readDelLog(this.name, query))
+      .then(dellog => {
+        return dellog.forEach(rec => {
+          this._messages.put({
+            seq: rec.low,
+            low: rec.low,
+            hi: rec.hi,
+            _deleted: true
+          });
+        });
+      })
+      .then(_ => {
+        // DEBUG
+        this._messages.forEach(msg => console.log(msg));
       });
   }
 

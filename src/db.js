@@ -9,6 +9,10 @@
 // Localizable strings should be double quoted "строка на другом языке",
 // non-localizable strings should be single quoted 'non-localized'.
 
+import {
+  clipRange
+} from './utils.js';
+
 const DB_VERSION = 3;
 const DB_NAME = 'tinode-web';
 
@@ -557,13 +561,16 @@ export default class DB {
         query.ranges.forEach(range => {
           const key = range.hi ? IDBKeyRange.bound([topicName, range.low], [topicName, range.Hi], false, true) :
             IDBKeyRange.only([topicName, range.low])
-          const req = trx.objectStore('message').get(key);
-          req.onsuccess = event => {
+          trx.objectStore('message').get(key).onsuccess = event => {
+            const msgs = event.target.result;
+            if (callback) {
+              callback.call(context, msgs);
+            }
             count++;
-            if (Array.isArray(event.target.result)) {
-              result.concat(event.target.result);
+            if (Array.isArray(msgs)) {
+              result.concat(msgs);
             } else {
-              result.push(event.target.result);
+              result.push(msgs);
             }
             if (count == query.ranges.length) {
               resolve(result);
@@ -611,7 +618,7 @@ export default class DB {
    * @memberOf DB
    * @param {string} topicName - name of the topic to retrieve messages from.
    * @param {number} from - position to search from.
-   * @param {number} limit - position to search from.
+   * @param {number} limit - maximum number of items in all deleted ranges.
    * @param {number} maxSeq - if <code>&gt;0</code> find newer missing range upto maxSeq value, older otherwise.
    *
    * @return {Promise} promise resolved/rejected on operation completion.
@@ -691,7 +698,7 @@ export default class DB {
               const delrange = event2.target.result && event2.target.result.value;
               if (delrange) {
                 const result = [];
-                clipped.forEach(r => result.push.apply(result, DB.#clipRange(r, delrange)));
+                clipped.forEach(r => result.push.apply(result, clipRange(r, delrange)));
                 clipped = result;
                 if (clipped.length > 0) {
                   // This missing range is not empty. Fetch the next deleted range.
@@ -752,6 +759,56 @@ export default class DB {
         hi: r.hi || (r.low + 1)
       }));
       trx.commit();
+    });
+  }
+
+  /**
+   * Retrieve deleted message records from persistent store.
+   * @memberOf DB
+   * @param {string} topicName - name of the topic to retrieve records for.
+   * @param {GetDataType} query - parameters of the message range to retrieve.
+   * @return {Promise} promise resolved/rejected on operation completion.
+   */
+  readDelLog(topicName, query) {
+    query = query || {};
+    const since = query.since > 0 ? query.since : 0;
+    const before = query.before > 0 ? query.before : Number.MAX_SAFE_INTEGER;
+    const limit = query.limit | 0;
+
+    if (!this.isReady()) {
+      return this.disabled ?
+        Promise.resolve([]) :
+        Promise.reject(new Error("not initialized"));
+    }
+
+    return new Promise((resolve, reject) => {
+      const trx = this.db.transaction(['dellog']);
+      trx.onerror = event => {
+        this.#logger('PCache', 'readDelLog', event.target.error);
+        reject(event.target.error);
+      };
+
+      let count = 0;
+      const result = [];
+      const range = IDBKeyRange.bound([topicName, 0, since], [topicName, before, Number.MAX_SAFE_INTEGER], false, true);
+      trx.objectStore('dellog').openCursor(range, 'prev')
+        .onsuccess = event => {
+          const cursor = event.target.result;
+          if (cursor) {
+            result.push({
+              low: cursor.value.low,
+              hi: cursor.value.hi
+            });
+            count += cursor.value.hi - cursor.value.low;
+            if (limit <= 0 || count < limit) {
+              cursor.continue();
+            } else {
+              resolve(result);
+            }
+          } else {
+            resolve(result);
+          }
+        };
     });
   }
 
@@ -854,42 +911,6 @@ export default class DB {
       }
     });
     return res;
-  }
-
-  // Cut 'clip' range out of 'src' range.
-  // Returns an array with 0, 1 or 2 elements.
-  static #clipRange(src, clip) {
-    if (clip.hi < src.low || clip.low >= src.hi) {
-      // Clip is completely outside of src, no intersection.
-      return [src];
-    }
-
-    if (clip.low <= src.low) {
-      if (clip.hi >= src.hi) {
-        // The source range is completely inside the clipping range.
-        return [];
-      }
-      // Partial clipping at the top.
-      return [{
-        low: src.low,
-        hi: clip.hi
-      }];
-    }
-
-    // Range on the lower end.
-    const result = [{
-      low: src.low,
-      hi: clip.low
-    }];
-    if (clip.hi < src.hi) {
-      // Maybe a range on the higher end, if clip is completely inside the source.
-      result.push({
-        low: clip.hi,
-        hi: src.hi
-      });
-    }
-
-    return result;
   }
 
   /**

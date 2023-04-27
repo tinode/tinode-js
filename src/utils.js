@@ -232,3 +232,39 @@ export function listToRanges(list) {
     return out;
   }, []);
 }
+
+// Cuts 'clip' range out of the 'src' range.
+// Returns an array with 0, 1 or 2 elements.
+export function clipRange(src, clip) {
+  if (clip.hi < src.low || clip.low >= src.hi) {
+    // Clip is completely outside of src, no intersection.
+    return [src];
+  }
+
+  if (clip.low <= src.low) {
+    if (clip.hi >= src.hi) {
+      // The source range is completely inside the clipping range.
+      return [];
+    }
+    // Partial clipping at the top.
+    return [{
+      low: src.low,
+      hi: clip.hi
+    }];
+  }
+
+  // Range on the lower end.
+  const result = [{
+    low: src.low,
+    hi: clip.low
+  }];
+  if (clip.hi < src.hi) {
+    // Maybe a range on the higher end, if clip is completely inside the source.
+    result.push({
+      low: clip.hi,
+      hi: src.hi
+    });
+  }
+
+  return result;
+}
