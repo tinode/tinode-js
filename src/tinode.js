@@ -402,9 +402,7 @@ export class Tinode {
 
     this._persist = config.persist;
     // Initialize object regardless. It simplifies the code.
-    this._db = new DBCache(err => {
-      this.logger('DB', err);
-    }, this.logger);
+    this._db = new DBCache(this.logger, this.logger);
 
     if (this._persist) {
       // Create the persistent cache.
@@ -428,7 +426,6 @@ export class Tinode {
           this.#attachCacheToTopic(topic);
           topic._cachePutSelf();
           this._db.maxDelId(topic.name).then(clear => {
-            console.log("topic=", topic.name, "delID=", clear, "was", topic._maxDel);
             topic._maxDel = Math.max(topic._maxDel, clear || 0);
           });
           // Topic loaded from DB is not new.

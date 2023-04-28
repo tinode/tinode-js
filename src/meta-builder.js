@@ -69,11 +69,13 @@ export default class MetaGetBuilder {
    * @memberof Tinode.MetaGetBuilder#
    *
    * @param {Array.<SeqRange>} ranges - ranges of seq IDs to fetch.
+   * @param {number=} limit - maximum number of messages to fetch.
    * @returns {Tinode.MetaGetBuilder} <code>this</code> object.
    */
-  withDataRanges(ranges) {
+  withDataRanges(ranges, limit) {
     this.what['data'] = {
-      ranges: normalizeRanges(ranges, this.topic._maxSeq)
+      ranges: normalizeRanges(ranges, this.topic._maxSeq),
+      limit: limit
     };
     return this;
   }

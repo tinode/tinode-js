@@ -1065,6 +1065,7 @@ class DB {
         resolve(event.target.result);
       };
       trx.onerror = event => {
+        console.log(msg.seq, event.target.error);
         this.#logger('PCache', 'addMessage', event.target.error);
         reject(event.target.error);
       };
@@ -1128,7 +1129,7 @@ class DB {
       return this.disabled ? Promise.resolve([]) : Promise.reject(new Error("not initialized"));
     }
     const trx = this.db.transaction(['message']);
-    const result = [];
+    let result = [];
     if (Array.isArray(query.ranges)) {
       return new Promise((resolve, reject) => {
         trx.onerror = event => {
@@ -1137,18 +1138,21 @@ class DB {
         };
         let count = 0;
         query.ranges.forEach(range => {
-          const key = range.hi ? IDBKeyRange.bound([topicName, range.low], [topicName, range.Hi], false, true) : IDBKeyRange.only([topicName, range.low]);
-          trx.objectStore('message').get(key).onsuccess = event => {
+          const key = range.hi ? IDBKeyRange.bound([topicName, range.low], [topicName, range.hi], false, true) : IDBKeyRange.only([topicName, range.low]);
+          trx.objectStore('message').getAll(key).onsuccess = event => {
             const msgs = event.target.result;
-            if (callback) {
-              callback.call(context, msgs);
+            console.log('readMessages', range, key, msgs);
+            if (msgs) {
+              if (callback) {
+                callback.call(context, msgs);
+              }
+              if (Array.isArray(msgs)) {
+                result = result.concat(msgs);
+              } else {
+                result.push(msgs);
+              }
             }
             count++;
-            if (Array.isArray(msgs)) {
-              result.concat(msgs);
-            } else {
-              result.push(msgs);
-            }
             if (count == query.ranges.length) {
               resolve(result);
             }
@@ -3726,9 +3730,10 @@ class MetaGetBuilder {
   withLaterData(limit) {
     return this.withData(this.topic._maxSeq > 0 ? this.topic._maxSeq + 1 : undefined, undefined, limit);
   }
-  withDataRanges(ranges) {
+  withDataRanges(ranges, limit) {
     this.what['data'] = {
-      ranges: (0,_utils__WEBPACK_IMPORTED_MODULE_0__.normalizeRanges)(ranges, this.topic._maxSeq)
+      ranges: (0,_utils__WEBPACK_IMPORTED_MODULE_0__.normalizeRanges)(ranges, this.topic._maxSeq),
+      limit: limit
     };
     return this;
   }
@@ -4076,11 +4081,13 @@ class Topic {
   getMeta(params) {
     return this._tinode.getMeta(this.name, params);
   }
-  getMessagesPage(limit, gaps, forward) {
-    console.log("getMessagesPage", gaps, forward);
-    let query = forward ? this.startMetaQuery().withLaterData(limit) : this.startMetaQuery().withEarlierData(limit);
+  getMessagesPage(limit, gaps, min, max, newer) {
+    console.log("getMessagesPage", gaps, min, max, newer);
+    let query = gaps ? this.startMetaQuery().withDataRanges(gaps, limit) : newer ? this.startMetaQuery().withData(min, undefined, limit) : this.startMetaQuery().withData(undefined, max, limit);
     return this._loadMessages(this._tinode._db, query.extract('data')).then(count => {
-      if (count == limit) {
+      console.log("getMessagesPage._loadMessages, count=", count);
+      gaps = this.msgHasMoreMessages(min, max, newer);
+      if (gaps.length == 0) {
         return Promise.resolve({
           topic: this.name,
           code: 200,
@@ -4090,16 +4097,8 @@ class Topic {
         });
       }
       limit -= count;
-      query = forward ? this.startMetaQuery().withLaterData(limit) : this.startMetaQuery().withEarlierData(limit);
-      let promise = this.getMeta(query.build());
-      if (!forward) {
-        promise = promise.then(ctrl => {
-          if (ctrl && ctrl.params && !ctrl.params.count) {
-            this._noEarlierMsgs = true;
-          }
-        });
-      }
-      return promise;
+      query = this.startMetaQuery().withDataRanges(gaps, limit);
+      return this.getMeta(query.build());
     });
   }
   getPinnedMessages() {
@@ -4565,7 +4564,9 @@ class Topic {
         gaps.push(gap);
       }
     }
-    console.log("Gaps in cache found:", gaps, "min/max:", min, max, "haveMore:", gaps.length > 0);
+    if (gaps.length > 0) {
+      console.log("Gaps in cache found:", gaps, "min/max:", min, max, "haveMore:", gaps.length > 0);
+    }
     return gaps;
   }
   isNewMessage(seqId) {
@@ -4994,7 +4995,10 @@ class Topic {
   _loadMessages(db, query) {
     query = query || {};
     query.limit = query.limit || _config_js__WEBPACK_IMPORTED_MODULE_3__.DEFAULT_MESSAGES_PAGE;
+    let count = 0;
+    console.log("_loadMessages", query);
     return db.readMessages(this.name, query).then(msgs => {
+      console.log("_loadMessages.readMessages", msgs);
       msgs.forEach(data => {
         if (data.seq > this._maxSeq) {
           this._maxSeq = data.seq;
@@ -5005,8 +5009,9 @@ class Topic {
         this._messages.put(data);
         this._maybeUpdateMessageVersionsCache(data);
       });
-      return msgs.length;
+      count = msgs.length;
     }).then(_ => db.readDelLog(this.name, query)).then(dellog => {
+      console.log("_loadMessages.readDelLog", dellog);
       return dellog.forEach(rec => {
         this._messages.put({
           seq: rec.low,
@@ -5016,7 +5021,7 @@ class Topic {
         });
       });
     }).then(_ => {
-      this._messages.forEach(msg => console.log(msg));
+      return count;
     });
   }
   _updateReceived(seq, act) {
@@ -5632,9 +5637,7 @@ class Tinode {
       }
     };
     this._persist = config.persist;
-    this._db = new _db_js__WEBPACK_IMPORTED_MODULE_4__["default"](err => {
-      this.logger('DB', err);
-    }, this.logger);
+    this._db = new _db_js__WEBPACK_IMPORTED_MODULE_4__["default"](this.logger, this.logger);
     if (this._persist) {
       const prom = [];
       this._db.initDatabase().then(_ => {

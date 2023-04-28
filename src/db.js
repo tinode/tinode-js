@@ -547,7 +547,7 @@ export default class DB {
     }
 
     const trx = this.db.transaction(['message']);
-    const result = [];
+    let result = [];
 
     // Handle individual message ranges.
     if (Array.isArray(query.ranges)) {
@@ -559,19 +559,21 @@ export default class DB {
 
         let count = 0;
         query.ranges.forEach(range => {
-          const key = range.hi ? IDBKeyRange.bound([topicName, range.low], [topicName, range.Hi], false, true) :
-            IDBKeyRange.only([topicName, range.low])
-          trx.objectStore('message').get(key).onsuccess = event => {
+          const key = range.hi ? IDBKeyRange.bound([topicName, range.low], [topicName, range.hi], false, true) :
+            IDBKeyRange.only([topicName, range.low]);
+          trx.objectStore('message').getAll(key).onsuccess = event => {
             const msgs = event.target.result;
-            if (callback) {
-              callback.call(context, msgs);
+            if (msgs) {
+              if (callback) {
+                callback.call(context, msgs);
+              }
+              if (Array.isArray(msgs)) {
+                result = result.concat(msgs);
+              } else {
+                result.push(msgs);
+              }
             }
             count++;
-            if (Array.isArray(msgs)) {
-              result.concat(msgs);
-            } else {
-              result.push(msgs);
-            }
             if (count == query.ranges.length) {
               resolve(result);
             }

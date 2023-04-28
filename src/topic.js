@@ -497,25 +497,30 @@ export default class Topic {
   }
 
   /**
-   * Request more messages from the server
+   * Request more messages from the server. The goal is to load continous range of messages
+   * covering at least between 'min' and 'max' + one full page forward (newer = true) or backwards
+   * (newer=false).
    * @memberof Tinode.Topic#
    *
    * @param {number} limit number of messages to get.
    * @param {Array.<Range>} gaps - ranges of messages to load.
-   * @param {boolean} forward if true, request newer messages.
+   * @param {number} min if non-negative, request newer messages with seq >= min.
+   * @param {number} max if positive, request older messages with seq < max.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
-  getMessagesPage(limit, gaps, forward) {
-    console.log("getMessagesPage", gaps, forward);
-
-    let query = forward ?
-      this.startMetaQuery().withLaterData(limit) :
-      this.startMetaQuery().withEarlierData(limit);
+  getMessagesPage(limit, gaps, min, max, newer) {
+    let query = gaps ?
+      this.startMetaQuery().withDataRanges(gaps, limit) :
+      newer ?
+      this.startMetaQuery().withData(min, undefined, limit) :
+      this.startMetaQuery().withData(undefined, max, limit);
     // First try fetching from DB, then from the server.
     return this._loadMessages(this._tinode._db, query.extract('data'))
       .then(count => {
-        if (count == limit) {
-          // Got enough messages from local cache.
+        // Recalculate missing ranges.
+        gaps = this.msgHasMoreMessages(min, max, newer);
+        if (gaps.length == 0) {
+          // All messages loaded.
           return Promise.resolve({
             topic: this.name,
             code: 200,
@@ -528,17 +533,8 @@ export default class Topic {
         // Reduce the count of requested messages.
         limit -= count;
         // Update query with new values loaded from DB.
-        query = forward ? this.startMetaQuery().withLaterData(limit) :
-          this.startMetaQuery().withEarlierData(limit);
-        let promise = this.getMeta(query.build());
-        if (!forward) {
-          promise = promise.then(ctrl => {
-            if (ctrl && ctrl.params && !ctrl.params.count) {
-              this._noEarlierMsgs = true;
-            }
-          });
-        }
-        return promise;
+        query = this.startMetaQuery().withDataRanges(gaps, limit);
+        return this.getMeta(query.build());
       });
   }
 
@@ -1355,7 +1351,6 @@ export default class Topic {
         gaps.push(gap);
       }
     }
-    console.log("Gaps in cache found:", gaps, "min/max:", min, max, "haveMore:", gaps.length > 0);
     return gaps;
   }
   /**
@@ -2000,15 +1995,8 @@ export default class Topic {
     query = query || {};
     query.limit = query.limit || Const.DEFAULT_MESSAGES_PAGE;
 
-    /*
-    this._tinode._db.missingRanges(this.name, this._maxSeq, limit, forward ? this._maxSeq : undefined)
-      .then(ranges => {
-        let query = forward ?
-          this.startMetaQuery().withLaterData(limit) :
-          this.startMetaQuery().withEarlierData(limit);
-      });
-    */
-
+    // Count of message loaded from DB.
+    let count = 0;
     return db.readMessages(this.name, query)
       .then(msgs => {
         msgs.forEach(data => {
@@ -2021,7 +2009,7 @@ export default class Topic {
           this._messages.put(data);
           this._maybeUpdateMessageVersionsCache(data);
         });
-        return msgs.length;
+        count = msgs.length;
       })
       .then(_ => db.readDelLog(this.name, query))
       .then(dellog => {
@@ -2036,7 +2024,7 @@ export default class Topic {
       })
       .then(_ => {
         // DEBUG
-        this._messages.forEach(msg => console.log(msg));
+        return count;
       });
   }
 
