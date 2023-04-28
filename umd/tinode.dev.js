@@ -1065,7 +1065,6 @@ class DB {
         resolve(event.target.result);
       };
       trx.onerror = event => {
-        console.log(msg.seq, event.target.error);
         this.#logger('PCache', 'addMessage', event.target.error);
         reject(event.target.error);
       };
@@ -1141,7 +1140,6 @@ class DB {
           const key = range.hi ? IDBKeyRange.bound([topicName, range.low], [topicName, range.hi], false, true) : IDBKeyRange.only([topicName, range.low]);
           trx.objectStore('message').getAll(key).onsuccess = event => {
             const msgs = event.target.result;
-            console.log('readMessages', range, key, msgs);
             if (msgs) {
               if (callback) {
                 callback.call(context, msgs);
@@ -4082,10 +4080,8 @@ class Topic {
     return this._tinode.getMeta(this.name, params);
   }
   getMessagesPage(limit, gaps, min, max, newer) {
-    console.log("getMessagesPage", gaps, min, max, newer);
     let query = gaps ? this.startMetaQuery().withDataRanges(gaps, limit) : newer ? this.startMetaQuery().withData(min, undefined, limit) : this.startMetaQuery().withData(undefined, max, limit);
     return this._loadMessages(this._tinode._db, query.extract('data')).then(count => {
-      console.log("getMessagesPage._loadMessages, count=", count);
       gaps = this.msgHasMoreMessages(min, max, newer);
       if (gaps.length == 0) {
         return Promise.resolve({
@@ -4564,9 +4560,6 @@ class Topic {
         gaps.push(gap);
       }
     }
-    if (gaps.length > 0) {
-      console.log("Gaps in cache found:", gaps, "min/max:", min, max, "haveMore:", gaps.length > 0);
-    }
     return gaps;
   }
   isNewMessage(seqId) {
@@ -4996,9 +4989,7 @@ class Topic {
     query = query || {};
     query.limit = query.limit || _config_js__WEBPACK_IMPORTED_MODULE_3__.DEFAULT_MESSAGES_PAGE;
     let count = 0;
-    console.log("_loadMessages", query);
     return db.readMessages(this.name, query).then(msgs => {
-      console.log("_loadMessages.readMessages", msgs);
       msgs.forEach(data => {
         if (data.seq > this._maxSeq) {
           this._maxSeq = data.seq;
@@ -5011,7 +5002,6 @@ class Topic {
       });
       count = msgs.length;
     }).then(_ => db.readDelLog(this.name, query)).then(dellog => {
-      console.log("_loadMessages.readDelLog", dellog);
       return dellog.forEach(rec => {
         this._messages.put({
           seq: rec.low,
@@ -5657,7 +5647,6 @@ class Tinode {
           this.#attachCacheToTopic(topic);
           topic._cachePutSelf();
           this._db.maxDelId(topic.name).then(clear => {
-            console.log("topic=", topic.name, "delID=", clear, "was", topic._maxDel);
             topic._maxDel = Math.max(topic._maxDel, clear || 0);
           });
           delete topic._new;
