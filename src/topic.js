@@ -1657,11 +1657,15 @@ export default class Topic {
 
     if (data.head && data.head.webrtc && data.head.mime == Drafty.getContentType() && data.content) {
       // Rewrite VC body with info from the headers.
-      data.content = Drafty.updateVideoCall(data.content, {
+      let upd = {
         state: data.head.webrtc,
         duration: data.head['webrtc-duration'],
         incoming: !outgoing,
-      });
+      };
+      if (data.head.vc) {
+        upd.vc = true;
+      }
+      data.content = Drafty.updateVideoCall(data.content, upd);
     }
 
     if (!data._noForwarding) {
