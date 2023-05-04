@@ -1657,7 +1657,7 @@ export default class Topic {
 
     if (data.head && data.head.webrtc && data.head.mime == Drafty.getContentType() && data.content) {
       // Rewrite VC body with info from the headers.
-      let upd = {
+      const upd = {
         state: data.head.webrtc,
         duration: data.head['webrtc-duration'],
         incoming: !outgoing,
