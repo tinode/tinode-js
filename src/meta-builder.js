@@ -21,7 +21,7 @@ export default class MetaGetBuilder {
 
   // Get timestamp of the most recent desc update.
   #get_desc_ims() {
-    return this.topic.updated;
+    return this.topic._deleted ? undefined : this.topic.updated;
   }
 
   // Get timestamp of the most recent subs update.
@@ -29,7 +29,7 @@ export default class MetaGetBuilder {
     if (this.topic.isP2PType()) {
       return this.#get_desc_ims();
     }
-    return this.topic._lastSubsUpdate;
+    return this.topic._deleted ? undefined : this.topic._lastSubsUpdate;
   }
   /**
    * Add query parameters to fetch messages within explicit limits.

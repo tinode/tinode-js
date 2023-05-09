@@ -239,11 +239,6 @@ export class Topic {
       return Promise.resolve(this);
     }
 
-    // If the topic is deleted, reject subscription requests.
-    if (this._deleted) {
-      return Promise.reject(new Error("Conversation deleted"));
-    }
-
     // Send subscribe message, handle async response.
     // If topic name is explicitly provided, use it. If no name, then it's a new group topic,
     // use "new".
@@ -1633,7 +1628,7 @@ export class Topic {
         // Issue {get sub} only if the current user has no p2p topics with the updated user (p2p name is not in cache).
         // Otherwise 'me' will issue a {get desc} request.
         if (pres.src && !this._tinode.isTopicCached(pres.src)) {
-          this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
+          this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
         }
         break;
       case 'acs':
@@ -2076,6 +2071,8 @@ export class TopicMe extends Topic {
 
   // Process presence change message
   _routePres(pres) {
+    console.log("me._routePres", pres.what);
+
     if (pres.what == 'term') {
       // The 'me' topic itself is detached. Mark as unsubscribed.
       this._resetSub();
@@ -2103,6 +2100,7 @@ export class TopicMe extends Topic {
           }
           break;
         case 'msg': // new message received
+          console.log("me._routePres>_updateReceived", pres.seq, pres.act, cont._deleted);
           cont._updateReceived(pres.seq, pres.act);
           break;
         case 'upd': // desc updated
@@ -2138,10 +2136,12 @@ export class TopicMe extends Topic {
           break;
         case 'gone':
           // topic deleted or unsubscribed from.
+          this._tinode.cacheRemTopic(pres.src);
+          console.log("gone, deleting", this._tinode.cacheGetTopic(pres.src));
           if (!cont._deleted) {
             cont._deleted = true;
             cont._attached = false;
-            this._tinode._db.markTopicAsDeleted(pres.src);
+            this._tinode._db.markTopicAsDeleted(pres.src, true);
           } else {
             this._tinode._db.remTopic(pres.src);
           }
@@ -2172,14 +2172,23 @@ export class TopicMe extends Topic {
           this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
           // Create a dummy entry to catch online status update.
           const dummy = this._tinode.getTopic(pres.src);
-          dummy.topic = pres.src;
           dummy.online = false;
           dummy.acs = acs;
           this._tinode._db.updTopic(dummy);
         }
       } else if (pres.what == 'tags') {
         this.getMeta(this.startMetaQuery().withTags().build());
+      } else if (pres.what == 'msg') {
+        console.log("me._routePres > this.getMeta", pres.src);
+        // Message received for un unknown (previously deleted) topic.
+        this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
+        // Create an entry to catch updates and messages.
+        const dummy = this._tinode.getTopic(pres.src);
+        dummy._deleted = false;
+        this._tinode._db.updTopic(dummy);
       }
+
+      this._refreshContact(pres.what, cont);
     }
 
     if (this.onPres) {
