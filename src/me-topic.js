@@ -232,10 +232,11 @@ export default class TopicMe extends Topic {
           break;
         case 'gone':
           // topic deleted or unsubscribed from.
+          this._tinode.cacheRemTopic(pres.src);
           if (!cont._deleted) {
             cont._deleted = true;
             cont._attached = false;
-            this._tinode._db.markTopicAsDeleted(pres.src);
+            this._tinode._db.markTopicAsDeleted(pres.src, true);
           } else {
             this._tinode._db.remTopic(pres.src);
           }
@@ -273,7 +274,16 @@ export default class TopicMe extends Topic {
         }
       } else if (pres.what == 'tags') {
         this.getMeta(this.startMetaQuery().withTags().build());
+      } else if (pres.what == 'msg') {
+        // Message received for un unknown (previously deleted) topic.
+        this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
+        // Create an entry to catch updates and messages.
+        const dummy = this._tinode.getTopic(pres.src);
+        dummy._deleted = false;
+        this._tinode._db.updTopic(dummy);
       }
+
+      this._refreshContact(pres.what, cont);
     }
 
     if (this.onPres) {

@@ -189,9 +189,10 @@ export default class DB {
    * Mark or unmark topic as deleted.
    * @memberOf DB
    * @param {string} name - name of the topic to mark or unmark.
+   * @param {boolean} deleted - status
    * @return {Promise} promise resolved/rejected on operation completion.
    */
-  markTopicAsDeleted(name) {
+  markTopicAsDeleted(name, deleted) {
     if (!this.isReady()) {
       return this.disabled ?
         Promise.resolve() :
@@ -209,8 +210,10 @@ export default class DB {
       const req = trx.objectStore('topic').get(name);
       req.onsuccess = event => {
         const topic = event.target.result;
-        topic._deleted = true;
-        trx.objectStore('topic').put(topic);
+        if (topic && topic._deleted != deleted) {
+          topic._deleted = deleted;
+          trx.objectStore('topic').put(topic);
+        }
         trx.commit();
       };
     });

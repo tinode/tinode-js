@@ -250,11 +250,6 @@ export default class Topic {
       return Promise.resolve(this);
     }
 
-    // If the topic is deleted, reject subscription requests.
-    if (this._deleted) {
-      return Promise.reject(new Error("Conversation deleted"));
-    }
-
     // Send subscribe message, handle async response.
     // If topic name is explicitly provided, use it. If no name, then it's a new group topic,
     // use "new".
@@ -1742,7 +1737,7 @@ export default class Topic {
         // Issue {get sub} only if the current user has no p2p topics with the updated user (p2p name is not in cache).
         // Otherwise 'me' will issue a {get desc} request.
         if (pres.src && !this._tinode.isTopicCached(pres.src)) {
-          this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
+          this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
         }
         break;
       case 'aux':
