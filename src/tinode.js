@@ -843,9 +843,6 @@ export class Tinode {
 
   // Cache management
   #cachePut(type, name, obj) {
-    if (name == 'usrGosrQjv25RM') {
-      console.log("adding", type, "to cache", new Error("stacktrace"));
-    }
     this._cache[type + ':' + name] = obj;
   }
   #cacheGet(type, name) {

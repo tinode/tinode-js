@@ -2071,8 +2071,6 @@ export class TopicMe extends Topic {
 
   // Process presence change message
   _routePres(pres) {
-    console.log("me._routePres", pres.what);
-
     if (pres.what == 'term') {
       // The 'me' topic itself is detached. Mark as unsubscribed.
       this._resetSub();
@@ -2100,7 +2098,6 @@ export class TopicMe extends Topic {
           }
           break;
         case 'msg': // new message received
-          console.log("me._routePres>_updateReceived", pres.seq, pres.act, cont._deleted);
           cont._updateReceived(pres.seq, pres.act);
           break;
         case 'upd': // desc updated
@@ -2137,7 +2134,6 @@ export class TopicMe extends Topic {
         case 'gone':
           // topic deleted or unsubscribed from.
           this._tinode.cacheRemTopic(pres.src);
-          console.log("gone, deleting", this._tinode.cacheGetTopic(pres.src));
           if (!cont._deleted) {
             cont._deleted = true;
             cont._attached = false;
@@ -2179,7 +2175,6 @@ export class TopicMe extends Topic {
       } else if (pres.what == 'tags') {
         this.getMeta(this.startMetaQuery().withTags().build());
       } else if (pres.what == 'msg') {
-        console.log("me._routePres > this.getMeta", pres.src);
         // Message received for un unknown (previously deleted) topic.
         this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
         // Create an entry to catch updates and messages.
