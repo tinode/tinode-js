@@ -1322,6 +1322,9 @@ export default class Topic {
   msgHasMoreMessages(min, max, newer) {
     // Find gaps in cached messages.
     const gaps = [];
+    if (min >= max) {
+      return gaps;
+    }
     let maxSeq = 0;
     let gap;
     this._messages.forEach((msg, prev) => {
@@ -1337,6 +1340,8 @@ export default class Topic {
       } else {
         gap = null;
       }
+      // If newer: collect all gaps from min to infinity.
+      // If older: collect all gaps from max to zero.
       if (gap && (newer ? gap.hi >= min : gap.low < max)) {
         gaps.push(gap);
       }
