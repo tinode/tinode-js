@@ -549,7 +549,7 @@ export class Topic {
           }
           if (!params.sub.user) {
             // This is a subscription update of the current user.
-            // Assign user ID otherwise the update will be ignored by _processMetaSub.
+            // Assign user ID otherwise the update will be ignored by _processMetaSubs.
             params.sub.user = this._tinode.getCurrentUserID();
             if (!params.desc) {
               // Force update to topic's asc.
@@ -557,7 +557,7 @@ export class Topic {
             }
           }
           params.sub._noForwarding = true;
-          this._processMetaSub([params.sub]);
+          this._processMetaSubs([params.sub]);
         }
 
         if (params.desc) {
@@ -1586,7 +1586,7 @@ export class Topic {
       this._processMetaDesc(meta.desc);
     }
     if (meta.sub && meta.sub.length > 0) {
-      this._processMetaSub(meta.sub);
+      this._processMetaSubs(meta.sub);
     }
     if (meta.del) {
       this._processDelMessages(meta.del.clear, meta.del.delseq);
@@ -1628,7 +1628,7 @@ export class Topic {
         // Issue {get sub} only if the current user has no p2p topics with the updated user (p2p name is not in cache).
         // Otherwise 'me' will issue a {get desc} request.
         if (pres.src && !this._tinode.isTopicCached(pres.src)) {
-          this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
+          this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
         }
         break;
       case 'acs':
@@ -1649,13 +1649,13 @@ export class Topic {
               user.acs = acs;
             }
             user.updated = new Date();
-            this._processMetaSub([user]);
+            this._processMetaSubs([user]);
           }
         } else {
           // Known user
           user.acs.updateAll(pres.dacs);
           // Update user's access mode.
-          this._processMetaSub([{
+          this._processMetaSubs([{
             user: uid,
             updated: new Date(),
             acs: user.acs
@@ -1743,7 +1743,7 @@ export class Topic {
   }
   // Called by Tinode when meta.sub is recived or in response to received
   // {ctrl} after setMeta-sub.
-  _processMetaSub(subs) {
+  _processMetaSubs(subs) {
     for (let idx in subs) {
       const sub = subs[idx];
 
@@ -1962,8 +1962,8 @@ export class TopicMe extends Topic {
     }
   }
 
-  // Override the original Topic._processMetaSub
-  _processMetaSub(subs) {
+  // Override the original Topic._processMetaSubs
+  _processMetaSubs(subs) {
     let updateCount = 0;
     subs.forEach((sub) => {
       const topicName = sub.topic;
@@ -2105,12 +2105,17 @@ export class TopicMe extends Topic {
           this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
           break;
         case 'acs': // access mode changed
-          if (cont.acs) {
-            cont.acs.updateAll(pres.dacs);
-          } else {
-            cont.acs = new AccessMode().updateAll(pres.dacs);
+          // If 'tgt' is not set then this is an update to the permissions of the current user.
+          // Otherwise it's an update to group topic subscriber permissions while the topic is offline.
+          // Just gnore it then.
+          if (!pres.tgt) {
+            if (cont.acs) {
+              cont.acs.updateAll(pres.dacs);
+            } else {
+              cont.acs = new AccessMode().updateAll(pres.dacs);
+            }
+            cont.touched = new Date();
           }
-          cont.touched = new Date();
           break;
         case 'ua':
           // user agent changed.
@@ -2335,8 +2340,8 @@ export class TopicFnd extends Topic {
     super(Const.TOPIC_FND, callbacks);
   }
 
-  // Override the original Topic._processMetaSub
-  _processMetaSub(subs) {
+  // Override the original Topic._processMetaSubs
+  _processMetaSubs(subs) {
     let updateCount = Object.getOwnPropertyNames(this._contacts).length;
     // Reset contact list.
     this._contacts = {};
