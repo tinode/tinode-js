@@ -30,8 +30,8 @@ export default class TopicFnd extends Topic {
     super(Const.TOPIC_FND, callbacks);
   }
 
-  // Override the original Topic._processMetaSub
-  _processMetaSub(subs) {
+  // Override the original Topic._processMetaSubs
+  _processMetaSubs(subs) {
     let updateCount = Object.getOwnPropertyNames(this._contacts).length;
     // Reset contact list.
     this._contacts = {};

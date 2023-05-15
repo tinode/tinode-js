@@ -596,7 +596,7 @@ export class Tinode {
               const topic = this.#cacheGet('topic', pkt.ctrl.topic);
               if (topic) {
                 // Trigger topic.onSubsUpdated.
-                topic._processMetaSub([]);
+                topic._processMetaSubs([]);
               }
             }
           }

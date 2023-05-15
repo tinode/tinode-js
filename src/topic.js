@@ -604,7 +604,7 @@ export default class Topic {
           }
           if (!params.sub.user) {
             // This is a subscription update of the current user.
-            // Assign user ID otherwise the update will be ignored by _processMetaSub.
+            // Assign user ID otherwise the update will be ignored by _processMetaSubs.
             params.sub.user = this._tinode.getCurrentUserID();
             if (!params.desc) {
               // Force update to topic's asc.
@@ -612,7 +612,7 @@ export default class Topic {
             }
           }
           params.sub._noForwarding = true;
-          this._processMetaSub([params.sub]);
+          this._processMetaSubs([params.sub]);
         }
 
         if (params.desc) {
@@ -1697,7 +1697,7 @@ export default class Topic {
       this._processMetaDesc(meta.desc);
     }
     if (meta.sub && meta.sub.length > 0) {
-      this._processMetaSub(meta.sub);
+      this._processMetaSubs(meta.sub);
     }
     if (meta.del) {
       this._processDelMessages(meta.del.clear, meta.del.delseq);
@@ -1742,7 +1742,7 @@ export default class Topic {
         // Issue {get sub} only if the current user has no p2p topics with the updated user (p2p name is not in cache).
         // Otherwise 'me' will issue a {get desc} request.
         if (pres.src && !this._tinode.isTopicCached(pres.src)) {
-          this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
+          this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
         }
         break;
       case 'aux':
@@ -1767,13 +1767,13 @@ export default class Topic {
               user.acs = acs;
             }
             user.updated = new Date();
-            this._processMetaSub([user]);
+            this._processMetaSubs([user]);
           }
         } else {
           // Known user
           user.acs.updateAll(pres.dacs);
           // Update user's access mode.
-          this._processMetaSub([{
+          this._processMetaSubs([{
             user: uid,
             updated: new Date(),
             acs: user.acs
@@ -1861,7 +1861,7 @@ export default class Topic {
   }
   // Called by Tinode when meta.sub is recived or in response to received
   // {ctrl} after setMeta-sub.
-  _processMetaSub(subs) {
+  _processMetaSubs(subs) {
     for (let idx in subs) {
       const sub = subs[idx];
 

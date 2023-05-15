@@ -61,8 +61,8 @@ export default class TopicMe extends Topic {
     }
   }
 
-  // Override the original Topic._processMetaSub
-  _processMetaSub(subs) {
+  // Override the original Topic._processMetaSubs
+  _processMetaSubs(subs) {
     let updateCount = 0;
     subs.forEach((sub) => {
       const topicName = sub.topic;

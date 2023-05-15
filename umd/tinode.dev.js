@@ -3051,7 +3051,7 @@ class TopicFnd extends _topic_js__WEBPACK_IMPORTED_MODULE_1__["default"] {
   constructor(callbacks) {
     super(_config_js__WEBPACK_IMPORTED_MODULE_0__.TOPIC_FND, callbacks);
   }
-  _processMetaSub(subs) {
+  _processMetaSubs(subs) {
     let updateCount = Object.getOwnPropertyNames(this._contacts).length;
     this._contacts = {};
     for (let idx in subs) {
@@ -3376,7 +3376,7 @@ class TopicMe extends _topic_js__WEBPACK_IMPORTED_MODULE_2__["default"] {
       this.onMetaDesc(this);
     }
   }
-  _processMetaSub(subs) {
+  _processMetaSubs(subs) {
     let updateCount = 0;
     subs.forEach(sub => {
       const topicName = sub.topic;
@@ -4073,7 +4073,7 @@ class Topic {
           }
         }
         params.sub._noForwarding = true;
-        this._processMetaSub([params.sub]);
+        this._processMetaSubs([params.sub]);
       }
       if (params.desc) {
         if (ctrl.params && ctrl.params.acs) {
@@ -4683,7 +4683,7 @@ class Topic {
       this._processMetaDesc(meta.desc);
     }
     if (meta.sub && meta.sub.length > 0) {
-      this._processMetaSub(meta.sub);
+      this._processMetaSubs(meta.sub);
     }
     if (meta.del) {
       this._processDelMessages(meta.del.clear, meta.del.delseq);
@@ -4721,7 +4721,7 @@ class Topic {
         break;
       case 'upd':
         if (pres.src && !this._tinode.isTopicCached(pres.src)) {
-          this.getMeta(this.startMetaQuery().withOneSub(pres.src).build());
+          this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
         }
         break;
       case 'aux':
@@ -4744,11 +4744,11 @@ class Topic {
               user.acs = acs;
             }
             user.updated = new Date();
-            this._processMetaSub([user]);
+            this._processMetaSubs([user]);
           }
         } else {
           user.acs.updateAll(pres.dacs);
-          this._processMetaSub([{
+          this._processMetaSubs([{
             user: uid,
             updated: new Date(),
             acs: user.acs
@@ -4813,7 +4813,7 @@ class Topic {
       this.onMetaDesc(this);
     }
   }
-  _processMetaSub(subs) {
+  _processMetaSubs(subs) {
     for (let idx in subs) {
       const sub = subs[idx];
       sub.online = !!sub.online;
@@ -5721,7 +5721,7 @@ class Tinode {
             } else if (pkt.ctrl.params.what == 'sub') {
               const topic = this.#cacheGet('topic', pkt.ctrl.topic);
               if (topic) {
-                topic._processMetaSub([]);
+                topic._processMetaSubs([]);
               }
             }
           }
