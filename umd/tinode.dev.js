@@ -3493,12 +3493,14 @@ class TopicMe extends _topic_js__WEBPACK_IMPORTED_MODULE_2__["default"] {
           this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
           break;
         case 'acs':
-          if (cont.acs) {
-            cont.acs.updateAll(pres.dacs);
-          } else {
-            cont.acs = new _access_mode_js__WEBPACK_IMPORTED_MODULE_0__["default"]().updateAll(pres.dacs);
+          if (!pres.tgt) {
+            if (cont.acs) {
+              cont.acs.updateAll(pres.dacs);
+            } else {
+              cont.acs = new _access_mode_js__WEBPACK_IMPORTED_MODULE_0__["default"]().updateAll(pres.dacs);
+            }
+            cont.touched = new Date();
           }
-          cont.touched = new Date();
           break;
         case 'ua':
           cont.seen = {

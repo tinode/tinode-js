@@ -204,12 +204,17 @@ export default class TopicMe extends Topic {
           this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
           break;
         case 'acs': // access mode changed
-          if (cont.acs) {
-            cont.acs.updateAll(pres.dacs);
-          } else {
-            cont.acs = new AccessMode().updateAll(pres.dacs);
+          // If 'tgt' is not set then this is an update to the permissions of the current user.
+          // Otherwise it's an update to group topic subscriber permissions while the topic is offline.
+          // Just gnore it then.
+          if (!pres.tgt) {
+            if (cont.acs) {
+              cont.acs.updateAll(pres.dacs);
+            } else {
+              cont.acs = new AccessMode().updateAll(pres.dacs);
+            }
+            cont.touched = new Date();
           }
-          cont.touched = new Date();
           break;
         case 'ua':
           // user agent changed.
