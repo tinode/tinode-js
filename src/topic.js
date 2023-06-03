@@ -856,7 +856,7 @@ export class Topic {
       // Send notification to the server.
       this._tinode.note(this.name, what, seq);
       // Update locally cached contact with the new count.
-      this._updateReadRecv(what, seq);
+      this._updateMyReadRecv(what, seq);
 
       if (this.acs != null && !this.acs.isMuted()) {
         const me = this._tinode.getMeTopic();
@@ -930,8 +930,8 @@ export class Topic {
     return this._tinode.videoCall(this.name, seq, evt, payload);
   }
 
-  // Update cached read/recv/unread counts.
-  _updateReadRecv(what, seq, ts) {
+  // Update cached read/recv/unread counts for the current user.
+  _updateMyReadRecv(what, seq, ts) {
     let oldVal, doUpdate = false;
 
     seq = seq | 0;
@@ -1575,7 +1575,18 @@ export class Topic {
 
     // Update locally cached contact with the new message count.
     const what = outgoing ? 'read' : 'msg';
-    this._updateReadRecv(what, data.seq, data.ts);
+    this._updateMyReadRecv(what, data.seq, data.ts);
+
+    if (!outgoing && data.from) {
+      // Mark messages as read by the sender.
+      this._routeInfo({
+        what: 'read',
+        from: data.from,
+        seq: data.seq,
+        _noForwarding: true
+      });
+    }
+
     // Notify 'me' listeners of the change.
     this._tinode.getMeTopic()._refreshContact(what, this);
   }
@@ -1688,15 +1699,17 @@ export class Topic {
         }
 
         // If this is an update from the current user, update the cache with the new count.
-        if (this._tinode.isMe(info.from)) {
-          this._updateReadRecv(info.what, info.seq);
+        if (this._tinode.isMe(info.from) && !info._noForwarding) {
+          this._updateMyReadRecv(info.what, info.seq);
         }
 
         // Notify 'me' listener of the status change.
         this._tinode.getMeTopic()._refreshContact(info.what, this);
         break;
       case 'kp':
-        // Do nothing.
+      case 'kpa':
+      case 'kpv':
+        // Typing or audio/video recording notification. Do nothing.
         break;
       case 'call':
         // Do nothing here.

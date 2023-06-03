@@ -3739,7 +3739,7 @@ class Topic {
     }
     if (update) {
       this._tinode.note(this.name, what, seq);
-      this._updateReadRecv(what, seq);
+      this._updateMyReadRecv(what, seq);
       if (this.acs != null && !this.acs.isMuted()) {
         const me = this._tinode.getMeTopic();
         me._refreshContact(what, this);
@@ -3775,7 +3775,7 @@ class Topic {
     }
     return this._tinode.videoCall(this.name, seq, evt, payload);
   }
-  _updateReadRecv(what, seq, ts) {
+  _updateMyReadRecv(what, seq, ts) {
     let oldVal,
       doUpdate = false;
     seq = seq | 0;
@@ -4120,7 +4120,15 @@ class Topic {
       this.onData(data);
     }
     const what = outgoing ? 'read' : 'msg';
-    this._updateReadRecv(what, data.seq, data.ts);
+    this._updateMyReadRecv(what, data.seq, data.ts);
+    if (!outgoing && data.from) {
+      this._routeInfo({
+        what: 'read',
+        from: data.from,
+        seq: data.seq,
+        _noForwarding: true
+      });
+    }
     this._tinode.getMeTopic()._refreshContact(what, this);
   }
   _routeMeta(meta) {
@@ -4216,12 +4224,14 @@ class Topic {
         if (msg) {
           this.msgStatus(msg, true);
         }
-        if (this._tinode.isMe(info.from)) {
-          this._updateReadRecv(info.what, info.seq);
+        if (this._tinode.isMe(info.from) && !info._noForwarding) {
+          this._updateMyReadRecv(info.what, info.seq);
         }
         this._tinode.getMeTopic()._refreshContact(info.what, this);
         break;
       case 'kp':
+      case 'kpa':
+      case 'kpv':
         break;
       case 'call':
         break;
