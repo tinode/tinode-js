@@ -788,7 +788,7 @@ class DB {
   #onError = _ => {};
   #logger = _ => {};
   db = null;
-  disabled = false;
+  disabled = true;
   constructor(onError, logger) {
     this.#onError = onError || this.#onError;
     this.#logger = logger || this.#logger;
