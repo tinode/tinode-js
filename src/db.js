@@ -25,7 +25,7 @@ export default class DB {
   // Instance of IndexDB.
   db = null;
   // Indicator that the cache is disabled.
-  disabled = false;
+  disabled = true;
 
   constructor(onError, logger) {
     this.#onError = onError || this.#onError;
