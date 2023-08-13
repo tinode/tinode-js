@@ -404,7 +404,7 @@ const DECORATORS = {
         'data-width': data.width,
         'data-height': data.height,
         'data-name': data.name,
-        'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
+        'data-size': data.ref ? (data.size | 0) : (data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0)),
         'data-mime': data.mime,
       };
     },
@@ -462,7 +462,7 @@ const DECORATORS = {
         'data-preview': poster,
         'data-duration': data.duration | 0,
         'data-name': data.name,
-        'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
+        'data-size': data.ref ? (data.size | 0) : (data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0)),
         'data-mime': data.mime,
       };
     }
