@@ -1909,7 +1909,7 @@ Drafty.tagName = function(style) {
  * @returns {Object} object with HTML attributes.
  */
 Drafty.attrValue = function(style, data) {
-  if (data && DECORATORS[style]) {
+  if (data && DECORATORS[style] && DECORATORS[style].props) {
     return DECORATORS[style].props(data);
   }
 
