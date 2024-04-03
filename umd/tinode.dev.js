@@ -378,33 +378,33 @@ class CommError extends Error {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   DEFAULT_MESSAGES_PAGE: () => (/* binding */ DEFAULT_MESSAGES_PAGE),
-/* harmony export */   DEL_CHAR: () => (/* binding */ DEL_CHAR),
-/* harmony export */   EXPIRE_PROMISES_PERIOD: () => (/* binding */ EXPIRE_PROMISES_PERIOD),
-/* harmony export */   EXPIRE_PROMISES_TIMEOUT: () => (/* binding */ EXPIRE_PROMISES_TIMEOUT),
-/* harmony export */   LIBRARY: () => (/* binding */ LIBRARY),
-/* harmony export */   LOCAL_SEQID: () => (/* binding */ LOCAL_SEQID),
-/* harmony export */   MESSAGE_STATUS_FAILED: () => (/* binding */ MESSAGE_STATUS_FAILED),
-/* harmony export */   MESSAGE_STATUS_FATAL: () => (/* binding */ MESSAGE_STATUS_FATAL),
-/* harmony export */   MESSAGE_STATUS_NONE: () => (/* binding */ MESSAGE_STATUS_NONE),
-/* harmony export */   MESSAGE_STATUS_QUEUED: () => (/* binding */ MESSAGE_STATUS_QUEUED),
-/* harmony export */   MESSAGE_STATUS_READ: () => (/* binding */ MESSAGE_STATUS_READ),
-/* harmony export */   MESSAGE_STATUS_RECEIVED: () => (/* binding */ MESSAGE_STATUS_RECEIVED),
-/* harmony export */   MESSAGE_STATUS_SENDING: () => (/* binding */ MESSAGE_STATUS_SENDING),
-/* harmony export */   MESSAGE_STATUS_SENT: () => (/* binding */ MESSAGE_STATUS_SENT),
-/* harmony export */   MESSAGE_STATUS_TO_ME: () => (/* binding */ MESSAGE_STATUS_TO_ME),
-/* harmony export */   PROTOCOL_VERSION: () => (/* binding */ PROTOCOL_VERSION),
-/* harmony export */   RECV_TIMEOUT: () => (/* binding */ RECV_TIMEOUT),
-/* harmony export */   TOPIC_CHAN: () => (/* binding */ TOPIC_CHAN),
-/* harmony export */   TOPIC_FND: () => (/* binding */ TOPIC_FND),
-/* harmony export */   TOPIC_GRP: () => (/* binding */ TOPIC_GRP),
-/* harmony export */   TOPIC_ME: () => (/* binding */ TOPIC_ME),
-/* harmony export */   TOPIC_NEW: () => (/* binding */ TOPIC_NEW),
-/* harmony export */   TOPIC_NEW_CHAN: () => (/* binding */ TOPIC_NEW_CHAN),
-/* harmony export */   TOPIC_P2P: () => (/* binding */ TOPIC_P2P),
-/* harmony export */   TOPIC_SYS: () => (/* binding */ TOPIC_SYS),
-/* harmony export */   USER_NEW: () => (/* binding */ USER_NEW),
-/* harmony export */   VERSION: () => (/* binding */ VERSION)
+/* harmony export */   "DEFAULT_MESSAGES_PAGE": () => (/* binding */ DEFAULT_MESSAGES_PAGE),
+/* harmony export */   "DEL_CHAR": () => (/* binding */ DEL_CHAR),
+/* harmony export */   "EXPIRE_PROMISES_PERIOD": () => (/* binding */ EXPIRE_PROMISES_PERIOD),
+/* harmony export */   "EXPIRE_PROMISES_TIMEOUT": () => (/* binding */ EXPIRE_PROMISES_TIMEOUT),
+/* harmony export */   "LIBRARY": () => (/* binding */ LIBRARY),
+/* harmony export */   "LOCAL_SEQID": () => (/* binding */ LOCAL_SEQID),
+/* harmony export */   "MESSAGE_STATUS_FAILED": () => (/* binding */ MESSAGE_STATUS_FAILED),
+/* harmony export */   "MESSAGE_STATUS_FATAL": () => (/* binding */ MESSAGE_STATUS_FATAL),
+/* harmony export */   "MESSAGE_STATUS_NONE": () => (/* binding */ MESSAGE_STATUS_NONE),
+/* harmony export */   "MESSAGE_STATUS_QUEUED": () => (/* binding */ MESSAGE_STATUS_QUEUED),
+/* harmony export */   "MESSAGE_STATUS_READ": () => (/* binding */ MESSAGE_STATUS_READ),
+/* harmony export */   "MESSAGE_STATUS_RECEIVED": () => (/* binding */ MESSAGE_STATUS_RECEIVED),
+/* harmony export */   "MESSAGE_STATUS_SENDING": () => (/* binding */ MESSAGE_STATUS_SENDING),
+/* harmony export */   "MESSAGE_STATUS_SENT": () => (/* binding */ MESSAGE_STATUS_SENT),
+/* harmony export */   "MESSAGE_STATUS_TO_ME": () => (/* binding */ MESSAGE_STATUS_TO_ME),
+/* harmony export */   "PROTOCOL_VERSION": () => (/* binding */ PROTOCOL_VERSION),
+/* harmony export */   "RECV_TIMEOUT": () => (/* binding */ RECV_TIMEOUT),
+/* harmony export */   "TOPIC_CHAN": () => (/* binding */ TOPIC_CHAN),
+/* harmony export */   "TOPIC_FND": () => (/* binding */ TOPIC_FND),
+/* harmony export */   "TOPIC_GRP": () => (/* binding */ TOPIC_GRP),
+/* harmony export */   "TOPIC_ME": () => (/* binding */ TOPIC_ME),
+/* harmony export */   "TOPIC_NEW": () => (/* binding */ TOPIC_NEW),
+/* harmony export */   "TOPIC_NEW_CHAN": () => (/* binding */ TOPIC_NEW_CHAN),
+/* harmony export */   "TOPIC_P2P": () => (/* binding */ TOPIC_P2P),
+/* harmony export */   "TOPIC_SYS": () => (/* binding */ TOPIC_SYS),
+/* harmony export */   "USER_NEW": () => (/* binding */ USER_NEW),
+/* harmony export */   "VERSION": () => (/* binding */ VERSION)
 /* harmony export */ });
 /* harmony import */ var _version_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../version.js */ "./version.js");
 
@@ -1280,6 +1280,7 @@ const MAX_PREVIEW_DATA_SIZE = 64;
 const JSON_MIME_TYPE = 'application/json';
 const DRAFTY_MIME_TYPE = 'text/x-drafty';
 const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'incoming', 'mime', 'name', 'premime', 'preref', 'preview', 'ref', 'size', 'state', 'url', 'val', 'width'];
+const segmenter = new Intl.Segmenter();
 const INLINE_STYLES = [{
   name: 'ST',
   start: /(?:^|[\W_])(\*)[^\s*]/,
@@ -1700,24 +1701,48 @@ Drafty.parse = function (content) {
   if (blx.length > 0) {
     result.txt = blx[0].txt;
     result.fmt = (blx[0].fmt || []).concat(blx[0].ent || []);
+    if (result.fmt.length) {
+      const segments = segmenter.segment(result.txt);
+      for (const ele of result.fmt) {
+        ({
+          at: ele.at,
+          len: ele.len
+        } = getCorrectLengthsWhenTreatedAsGrapheme(ele, segments, result.txt));
+      }
+    }
     for (let i = 1; i < blx.length; i++) {
       const block = blx[i];
-      const offset = result.txt.length + 1;
+      const offset = getGraphemesFromString(result.txt).length + 1;
       result.fmt.push({
         tp: 'BR',
         len: 1,
         at: offset - 1
       });
+      let segments = {};
       result.txt += ' ' + block.txt;
       if (block.fmt) {
+        segments = segmenter.segment(block.txt);
         result.fmt = result.fmt.concat(block.fmt.map(s => {
-          s.at += offset;
+          const {
+            at: correctAt,
+            len: correctLen
+          } = getCorrectLengthsWhenTreatedAsGrapheme(s, segments, block.txt);
+          s.at = correctAt + offset;
+          s.len = correctLen;
           return s;
         }));
       }
       if (block.ent) {
+        if (isEmptyObject(segments)) {
+          segments = segmenter.segment(block.txt);
+        }
         result.fmt = result.fmt.concat(block.ent.map(s => {
-          s.at += offset;
+          const {
+            at: correctAt,
+            len: correctLen
+          } = getCorrectLengthsWhenTreatedAsGrapheme(s, segments, block.txt);
+          s.at = correctAt + offset;
+          s.len = correctLen;
           return s;
         }));
       }
@@ -1739,7 +1764,7 @@ Drafty.append = function (first, second) {
     return first;
   }
   first.txt = first.txt || '';
-  const len = first.txt.length;
+  const len = getGraphemesFromString(first.txt).length;
   if (typeof second == 'string') {
     first.txt += second;
   } else if (second.txt) {
@@ -1927,7 +1952,7 @@ Drafty.quote = function (header, uid, body) {
   const quote = Drafty.append(Drafty.appendLineBreak(Drafty.mention(header, uid)), body);
   quote.fmt.push({
     at: 0,
-    len: quote.txt.length,
+    len: getGraphemesFromString(quote.txt).length,
     tp: 'QQ'
   });
   return quote;
@@ -1937,7 +1962,7 @@ Drafty.mention = function (name, uid) {
     txt: name || '',
     fmt: [{
       at: 0,
-      len: (name || '').length,
+      len: getGraphemesFromString(name || '').length,
       key: 0
     }],
     ent: [{
@@ -2101,7 +2126,7 @@ Drafty.appendLineBreak = function (content) {
   };
   content.fmt = content.fmt || [];
   content.fmt.push({
-    at: content.txt.length,
+    at: getGraphemesFromString(content.txt).length,
     len: 1,
     tp: 'BR'
   });
@@ -2504,7 +2529,7 @@ function draftyToTree(doc) {
         key: key
       });
       return;
-    } else if (at + len > txt.length) {
+    } else if (at + len > getGraphemesFromString(txt).length) {
       return;
     }
     if (!span.tp) {
@@ -2546,7 +2571,8 @@ function draftyToTree(doc) {
       span.type = 'HD';
     }
   });
-  let tree = spansToTree({}, txt, 0, txt.length, spans);
+  const graphemes = getGraphemesFromString(txt);
+  let tree = spansToTree({}, graphemes, 0, graphemes.length, spans);
   const flatten = function (node) {
     if (Array.isArray(node.children) && node.children.length == 1) {
       const child = node.children[0];
@@ -2582,11 +2608,11 @@ function addNode(parent, n) {
   parent.children.push(n);
   return parent;
 }
-function spansToTree(parent, text, start, end, spans) {
+function spansToTree(parent, graphemes, start, end, spans) {
   if (!spans || spans.length == 0) {
     if (start < end) {
       addNode(parent, {
-        text: text.substring(start, end)
+        text: graphemes.slice(start, end).map(segment => segment.segment).join("")
       });
     }
     return parent;
@@ -2604,7 +2630,7 @@ function spansToTree(parent, text, start, end, spans) {
     }
     if (start < span.start) {
       addNode(parent, {
-        text: text.substring(start, span.start)
+        text: graphemes.slice(start, span.start).map(segment => segment.segment).join("")
       });
       start = span.start;
     }
@@ -2629,12 +2655,12 @@ function spansToTree(parent, text, start, end, spans) {
       type: span.type,
       data: span.data,
       key: span.key
-    }, text, start, span.end, subspans));
+    }, graphemes, start, span.end, subspans));
     start = span.end;
   }
   if (start < end) {
     addNode(parent, {
-      text: text.substring(start, end)
+      text: graphemes.slice(start, end).map(segment => segment.segment).join("")
     });
   }
   return parent;
@@ -2644,7 +2670,7 @@ function treeToDrafty(doc, tree, keymap) {
     return doc;
   }
   doc.txt = doc.txt || '';
-  const start = doc.txt.length;
+  const start = getGraphemesFromString(doc.txt).length;
   if (tree.text) {
     doc.txt += tree.text;
   } else if (Array.isArray(tree.children)) {
@@ -2653,7 +2679,7 @@ function treeToDrafty(doc, tree, keymap) {
     });
   }
   if (tree.type) {
-    const len = doc.txt.length - start;
+    const len = getGraphemesFromString(doc.txt).length - start;
     doc.fmt = doc.fmt || [];
     if (Object.keys(tree.data || {}).length > 0) {
       doc.ent = doc.ent || [];
@@ -2755,12 +2781,12 @@ function shortenTree(tree, limit, tail) {
       node.text = tail;
       limit = -1;
     } else if (node.text) {
-      const len = node.text.length;
-      if (len > limit) {
-        node.text = node.text.substring(0, limit) + tail;
+      const graphemes = getGraphemesFromString(node.text);
+      if (graphemes.length > limit) {
+        node.text = graphemes.slice(0, limit).map(segment => segment.segment).join("") + tail;
         limit = -1;
       } else {
-        limit -= len;
+        limit -= graphemes.length;
       }
     }
     return node;
@@ -2906,6 +2932,38 @@ function copyEntData(data, light, allow) {
     }
   }
   return null;
+}
+function isEmptyObject(obj) {
+  return Object.keys(obj ?? {}).length === 0;
+}
+;
+function getGraphemeIndices(graphemes) {
+  let result = [];
+  let graphemeIndex = 0;
+  let charIndex = 0;
+  for (let {
+    segment
+  } of graphemes) {
+    for (let i = 0; i < segment.length; i++) {
+      result[charIndex + i] = graphemeIndex;
+    }
+    charIndex += segment.length;
+    graphemeIndex++;
+  }
+  return result;
+}
+function getCorrectLengthsWhenTreatedAsGrapheme(fmt, segments, txt) {
+  segments = segments ?? segmenter.segment(txt);
+  const indices = getGraphemeIndices(segments);
+  const correctAt = indices[fmt.at];
+  const correctLen = fmt.at + fmt.len <= txt.length ? indices[fmt.at + fmt.len - 1] - correctAt : fmt.len;
+  return {
+    at: correctAt,
+    len: correctLen + 1
+  };
+}
+function getGraphemesFromString(input) {
+  return Array.from(segmenter.segment(input));
 }
 if (true) {
   module.exports = Drafty;
@@ -3276,9 +3334,9 @@ class MetaGetBuilder {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   Topic: () => (/* binding */ Topic),
-/* harmony export */   TopicFnd: () => (/* binding */ TopicFnd),
-/* harmony export */   TopicMe: () => (/* binding */ TopicMe)
+/* harmony export */   "Topic": () => (/* binding */ Topic),
+/* harmony export */   "TopicFnd": () => (/* binding */ TopicFnd),
+/* harmony export */   "TopicMe": () => (/* binding */ TopicMe)
 /* harmony export */ });
 /* harmony import */ var _access_mode_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./access-mode.js */ "./src/access-mode.js");
 /* harmony import */ var _cbuffer_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./cbuffer.js */ "./src/cbuffer.js");
@@ -4719,13 +4777,13 @@ class TopicFnd extends Topic {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   isUrlRelative: () => (/* binding */ isUrlRelative),
-/* harmony export */   jsonParseHelper: () => (/* binding */ jsonParseHelper),
-/* harmony export */   mergeObj: () => (/* binding */ mergeObj),
-/* harmony export */   mergeToCache: () => (/* binding */ mergeToCache),
-/* harmony export */   normalizeArray: () => (/* binding */ normalizeArray),
-/* harmony export */   rfc3339DateString: () => (/* binding */ rfc3339DateString),
-/* harmony export */   simplify: () => (/* binding */ simplify)
+/* harmony export */   "isUrlRelative": () => (/* binding */ isUrlRelative),
+/* harmony export */   "jsonParseHelper": () => (/* binding */ jsonParseHelper),
+/* harmony export */   "mergeObj": () => (/* binding */ mergeObj),
+/* harmony export */   "mergeToCache": () => (/* binding */ mergeToCache),
+/* harmony export */   "normalizeArray": () => (/* binding */ normalizeArray),
+/* harmony export */   "rfc3339DateString": () => (/* binding */ rfc3339DateString),
+/* harmony export */   "simplify": () => (/* binding */ simplify)
 /* harmony export */ });
 /* harmony import */ var _access_mode_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./access-mode.js */ "./src/access-mode.js");
 /* harmony import */ var _config_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./config.js */ "./src/config.js");
@@ -4855,7 +4913,7 @@ function normalizeArray(arr) {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   PACKAGE_VERSION: () => (/* binding */ PACKAGE_VERSION)
+/* harmony export */   "PACKAGE_VERSION": () => (/* binding */ PACKAGE_VERSION)
 /* harmony export */ });
 const PACKAGE_VERSION = "0.22.12";
 
@@ -4949,9 +5007,9 @@ var __webpack_exports__ = {};
   \***********************/
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   AccessMode: () => (/* reexport safe */ _access_mode_js__WEBPACK_IMPORTED_MODULE_0__["default"]),
-/* harmony export */   Drafty: () => (/* reexport default from dynamic */ _drafty_js__WEBPACK_IMPORTED_MODULE_5___default.a),
-/* harmony export */   Tinode: () => (/* binding */ Tinode)
+/* harmony export */   "AccessMode": () => (/* reexport safe */ _access_mode_js__WEBPACK_IMPORTED_MODULE_0__["default"]),
+/* harmony export */   "Drafty": () => (/* reexport default from dynamic */ _drafty_js__WEBPACK_IMPORTED_MODULE_5___default.a),
+/* harmony export */   "Tinode": () => (/* binding */ Tinode)
 /* harmony export */ });
 /* harmony import */ var _access_mode_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./access-mode.js */ "./src/access-mode.js");
 /* harmony import */ var _config_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./config.js */ "./src/config.js");

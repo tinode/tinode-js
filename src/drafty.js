@@ -67,6 +67,8 @@ const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'incoming', 'mime', 'na
   'ref', 'size', 'state', 'url', 'val', 'width'
 ];
 
+const segmenter = new Intl.Segmenter();
+
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
 // so it's a bit messy.
 const INLINE_STYLES = [
@@ -597,9 +599,20 @@ Drafty.parse = function(content) {
     result.txt = blx[0].txt;
     result.fmt = (blx[0].fmt || []).concat(blx[0].ent || []);
 
+    if (result.fmt.length) {
+      const segments = segmenter.segment(result.txt);
+      for (const ele of result.fmt) {
+        ({
+            at: ele.at,
+            len: ele.len
+          } =
+          getCorrectLengthsWhenTreatedAsGrapheme(ele, segments, result.txt));
+      }
+    }
+
     for (let i = 1; i < blx.length; i++) {
       const block = blx[i];
-      const offset = result.txt.length + 1;
+      const offset = getGraphemesFromString(result.txt).length + 1;
 
       result.fmt.push({
         tp: 'BR',
@@ -607,18 +620,40 @@ Drafty.parse = function(content) {
         at: offset - 1
       });
 
+      let segments = {};
+
       result.txt += ' ' + block.txt;
       if (block.fmt) {
-        result.fmt = result.fmt.concat(block.fmt.map((s) => {
-          s.at += offset;
-          return s;
-        }));
+        segments = segmenter.segment(block.txt);
+        result.fmt = result.fmt.concat(
+          block.fmt.map((s) => {
+            const {
+              at: correctAt,
+              len: correctLen
+            } =
+            getCorrectLengthsWhenTreatedAsGrapheme(s, segments, block.txt);
+            s.at = correctAt + offset;
+            s.len = correctLen;
+            return s;
+          })
+        );
       }
       if (block.ent) {
-        result.fmt = result.fmt.concat(block.ent.map((s) => {
-          s.at += offset;
-          return s;
-        }));
+        if (isEmptyObject(segments)) {
+          segments = segmenter.segment(block.txt);
+        }
+        result.fmt = result.fmt.concat(
+          block.ent.map((s) => {
+            const {
+              at: correctAt,
+              len: correctLen
+            } =
+            getCorrectLengthsWhenTreatedAsGrapheme(s, segments, block.txt);
+            s.at = correctAt + offset;
+            s.len = correctLen;
+            return s;
+          })
+        );
       }
     }
 
@@ -650,7 +685,7 @@ Drafty.append = function(first, second) {
   }
 
   first.txt = first.txt || '';
-  const len = first.txt.length;
+  const len = getGraphemesFromString(first.txt).length;
 
   if (typeof second == 'string') {
     first.txt += second;
@@ -998,7 +1033,7 @@ Drafty.quote = function(header, uid, body) {
   // Wrap into a quote.
   quote.fmt.push({
     at: 0,
-    len: quote.txt.length,
+    len: getGraphemesFromString(quote.txt).length,
     tp: 'QQ'
   });
 
@@ -1018,7 +1053,7 @@ Drafty.mention = function(name, uid) {
     txt: name || '',
     fmt: [{
       at: 0,
-      len: (name || '').length,
+      len: getGraphemesFromString(name || '').length,
       key: 0
     }],
     ent: [{
@@ -1336,7 +1371,7 @@ Drafty.appendLineBreak = function(content) {
   };
   content.fmt = content.fmt || [];
   content.fmt.push({
-    at: content.txt.length,
+    at: getGraphemesFromString(content.txt).length,
     len: 1,
     tp: 'BR'
   });
@@ -2135,7 +2170,7 @@ function draftyToTree(doc) {
         key: key
       });
       return;
-    } else if (at + len > txt.length) {
+    } else if (at + len > getGraphemesFromString(txt).length) {
       // Span is out of bounds.
       return;
     }
@@ -2187,7 +2222,8 @@ function draftyToTree(doc) {
     }
   });
 
-  let tree = spansToTree({}, txt, 0, txt.length, spans);
+  const graphemes = getGraphemesFromString(txt)
+  let tree = spansToTree({}, graphemes, 0, graphemes.length, spans);
 
   // Flatten tree nodes.
   const flatten = function(node) {
@@ -2236,11 +2272,13 @@ function addNode(parent, n) {
 }
 
 // Returns a tree of nodes.
-function spansToTree(parent, text, start, end, spans) {
+function spansToTree(parent, graphemes, start, end, spans) {
   if (!spans || spans.length == 0) {
     if (start < end) {
       addNode(parent, {
-        text: text.substring(start, end)
+        text: graphemes.slice(start, end)
+          .map(segment => segment.segment)
+          .join("")
       });
     }
     return parent;
@@ -2262,7 +2300,9 @@ function spansToTree(parent, text, start, end, spans) {
     // Add un-styled range before the styled span starts.
     if (start < span.start) {
       addNode(parent, {
-        text: text.substring(start, span.start)
+        text: graphemes.slice(start, span.start)
+          .map(segment => segment.segment)
+          .join("")
       });
       start = span.start;
     }
@@ -2295,14 +2335,17 @@ function spansToTree(parent, text, start, end, spans) {
       type: span.type,
       data: span.data,
       key: span.key
-    }, text, start, span.end, subspans));
+    }, graphemes, start, span.end, subspans));
     start = span.end;
   }
 
   // Add the last unformatted range.
   if (start < end) {
     addNode(parent, {
-      text: text.substring(start, end)
+      text: graphemes
+        .slice(start, end)
+        .map((segment) => segment.segment)
+        .join("")
     });
   }
 
@@ -2318,7 +2361,7 @@ function treeToDrafty(doc, tree, keymap) {
   doc.txt = doc.txt || '';
 
   // Checkpoint to measure length of the current tree node.
-  const start = doc.txt.length;
+  const start = getGraphemesFromString(doc.txt).length;
 
   if (tree.text) {
     doc.txt += tree.text;
@@ -2329,7 +2372,7 @@ function treeToDrafty(doc, tree, keymap) {
   }
 
   if (tree.type) {
-    const len = doc.txt.length - start;
+    const len = getGraphemesFromString(doc.txt).length - start;
     doc.fmt = doc.fmt || [];
     if (Object.keys(tree.data || {}).length > 0) {
       doc.ent = doc.ent || [];
@@ -2452,12 +2495,15 @@ function shortenTree(tree, limit, tail) {
       node.text = tail;
       limit = -1;
     } else if (node.text) {
-      const len = node.text.length;
-      if (len > limit) {
-        node.text = node.text.substring(0, limit) + tail;
+      const graphemes = getGraphemesFromString(node.text);
+      if (graphemes.length > limit) {
+        node.text = graphemes
+          .slice(0, limit)
+          .map((segment) => segment.segment)
+          .join("") + tail;
         limit = -1;
       } else {
-        limit -= len;
+        limit -= graphemes.length;
       }
     }
     return node;
@@ -2631,6 +2677,63 @@ function copyEntData(data, light, allow) {
     }
   }
   return null;
+}
+
+// Returns true if object is empty, if undefined returns true
+function isEmptyObject(obj) {
+  return Object.keys(obj ?? {}).length === 0;
+};
+
+
+// Returns an array(len equal to og string) such that each index 
+// denotes the position of char in string in a grapheme array(created from that string)
+// Eg: string: "Hi👋🏼Hi" -> [0,1,2,2,2,2,3,4]
+function getGraphemeIndices(graphemes) {
+  let result = [];
+  let graphemeIndex = 0;
+  let charIndex = 0;
+
+  // Iterate over the grapheme clusters
+  for (let {
+      segment
+    }
+    of graphemes) {
+    // Map the character indices to the grapheme index
+    for (let i = 0; i < segment.length; i++) {
+      result[charIndex + i] = graphemeIndex;
+    }
+
+    // Increment the character index by the length of the grapheme cluster
+    charIndex += segment.length;
+
+    // Increment the grapheme index
+    graphemeIndex++;
+  }
+
+  return result;
+}
+
+// Returns correct offset and length, given the wrong offset, graphemes and og string 
+function getCorrectLengthsWhenTreatedAsGrapheme(fmt, segments, txt) {
+  segments = segments ?? segmenter.segment(txt);
+
+  const indices = getGraphemeIndices(segments);
+
+  const correctAt = indices[fmt.at];
+  const correctLen =
+    fmt.at + fmt.len <= txt.length ?
+    indices[fmt.at + fmt.len - 1] - correctAt :
+    fmt.len;
+
+  return {
+    at: correctAt,
+    len: correctLen + 1
+  };
+}
+
+// Returns graphme cluster array from string
+function getGraphemesFromString(input) {
+  return Array.from(segmenter.segment(input));
 }
 
 if (typeof module != 'undefined') {
