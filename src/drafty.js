@@ -2222,7 +2222,7 @@ function draftyToTree(doc) {
     }
   });
 
-  const graphemes = getGraphemesFromString(txt)
+  const graphemes = getGraphemesFromString(txt);
   let tree = spansToTree({}, graphemes, 0, graphemes.length, spans);
 
   // Flatten tree nodes.
@@ -2278,7 +2278,7 @@ function spansToTree(parent, graphemes, start, end, spans) {
       addNode(parent, {
         text: graphemes.slice(start, end)
           .map(segment => segment.segment)
-          .join("")
+          .join('')
       });
     }
     return parent;
@@ -2302,7 +2302,7 @@ function spansToTree(parent, graphemes, start, end, spans) {
       addNode(parent, {
         text: graphemes.slice(start, span.start)
           .map(segment => segment.segment)
-          .join("")
+          .join('')
       });
       start = span.start;
     }
@@ -2345,7 +2345,7 @@ function spansToTree(parent, graphemes, start, end, spans) {
       text: graphemes
         .slice(start, end)
         .map((segment) => segment.segment)
-        .join("")
+        .join('')
     });
   }
 
@@ -2500,7 +2500,7 @@ function shortenTree(tree, limit, tail) {
         node.text = graphemes
           .slice(0, limit)
           .map((segment) => segment.segment)
-          .join("") + tail;
+          .join('') + tail;
         limit = -1;
       } else {
         limit -= graphemes.length;
@@ -2681,7 +2681,7 @@ function copyEntData(data, light, allow) {
 
 // Returns true if object is empty, if undefined returns true
 function isEmptyObject(obj) {
-  return Object.keys(obj ?? {}).length === 0;
+  return Object.keys(obj ?? {}).length == 0;
 };
 
 
@@ -2689,12 +2689,12 @@ function isEmptyObject(obj) {
 // denotes the position of char in string in a grapheme array(created from that string)
 // Eg: string: "Hi👋🏼Hi" -> [0,1,2,2,2,2,3,4]
 function getGraphemeIndices(graphemes) {
-  let result = [];
+  const result = [];
   let graphemeIndex = 0;
   let charIndex = 0;
 
   // Iterate over the grapheme clusters
-  for (let {
+  for (const {
       segment
     }
     of graphemes) {
