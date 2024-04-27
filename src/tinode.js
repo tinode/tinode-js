@@ -53,6 +53,7 @@ import * as Const from './config.js';
 import CommError from './comm-error.js';
 import Connection from './connection.js';
 import DBCache from './db.js';
+import '@formatjs/intl-segmenter/polyfill'
 import Drafty from './drafty.js';
 import LargeFileHelper from './large-file.js';
 import MetaGetBuilder from './meta-builder.js';
