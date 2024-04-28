@@ -1,5 +1,5 @@
 /**
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2024 Tinode LLC.
  * @summary Minimally rich text representation and formatting for Tinode.
  * @license Apache 2.0
  *
@@ -2685,7 +2685,7 @@ function isEmptyObject(obj) {
 };
 
 
-// Returns an array(len equal to og string) such that each index 
+// Returns an array(len equal to og string) such that each index
 // denotes the position of char in string in a grapheme array(created from that string)
 // Eg: string: "Hi👋🏼Hi" -> [0,1,2,2,2,2,3,4]
 function getGraphemeIndices(graphemes) {
@@ -2713,7 +2713,7 @@ function getGraphemeIndices(graphemes) {
   return result;
 }
 
-// Returns correct offset and length, given the wrong offset, graphemes and og string 
+// Returns correct offset and length, given the wrong offset, graphemes and og string
 function getCorrectLengthsWhenTreatedAsGrapheme(fmt, segments, txt) {
   segments = segments ?? segmenter.segment(txt);
 

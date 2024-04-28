@@ -10874,7 +10874,7 @@ class DB {
 /***/ ((module) => {
 
 /**
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2024 Tinode LLC.
  * @summary Minimally rich text representation and formatting for Tinode.
  * @license Apache 2.0
  *
