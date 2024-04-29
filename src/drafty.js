@@ -67,6 +67,8 @@ const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'incoming', 'mime', 'na
   'ref', 'size', 'state', 'url', 'val', 'width'
 ];
 
+// Intl.Segmenter is not available in Firefox 124 and earlier. FF 125 with support for Intl.Segmenter
+// was released on April 15, 2024. Polyfill is included in the top package (webapp).
 const segmenter = new Intl.Segmenter();
 
 // Regular expressions for parsing inline formats. Javascript does not support lookbehind,
