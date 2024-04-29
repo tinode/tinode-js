@@ -606,13 +606,13 @@ Drafty.parse = function(content) {
             at: ele.at,
             len: ele.len
           } =
-          getCorrectLengthsWhenTreatedAsGrapheme(ele, segments, result.txt));
+          toGraphemeValues(ele, segments, result.txt));
       }
     }
 
     for (let i = 1; i < blx.length; i++) {
       const block = blx[i];
-      const offset = getGraphemesFromString(result.txt).length + 1;
+      const offset = stringToGraphemes(result.txt).length + 1;
 
       result.fmt.push({
         tp: 'BR',
@@ -631,7 +631,7 @@ Drafty.parse = function(content) {
               at: correctAt,
               len: correctLen
             } =
-            getCorrectLengthsWhenTreatedAsGrapheme(s, segments, block.txt);
+            toGraphemeValues(s, segments, block.txt);
             s.at = correctAt + offset;
             s.len = correctLen;
             return s;
@@ -648,7 +648,7 @@ Drafty.parse = function(content) {
               at: correctAt,
               len: correctLen
             } =
-            getCorrectLengthsWhenTreatedAsGrapheme(s, segments, block.txt);
+            toGraphemeValues(s, segments, block.txt);
             s.at = correctAt + offset;
             s.len = correctLen;
             return s;
@@ -685,7 +685,7 @@ Drafty.append = function(first, second) {
   }
 
   first.txt = first.txt || '';
-  const len = getGraphemesFromString(first.txt).length;
+  const len = stringToGraphemes(first.txt).length;
 
   if (typeof second == 'string') {
     first.txt += second;
@@ -1033,7 +1033,7 @@ Drafty.quote = function(header, uid, body) {
   // Wrap into a quote.
   quote.fmt.push({
     at: 0,
-    len: getGraphemesFromString(quote.txt).length,
+    len: stringToGraphemes(quote.txt).length,
     tp: 'QQ'
   });
 
@@ -1053,7 +1053,7 @@ Drafty.mention = function(name, uid) {
     txt: name || '',
     fmt: [{
       at: 0,
-      len: getGraphemesFromString(name || '').length,
+      len: stringToGraphemes(name || '').length,
       key: 0
     }],
     ent: [{
@@ -1371,7 +1371,7 @@ Drafty.appendLineBreak = function(content) {
   };
   content.fmt = content.fmt || [];
   content.fmt.push({
-    at: getGraphemesFromString(content.txt).length,
+    at: stringToGraphemes(content.txt).length,
     len: 1,
     tp: 'BR'
   });
@@ -2170,7 +2170,7 @@ function draftyToTree(doc) {
         key: key
       });
       return;
-    } else if (at + len > getGraphemesFromString(txt).length) {
+    } else if (at + len > stringToGraphemes(txt).length) {
       // Span is out of bounds.
       return;
     }
@@ -2222,7 +2222,7 @@ function draftyToTree(doc) {
     }
   });
 
-  const graphemes = getGraphemesFromString(txt);
+  const graphemes = stringToGraphemes(txt);
   let tree = spansToTree({}, graphemes, 0, graphemes.length, spans);
 
   // Flatten tree nodes.
@@ -2361,7 +2361,7 @@ function treeToDrafty(doc, tree, keymap) {
   doc.txt = doc.txt || '';
 
   // Checkpoint to measure length of the current tree node.
-  const start = getGraphemesFromString(doc.txt).length;
+  const start = stringToGraphemes(doc.txt).length;
 
   if (tree.text) {
     doc.txt += tree.text;
@@ -2372,7 +2372,7 @@ function treeToDrafty(doc, tree, keymap) {
   }
 
   if (tree.type) {
-    const len = getGraphemesFromString(doc.txt).length - start;
+    const len = stringToGraphemes(doc.txt).length - start;
     doc.fmt = doc.fmt || [];
     if (Object.keys(tree.data || {}).length > 0) {
       doc.ent = doc.ent || [];
@@ -2495,7 +2495,7 @@ function shortenTree(tree, limit, tail) {
       node.text = tail;
       limit = -1;
     } else if (node.text) {
-      const graphemes = getGraphemesFromString(node.text);
+      const graphemes = stringToGraphemes(node.text);
       if (graphemes.length > limit) {
         node.text = graphemes
           .slice(0, limit)
@@ -2685,45 +2685,44 @@ function isEmptyObject(obj) {
 };
 
 
-// Returns an array(len equal to og string) such that each index
-// denotes the position of char in string in a grapheme array(created from that string)
+// Returns an array (of length equal to the length of the original string) such that each index
+// denotes the position of char in string in a grapheme array (created from that string)
 // Eg: string: "Hi👋🏼Hi" -> [0,1,2,2,2,2,3,4]
-function getGraphemeIndices(graphemes) {
+function graphemeIndices(graphemes) {
   const result = [];
   let graphemeIndex = 0;
   let charIndex = 0;
 
-  // Iterate over the grapheme clusters
+  // Iterate over the grapheme clusters.
   for (const {
       segment
     }
     of graphemes) {
-    // Map the character indices to the grapheme index
+    // Map the character indices to the grapheme index.
     for (let i = 0; i < segment.length; i++) {
       result[charIndex + i] = graphemeIndex;
     }
 
-    // Increment the character index by the length of the grapheme cluster
+    // Increment the character index by the length of the grapheme cluster.
     charIndex += segment.length;
 
-    // Increment the grapheme index
+    // Increment the grapheme index.
     graphemeIndex++;
   }
 
   return result;
 }
 
-// Returns correct offset and length, given the wrong offset, graphemes and og string
-function getCorrectLengthsWhenTreatedAsGrapheme(fmt, segments, txt) {
+// Convert fmt.at and fmt.len from character-expressed index and length to grapheme-expressed
+// index and length.
+function toGraphemeValues(fmt, segments, txt) {
   segments = segments ?? segmenter.segment(txt);
 
-  const indices = getGraphemeIndices(segments);
+  const indices = graphemeIndices(segments);
 
   const correctAt = indices[fmt.at];
-  const correctLen =
-    fmt.at + fmt.len <= txt.length ?
-    indices[fmt.at + fmt.len - 1] - correctAt :
-    fmt.len;
+  const correctLen = fmt.at + fmt.len <= txt.length ?
+    indices[fmt.at + fmt.len - 1] - correctAt : fmt.len;
 
   return {
     at: correctAt,
@@ -2731,9 +2730,9 @@ function getCorrectLengthsWhenTreatedAsGrapheme(fmt, segments, txt) {
   };
 }
 
-// Returns graphme cluster array from string
-function getGraphemesFromString(input) {
-  return Array.from(segmenter.segment(input));
+// Convert string to graphme cluster array.
+function stringToGraphemes(str) {
+  return Array.from(segmenter.segment(str));
 }
 
 if (typeof module != 'undefined') {
