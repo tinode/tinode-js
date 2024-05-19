@@ -260,6 +260,21 @@ const parse_this = [
         },
       ],
     },
+  ],
+  [
+    '🔴Hello🔴\n🟠Hello🟠\n🟡Hello🟡',
+    {
+      "txt": "🔴Hello🔴 🟠Hello🟠 🟡Hello🟡",
+      "fmt": [{
+        "tp": "BR",
+        "at": 7,
+        "len": 1
+      }, {
+        "tp": "BR",
+        "at": 15,
+        "len": 1
+      }, ],
+    }
   ]
 ];
 
