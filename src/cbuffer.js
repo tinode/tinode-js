@@ -1,7 +1,7 @@
 /**
  * @file In-memory sorted cache of objects.
  *
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2025 Tinode LLC.
  */
 'use strict';
 
