@@ -380,7 +380,7 @@ export default class Connection {
 
     this.sendText = (msg) => {
       _sender = lp_sender(_lpURL);
-      if (_sender && (_sender.readyState == XDR_OPENED)) { // 1 == OPENED
+      if (_sender && (_sender.readyState == XDR_OPENED)) {
         _sender.send(msg);
       } else {
         throw new Error("Long poller failed to connect");
@@ -399,6 +399,9 @@ export default class Connection {
 
       if (this.#socket) {
         if (!force && this.#socket.readyState == this.#socket.OPEN) {
+          // Issue a probe request to be sure the connection is live.
+          // This is a non-blocking call.
+          this.probe();
           return Promise.resolve();
         }
         this.#socket.close();

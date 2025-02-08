@@ -192,6 +192,89 @@ const parse_this = [
         "len": 4
       }, ],
     }
+  ],
+  [
+    '🕯️ *bold* https://google.com',
+    {
+      txt: '🕯️ bold https://google.com',
+      fmt: [{
+          at: 2,
+          len: 4,
+          tp: 'ST',
+        },
+        {
+          at: 7,
+          key: 0,
+          len: 18,
+        },
+      ],
+      ent: [{
+        tp: 'LN',
+        data: {
+          url: 'https://google.com',
+        },
+      }, ]
+    }
+  ],
+  [
+    'Hi 👋🏼 Visit http://localhost:6060\n*New* *line*🫡 Visit http://localhost:8080',
+    {
+      txt: 'Hi 👋🏼 Visit http://localhost:6060 New line🫡 Visit http://localhost:8080',
+      fmt: [{
+          at: 11,
+          len: 21,
+          key: 0,
+        },
+        {
+          at: 32,
+          len: 1,
+          tp: 'BR',
+        },
+        {
+          at: 33,
+          len: 3,
+          tp: 'ST',
+        },
+        {
+          at: 37,
+          len: 4,
+          tp: 'ST',
+        },
+        {
+          at: 49,
+          len: 21,
+          key: 1,
+        },
+      ],
+      ent: [{
+          tp: 'LN',
+          data: {
+            url: 'http://localhost:6060',
+          },
+        },
+        {
+          tp: 'LN',
+          data: {
+            url: 'http://localhost:8080',
+          },
+        },
+      ],
+    },
+  ],
+  [
+    '🔴Hello🔴\n🟠Hello🟠\n🟡Hello🟡',
+    {
+      "txt": "🔴Hello🔴 🟠Hello🟠 🟡Hello🟡",
+      "fmt": [{
+        "tp": "BR",
+        "at": 7,
+        "len": 1
+      }, {
+        "tp": "BR",
+        "at": 15,
+        "len": 1
+      }, ],
+    }
   ]
 ];
 
@@ -711,7 +794,7 @@ const shorten_this = [
       }]
     },
     {
-      "txt": "😀 b1👩🏽‍✈️b2 smile 123 1…",
+      "txt": "😀 b1👩🏽‍✈️b2 smile …",
       "fmt": [{
         "tp": "ST",
         "at": 2,
@@ -864,6 +947,59 @@ const forward_this = [
       "txt": "Alice Johnson This is a simple replyThis is a reply to reply"
     }
   ],
+  [{
+      "txt": "➦ tinodeu 🔴Hello🔴 🟠Hello🟠 🟡Hello🟡 🟢Hello🟢",
+      "fmt": [{
+          "len": 9
+        },
+        {
+          "at": 9,
+          "len": 1,
+          "tp": "BR"
+        },
+        {
+          "at": 19,
+          "len": 1,
+          "tp": "BR"
+        },
+        {
+          "at": 29,
+          "len": 1,
+          "tp": "BR"
+        },
+        {
+          "at": 39,
+          "len": 1,
+          "tp": "BR"
+        }
+      ],
+      "ent": [{
+        "tp": "MN",
+        "data": {
+          "val": "usrfv76ZZoJQJc"
+        }
+      }]
+    },
+    {
+      "txt": "🔴Hello🔴 🟠Hello🟠 🟡Hello🟡 🟢Hello🟢",
+      "fmt": [{
+          "tp": "BR",
+          "at": 9,
+          "len": 1
+        },
+        {
+          "tp": "BR",
+          "at": 19,
+          "len": 1
+        },
+        {
+          "tp": "BR",
+          "at": 29,
+          "len": 1
+        }
+      ]
+    }
+  ]
 ];
 
 test.each(forward_this)('Drafty.forwardedContent %j', (src, exp) => {
@@ -952,6 +1088,63 @@ const preview_this = [
       "txt": "➦  This is a reply to re…"
     }
   ],
+  [{
+      "txt": 'Hi 👋🏼 Visit http://localhost:6060 New line🫡 Visit http://localhost:8080',
+      "fmt": [{
+          "at": 11,
+          "len": 21,
+          "key": 0,
+        },
+        {
+          "at": 32,
+          "len": 1,
+          "tp": 'BR',
+        },
+        {
+          "at": 33,
+          "len": 3,
+          "tp": 'ST',
+        },
+        {
+          "at": 37,
+          "len": 4,
+          "tp": 'ST',
+        },
+        {
+          "at": 49,
+          "len": 21,
+          "key": 1,
+        },
+      ],
+      "ent": [{
+          "tp": 'LN',
+          "data": {
+            "url": 'http://localhost:6060',
+          },
+        },
+        {
+          "tp": 'LN',
+          "data": {
+            "url": 'http://localhost:8080',
+          },
+        },
+      ],
+    },
+    {
+      "txt": "Hi 👋🏼 Visit http://localh…",
+      "fmt": [{
+        "at": 11,
+        "len": 14,
+        "key": 0
+      }],
+      "ent": [{
+        "tp": "LN",
+        "data": {
+          "url": "http://localhost:6060"
+        }
+      }]
+    }
+  ]
 ];
 
 test.each(preview_this)('Drafty.preview %j', (src, exp) => {
@@ -1321,3 +1514,53 @@ const invalid_this = [
 test.each(invalid_this)('Invalid Drafty %j', (src, exp) => {
   expect(Drafty.UNSAFE_toHTML(src)).toEqual(exp);
 });
+
+const quote_this = [
+  [{
+    "txt": "😀 b1👩🏽‍✈️b2 smile 123 123 123 123",
+    "fmt": [{
+        "tp": "ST",
+        "at": 8,
+        "len": 5
+      },
+      {
+        "tp": "EM",
+        "at": 22,
+        "len": 3
+      }
+    ]
+  }, {
+    "ent": [{
+      "data": {
+        "val": "usrbzV_721mIW0"
+      },
+      "tp": "MN",
+    }, ],
+    "fmt": [{
+      "at": 0,
+      "key": 0,
+      "len": 11,
+    }, {
+      "at": 11,
+      "len": 1,
+      "tp": "BR",
+    }, {
+      "at": 20,
+      "len": 5,
+      "tp": "ST",
+    }, {
+      "at": 34,
+      "len": 3,
+      "tp": "EM",
+    }, {
+      "at": 0,
+      "len": 41,
+      "tp": "QQ"
+    }, ],
+    "txt": "tinode-user 😀 b1👩🏽‍✈️b2 smile 123 123 123 123"
+  }],
+]
+
+test.each(quote_this)('Drafty.quote %j', (src, exp) => {
+  expect(Drafty.quote("tinode-user", "usrbzV_721mIW0", src)).toEqual(exp);
+})

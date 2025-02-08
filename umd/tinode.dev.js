@@ -235,7 +235,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 
 class CBuffer {
-  #comparator = undefined;
+  #comparator = (() => undefined)();
   #unique = false;
   buffer = [];
   constructor(compare_, unique_) {
@@ -694,6 +694,7 @@ class Connection {
       this.#boffClosed = false;
       if (this.#socket) {
         if (!force && this.#socket.readyState == this.#socket.OPEN) {
+          this.probe();
           return Promise.resolve();
         }
         this.#socket.close();
@@ -760,10 +761,10 @@ class Connection {
       return this.#socket && this.#socket.readyState == this.#socket.OPEN;
     };
   }
-  onMessage = undefined;
-  onDisconnect = undefined;
-  onOpen = undefined;
-  onAutoreconnectIteration = undefined;
+  onMessage = (() => undefined)();
+  onDisconnect = (() => undefined)();
+  onOpen = (() => undefined)();
+  onAutoreconnectIteration = (() => undefined)();
 }
 Connection.NETWORK_ERROR = NETWORK_ERROR;
 Connection.NETWORK_ERROR_TEXT = NETWORK_ERROR_TEXT;
@@ -1335,7 +1336,7 @@ class DB {
 /***/ ((module) => {
 
 /**
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2024 Tinode LLC.
  * @summary Minimally rich text representation and formatting for Tinode.
  * @license Apache 2.0
  *
@@ -1395,6 +1396,7 @@ const MAX_PREVIEW_DATA_SIZE = 64;
 const JSON_MIME_TYPE = 'application/json';
 const DRAFTY_MIME_TYPE = 'text/x-drafty';
 const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'incoming', 'mime', 'name', 'premime', 'preref', 'preview', 'ref', 'size', 'state', 'url', 'val', 'width'];
+const segmenter = new Intl.Segmenter();
 const INLINE_STYLES = [{
   name: 'ST',
   start: /(?:^|[\W_])(\*)[^\s*]/,
@@ -1682,7 +1684,7 @@ const DECORATORS = {
         'data-width': data.width,
         'data-height': data.height,
         'data-name': data.name,
-        'data-size': data.val ? data.val.length * 0.75 | 0 : data.size | 0,
+        'data-size': data.ref ? data.size | 0 : data.val ? data.val.length * 0.75 | 0 : data.size | 0,
         'data-mime': data.mime
       };
     }
@@ -1732,7 +1734,7 @@ const DECORATORS = {
         'data-preview': poster,
         'data-duration': data.duration | 0,
         'data-name': data.name,
-        'data-size': data.val ? data.val.length * 0.75 | 0 : data.size | 0,
+        'data-size': data.ref ? data.size | 0 : data.val ? data.val.length * 0.75 | 0 : data.size | 0,
         'data-mime': data.mime
       };
     }
@@ -1815,24 +1817,48 @@ Drafty.parse = function (content) {
   if (blx.length > 0) {
     result.txt = blx[0].txt;
     result.fmt = (blx[0].fmt || []).concat(blx[0].ent || []);
+    if (result.fmt.length) {
+      const segments = segmenter.segment(result.txt);
+      for (const ele of result.fmt) {
+        ({
+          at: ele.at,
+          len: ele.len
+        } = toGraphemeValues(ele, segments, result.txt));
+      }
+    }
     for (let i = 1; i < blx.length; i++) {
       const block = blx[i];
-      const offset = result.txt.length + 1;
+      const offset = stringToGraphemes(result.txt).length + 1;
       result.fmt.push({
         tp: 'BR',
         len: 1,
         at: offset - 1
       });
+      let segments = {};
       result.txt += ' ' + block.txt;
       if (block.fmt) {
+        segments = segmenter.segment(block.txt);
         result.fmt = result.fmt.concat(block.fmt.map(s => {
-          s.at += offset;
+          const {
+            at: correctAt,
+            len: correctLen
+          } = toGraphemeValues(s, segments, block.txt);
+          s.at = correctAt + offset;
+          s.len = correctLen;
           return s;
         }));
       }
       if (block.ent) {
+        if (isEmptyObject(segments)) {
+          segments = segmenter.segment(block.txt);
+        }
         result.fmt = result.fmt.concat(block.ent.map(s => {
-          s.at += offset;
+          const {
+            at: correctAt,
+            len: correctLen
+          } = toGraphemeValues(s, segments, block.txt);
+          s.at = correctAt + offset;
+          s.len = correctLen;
           return s;
         }));
       }
@@ -1854,7 +1880,7 @@ Drafty.append = function (first, second) {
     return first;
   }
   first.txt = first.txt || '';
-  const len = first.txt.length;
+  const len = stringToGraphemes(first.txt).length;
   if (typeof second == 'string') {
     first.txt += second;
   } else if (second.txt) {
@@ -2042,7 +2068,7 @@ Drafty.quote = function (header, uid, body) {
   const quote = Drafty.append(Drafty.appendLineBreak(Drafty.mention(header, uid)), body);
   quote.fmt.push({
     at: 0,
-    len: quote.txt.length,
+    len: stringToGraphemes(quote.txt).length,
     tp: 'QQ'
   });
   return quote;
@@ -2052,7 +2078,7 @@ Drafty.mention = function (name, uid) {
     txt: name || '',
     fmt: [{
       at: 0,
-      len: (name || '').length,
+      len: stringToGraphemes(name || '').length,
       key: 0
     }],
     ent: [{
@@ -2216,7 +2242,7 @@ Drafty.appendLineBreak = function (content) {
   };
   content.fmt = content.fmt || [];
   content.fmt.push({
-    at: content.txt.length,
+    at: stringToGraphemes(content.txt).length,
     len: 1,
     tp: 'BR'
   });
@@ -2394,7 +2420,7 @@ Drafty.attachments = function (content, callback, context) {
     return;
   }
   let count = 0;
-  for (let i in content.ent) {
+  for (let i in content.fmt) {
     let fmt = content.fmt[i];
     if (fmt && fmt.at < 0) {
       const ent = content.ent[fmt.key | 0];
@@ -2474,7 +2500,7 @@ Drafty.tagName = function (style) {
   return FORMAT_TAGS[style] && FORMAT_TAGS[style].html_tag;
 };
 Drafty.attrValue = function (style, data) {
-  if (data && DECORATORS[style]) {
+  if (data && DECORATORS[style] && DECORATORS[style].props) {
     return DECORATORS[style].props(data);
   }
   return undefined;
@@ -2619,7 +2645,7 @@ function draftyToTree(doc) {
         key: key
       });
       return;
-    } else if (at + len > txt.length) {
+    } else if (at + len > stringToGraphemes(txt).length) {
       return;
     }
     if (!span.tp) {
@@ -2661,7 +2687,8 @@ function draftyToTree(doc) {
       span.type = 'HD';
     }
   });
-  let tree = spansToTree({}, txt, 0, txt.length, spans);
+  const graphemes = stringToGraphemes(txt);
+  let tree = spansToTree({}, graphemes, 0, graphemes.length, spans);
   const flatten = function (node) {
     if (Array.isArray(node.children) && node.children.length == 1) {
       const child = node.children[0];
@@ -2697,11 +2724,11 @@ function addNode(parent, n) {
   parent.children.push(n);
   return parent;
 }
-function spansToTree(parent, text, start, end, spans) {
+function spansToTree(parent, graphemes, start, end, spans) {
   if (!spans || spans.length == 0) {
     if (start < end) {
       addNode(parent, {
-        text: text.substring(start, end)
+        text: graphemes.slice(start, end).map(segment => segment.segment).join('')
       });
     }
     return parent;
@@ -2719,7 +2746,7 @@ function spansToTree(parent, text, start, end, spans) {
     }
     if (start < span.start) {
       addNode(parent, {
-        text: text.substring(start, span.start)
+        text: graphemes.slice(start, span.start).map(segment => segment.segment).join('')
       });
       start = span.start;
     }
@@ -2744,12 +2771,12 @@ function spansToTree(parent, text, start, end, spans) {
       type: span.type,
       data: span.data,
       key: span.key
-    }, text, start, span.end, subspans));
+    }, graphemes, start, span.end, subspans));
     start = span.end;
   }
   if (start < end) {
     addNode(parent, {
-      text: text.substring(start, end)
+      text: graphemes.slice(start, end).map(segment => segment.segment).join('')
     });
   }
   return parent;
@@ -2759,7 +2786,7 @@ function treeToDrafty(doc, tree, keymap) {
     return doc;
   }
   doc.txt = doc.txt || '';
-  const start = doc.txt.length;
+  const start = stringToGraphemes(doc.txt).length;
   if (tree.text) {
     doc.txt += tree.text;
   } else if (Array.isArray(tree.children)) {
@@ -2768,7 +2795,7 @@ function treeToDrafty(doc, tree, keymap) {
     });
   }
   if (tree.type) {
-    const len = doc.txt.length - start;
+    const len = stringToGraphemes(doc.txt).length - start;
     doc.fmt = doc.fmt || [];
     if (Object.keys(tree.data || {}).length > 0) {
       doc.ent = doc.ent || [];
@@ -2870,12 +2897,12 @@ function shortenTree(tree, limit, tail) {
       node.text = tail;
       limit = -1;
     } else if (node.text) {
-      const len = node.text.length;
-      if (len > limit) {
-        node.text = node.text.substring(0, limit) + tail;
+      const graphemes = stringToGraphemes(node.text);
+      if (graphemes.length > limit) {
+        node.text = graphemes.slice(0, limit).map(segment => segment.segment).join('') + tail;
         limit = -1;
       } else {
-        limit -= len;
+        limit -= graphemes.length;
       }
     }
     return node;
@@ -3021,6 +3048,38 @@ function copyEntData(data, light, allow) {
     }
   }
   return null;
+}
+function isEmptyObject(obj) {
+  return Object.keys(obj ?? {}).length == 0;
+}
+;
+function graphemeIndices(graphemes) {
+  const result = [];
+  let graphemeIndex = 0;
+  let charIndex = 0;
+  for (const {
+    segment
+  } of graphemes) {
+    for (let i = 0; i < segment.length; i++) {
+      result[charIndex + i] = graphemeIndex;
+    }
+    charIndex += segment.length;
+    graphemeIndex++;
+  }
+  return result;
+}
+function toGraphemeValues(fmt, segments, txt) {
+  segments = segments ?? segmenter.segment(txt);
+  const indices = graphemeIndices(segments);
+  const correctAt = indices[fmt.at];
+  const correctLen = fmt.at + fmt.len <= txt.length ? indices[fmt.at + fmt.len - 1] - correctAt : fmt.len;
+  return {
+    at: correctAt,
+    len: correctLen + 1
+  };
+}
+function stringToGraphemes(str) {
+  return Array.from(segmenter.segment(str));
 }
 if (true) {
   module.exports = Drafty;
@@ -5289,7 +5348,7 @@ const PACKAGE_VERSION = "0.23.0-rc1";
 /******/ 	
 /************************************************************************/
 var __webpack_exports__ = {};
-// This entry need to be wrapped in an IIFE because it need to be isolated against other modules in the chunk.
+// This entry needs to be wrapped in an IIFE because it needs to be isolated against other modules in the chunk.
 (() => {
 /*!***********************!*\
   !*** ./src/tinode.js ***!
@@ -5545,7 +5604,7 @@ class Tinode {
   _login = null;
   _authToken = null;
   _inPacketCount = 0;
-  _messageId = Math.floor(Math.random() * 0xFFFF + 0xFFFF);
+  _messageId = (() => Math.floor(Math.random() * 0xFFFF + 0xFFFF))();
   _serverInfo = null;
   _deviceToken = null;
   _pendingPromises = {};
@@ -6515,17 +6574,17 @@ class Tinode {
       this._messageId = 0;
     }
   }
-  onWebsocketOpen = undefined;
-  onConnect = undefined;
-  onDisconnect = undefined;
-  onLogin = undefined;
-  onCtrlMessage = undefined;
-  onDataMessage = undefined;
-  onPresMessage = undefined;
-  onMessage = undefined;
-  onRawMessage = undefined;
-  onNetworkProbe = undefined;
-  onAutoreconnectIteration = undefined;
+  onWebsocketOpen = (() => undefined)();
+  onConnect = (() => undefined)();
+  onDisconnect = (() => undefined)();
+  onLogin = (() => undefined)();
+  onCtrlMessage = (() => undefined)();
+  onDataMessage = (() => undefined)();
+  onPresMessage = (() => undefined)();
+  onMessage = (() => undefined)();
+  onRawMessage = (() => undefined)();
+  onNetworkProbe = (() => undefined)();
+  onAutoreconnectIteration = (() => undefined)();
 }
 ;
 Tinode.MESSAGE_STATUS_NONE = _config_js__WEBPACK_IMPORTED_MODULE_1__.MESSAGE_STATUS_NONE;
@@ -6543,6 +6602,7 @@ Tinode.MAX_SUBSCRIBER_COUNT = 'maxSubscriberCount';
 Tinode.MAX_TAG_COUNT = 'maxTagCount';
 Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
 Tinode.REQ_CRED_VALIDATORS = 'reqCred';
+Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';
 })();
 
 /******/ 	return __webpack_exports__;

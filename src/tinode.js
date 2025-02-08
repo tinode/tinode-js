@@ -2254,3 +2254,6 @@ Tinode.MAX_SUBSCRIBER_COUNT = 'maxSubscriberCount';
 Tinode.MAX_TAG_COUNT = 'maxTagCount';
 Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
 Tinode.REQ_CRED_VALIDATORS = 'reqCred';
+
+// Tinode URI topic ID prefix, 'scheme:path/'.
+Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';
