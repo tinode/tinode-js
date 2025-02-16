@@ -1,7 +1,7 @@
 /**
  * @file Global constants and configuration parameters.
  *
- * @copyright 2015-2023 Tinode LLC
+ * @copyright 2015-2025 Tinode LLC
  */
 'use strict';
 
@@ -11,7 +11,7 @@ import {
 
 // Global constants
 export const PROTOCOL_VERSION = '0'; // Major component of the version, e.g. '0' in '0.17.1'.
-export const VERSION = PACKAGE_VERSION || '0.21';
+export const VERSION = PACKAGE_VERSION || '0.24';
 export const LIBRARY = 'tinodejs/' + VERSION;
 
 // Topic name prefixes.
@@ -20,6 +20,7 @@ export const TOPIC_NEW_CHAN = 'nch';
 export const TOPIC_ME = 'me';
 export const TOPIC_FND = 'fnd';
 export const TOPIC_SYS = 'sys';
+export const TOPIC_SLF = 'slf';
 export const TOPIC_CHAN = 'chn';
 export const TOPIC_GRP = 'grp';
 export const TOPIC_P2P = 'p2p';

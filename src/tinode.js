@@ -968,6 +968,14 @@ export class Tinode {
     return Topic.isMeTopicName(name);
   }
   /**
+   * Check if the given topic name is a name of a 'slf' topic.
+   * @param {string} name - Name of the topic to test.
+   * @returns {boolean} <code>true</code> if the name is a name of a 'slf' topic, <code>false</code> otherwise.
+   */
+  static isSelfTopicName(name) {
+    return Topic.isSelfTopicName(name);
+  }
+  /**
    * Check if the given topic name is a name of a group topic.
    * @param {string} name - Name of the topic to test.
    * @returns {boolean} <code>true</code> if the name is a name of a group topic, <code>false</code> otherwise.

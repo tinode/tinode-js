@@ -148,7 +148,8 @@ export default class Topic {
       'nch': Const.TOPIC_GRP,
       'chn': Const.TOPIC_GRP,
       'usr': Const.TOPIC_P2P,
-      'sys': Const.TOPIC_SYS
+      'sys': Const.TOPIC_SYS,
+      'slf': Const.TOPIC_SLF
     };
     return types[(typeof name == 'string') ? name.substring(0, 3) : 'xxx'];
   }
@@ -161,6 +162,16 @@ export default class Topic {
    */
   static isMeTopicName(name) {
     return Topic.topicType(name) == Const.TOPIC_ME;
+  }
+
+  /**
+   * Check if the given topic name is a name of a 'slf' topic.
+   *
+   * @param {string} name - Name of the topic to test.
+   * @returns {boolean} <code>true</code> if the name is a name of a 'slf' topic, <code>false</code> otherwise.
+   */
+  static isSelfTopicName(name) {
+    return Topic.topicType(name) == Const.TOPIC_SLF;
   }
 
   /**
@@ -193,7 +204,7 @@ export default class Topic {
    * @returns {boolean} <code>true</code> if the name is a name of a p2p or group topic, <code>false</code> otherwise.
    */
   static isCommTopicName(name) {
-    return Topic.isP2PTopicName(name) || Topic.isGroupTopicName(name);
+    return Topic.isP2PTopicName(name) || Topic.isGroupTopicName(name) || Topic.isSelfTopicName(name);
   }
 
   /**
@@ -1525,6 +1536,15 @@ export default class Topic {
    */
   isMeType() {
     return Topic.isMeTopicName(this.name);
+  }
+  /**
+   * Check if topic is a 'slf' topic.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} - <code>true</code> if topic is a 'slf' topic, <code>false</code> otherwise.
+   */
+  isSelfType() {
+    return Topic.isSelfTopicName(this.name);
   }
   /**
    * Check if topic is a channel.
