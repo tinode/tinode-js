@@ -84,15 +84,16 @@ export default class CBuffer {
   }
 
   /**
-   * Convenience method for getting the element from the end of the buffer.
+   * Convenience method for getting the last element from the buffer.
    * @memberof Tinode.CBuffer#
-   * @param {number} at - position to fetch from, counting from the end;
-   *    <code>undefined</code> or <code>null</code>  mean "last".
+   * @param {function} filter - optional filter to apply to elements. If filter is provided, the search
+   *   for the last element starts from the end of the buffer and goes backwards until the filter returns true.
    * @returns {Object} The last element in the buffer or <code>undefined</code> if buffer is empty.
    */
-  getLast(at) {
-    at |= 0;
-    return this.buffer.length > at ? this.buffer[this.buffer.length - 1 - at] : undefined;
+  getLast(filter) {
+    return filter ?
+      this.buffer.findLast(filter) :
+      this.buffer[this.buffer.length - 1];
   }
 
   /**

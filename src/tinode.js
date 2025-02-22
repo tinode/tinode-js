@@ -2259,9 +2259,12 @@ Tinode.DEL_CHAR = Const.DEL_CHAR;
 // Names of keys to server-provided configuration limits.
 Tinode.MAX_MESSAGE_SIZE = 'maxMessageSize';
 Tinode.MAX_SUBSCRIBER_COUNT = 'maxSubscriberCount';
+Tinode.MIN_TAG_LENGTH = 'minTagLength';
+Tinode.MAX_TAG_LENGTH = 'maxTagLength';
 Tinode.MAX_TAG_COUNT = 'maxTagCount';
 Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
 Tinode.REQ_CRED_VALIDATORS = 'reqCred';
+Tinode.MSG_DELETE_AGE = 'msgDelAge';
 
 // Tinode URI topic ID prefix, 'scheme:path/'.
 Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';

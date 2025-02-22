@@ -556,9 +556,10 @@ export default class Topic {
     }
 
     const loaded = [];
-    // First try fetching from DB, then from the server.
+    let remains = pins;
+    // First try fetching from DB, then check deleted log, then ask the server.
     return this._tinode._db.readMessages(this.name, {
-        ranges: listToRanges(pins)
+        ranges: listToRanges(remains)
       })
       .then(msgs => {
         msgs.forEach(data => {
@@ -569,21 +570,36 @@ export default class Topic {
             this._maybeUpdateMessageVersionsCache(data);
           }
         });
-        return loaded.length;
+        if (loaded.length < pins.length) {
+          // Some messages are missing, try dellog.
+          remains = pins.filter(seq => !loaded.includes(seq));
+          return this._tinode._db.readMessages(this.name, {
+            ranges: listToRanges(remains)
+          });
+        }
+        return null;
       })
-      .then(count => {
-        if (count == pins.length) {
+      .then(ranges => {
+        if (ranges) {
+          // Found some deleted ranges in dellog.
+          remains.forEach(seq => {
+            if (ranges.find(r => r.low <= seq && r.hi > seq)) {
+              loaded.push(seq);
+            }
+          });
+        }
+        if (loaded.length == pins.length) {
           // Got all pinned messages from the local cache.
           return Promise.resolve({
             topic: this.name,
             code: 200,
             params: {
-              count: count
+              count: loaded.length
             }
           });
         }
 
-        const remains = pins.filter(seq => !loaded.includes(seq));
+        remains = pins.filter(seq => !loaded.includes(seq));
         return this.getMeta(this.startMetaQuery().withDataList(remains).build());
       });
   }
@@ -747,7 +763,7 @@ export default class Topic {
     return Promise.resolve();
   }
   /**
-   * Delete messages. Hard-deleting messages requires Owner permission.
+   * Delete messages. Hard-deleting messages requires Deleter (D) permission.
    * Wrapper for {@link Tinode#delMessages}.
    * @memberof Tinode.Topic#
    *
@@ -1208,13 +1224,13 @@ export default class Topic {
     return undefined;
   }
   /**
-   * Get the most recent message from cache. This method counts all messages, including deleted ranges.
+   * Get the most recent non-deleted message from cache.
    * @memberof Tinode.Topic#
    *
    * @returns {Object} the most recent cached message or <code>undefined</code>, if no messages are cached.
    */
   latestMessage() {
-    return this._messages.getLast();
+    return this._messages.getLast(msg => !msg._deleted);
   }
   /**
    * Get the latest version for message.

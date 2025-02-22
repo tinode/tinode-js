@@ -10,7 +10,7 @@
 // non-localizable strings should be single quoted 'non-localized'.
 
 import {
-  clipRange
+  clipInRange
 } from './utils.js';
 
 const DB_VERSION = 3;
@@ -543,6 +543,8 @@ export default class DB {
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   readMessages(topicName, query, callback, context) {
+    query = query || {};
+
     if (!this.isReady()) {
       return this.disabled ?
         Promise.resolve([]) :
@@ -585,8 +587,8 @@ export default class DB {
       });
     }
 
+    // Handle single range.
     return new Promise((resolve, reject) => {
-      query = query || {};
       const since = query.since > 0 ? query.since : 0;
       const before = query.before > 0 ? query.before : Number.MAX_SAFE_INTEGER;
       const limit = query.limit | 0;
@@ -662,9 +664,6 @@ export default class DB {
    */
   readDelLog(topicName, query) {
     query = query || {};
-    const since = query.since > 0 ? query.since : 0;
-    const before = query.before > 0 ? query.before : Number.MAX_SAFE_INTEGER;
-    const limit = query.limit | 0;
 
     if (!this.isReady()) {
       return this.disabled ?
@@ -672,8 +671,52 @@ export default class DB {
         Promise.reject(new Error("not initialized"));
     }
 
+    const trx = this.db.transaction(['dellog']);
+    let result = [];
+
+    // Handle individual message ranges.
+    if (Array.isArray(query.ranges)) {
+      return new Promise((resolve, reject) => {
+        trx.onerror = event => {
+          this.#logger('PCache', 'readDelLog', event.target.error);
+          reject(event.target.error);
+        };
+
+        let count = 0;
+        query.ranges.forEach(range => {
+          const hi = range.hi || (range.low + 1);
+          const key = IDBKeyRange.bound([topicName, 0, range.low], [topicName, hi, Number.MAX_SAFE_INTEGER], false, true);
+          trx.objectStore('dellog').getAll(key).onsuccess = event => {
+            const entries = event.target.result;
+            if (entries) {
+              if (Array.isArray(entries)) {
+                result = result.concat(array.map(entry => {
+                  return {
+                    low: entry.low,
+                    hi: entry.hi
+                  };
+                }));
+              } else {
+                result.push({
+                  low: entries.low,
+                  hi: entries.hi
+                });
+              }
+            }
+            count++;
+            if (count == query.ranges.length) {
+              resolve(result);
+            }
+          };
+        });
+      });
+    }
+
     return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['dellog']);
+      const since = query.since > 0 ? query.since : 0;
+      const before = query.before > 0 ? query.before : Number.MAX_SAFE_INTEGER;
+      const limit = query.limit | 0;
+
       trx.onerror = event => {
         this.#logger('PCache', 'readDelLog', event.target.error);
         reject(event.target.error);

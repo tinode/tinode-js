@@ -145,7 +145,7 @@ export function simplify(obj) {
 };
 
 
-// Trim whitespace, strip empty and duplicate elements elements.
+// Trim whitespace, convert to lowercase, strip empty, short, and duplicate elements elements.
 // If the result is an empty array, add a single element "\u2421" (Unicode Del character).
 export function normalizeArray(arr) {
   let out = [];
@@ -160,7 +160,7 @@ export function normalizeArray(arr) {
         }
       }
     }
-    out.sort().filter((item, pos, ary) => {
+    out = out.sort().filter((item, pos, ary) => {
       return !pos || item != ary[pos - 1];
     });
   }
@@ -181,16 +181,16 @@ export function normalizeRanges(ranges, maxSeq) {
   // Sort ranges in accending order by low, then descending by hi.
   ranges.sort((r1, r2) => {
     if (r1.low < r2.low) {
-      return true;
+      return -1;
     }
     if (r1.low == r2.low) {
-      return !r2.hi || (r1.hi >= r2.hi);
+      return (r2.hi | 0) - r1.hi;
     }
-    return false;
+    return 1;
   });
 
   // Remove pending messages from ranges possibly clipping some ranges.
-  return ranges.reduce((out, r) => {
+  ranges = ranges.reduce((out, r) => {
     if (r.low < LOCAL_SEQID && r.low > 0) {
       if (!r.hi || r.hi < LOCAL_SEQID) {
         out.push(r);
@@ -204,6 +204,23 @@ export function normalizeRanges(ranges, maxSeq) {
     }
     return out;
   }, []);
+
+  // Merge overlapping ranges.
+  ranges = ranges.reduce((out, r) => {
+    if (out.length == 0) {
+      out.push(r);
+    } else {
+      let prev = out[out.length - 1];
+      if (r.low <= prev.hi) {
+        prev.hi = Math.max(prev.hi, r.hi);
+      } else {
+        out.push(r);
+      }
+    }
+    return out;
+  }, []);
+
+  return ranges;
 }
 
 // Convert array of IDs to array of ranges.
@@ -235,11 +252,12 @@ export function listToRanges(list) {
 
 // Cuts 'clip' range out of the 'src' range.
 // Returns an array with 0, 1 or 2 elements.
-export function clipRange(src, clip) {
-  if (clip.hi < src.low || clip.low >= src.hi) {
+export function clipOutRange(src, clip) {
+  if (clip.hi <= src.low || clip.low >= src.hi) {
     // Clip is completely outside of src, no intersection.
     return [src];
   }
+
 
   if (clip.low <= src.low) {
     if (clip.hi >= src.hi) {
@@ -248,8 +266,8 @@ export function clipRange(src, clip) {
     }
     // Partial clipping at the top.
     return [{
-      low: src.low,
-      hi: clip.hi
+      low: clip.hi,
+      hi: src.hi
     }];
   }
 
@@ -265,6 +283,28 @@ export function clipRange(src, clip) {
       hi: src.hi
     });
   }
+
+  return result;
+}
+
+// Cuts 'src' range to be completely within 'clip' range.
+// Returns clipped range or null if 'src' is outside of 'clip'.
+export function clipInRange(src, clip) {
+  if (clip.hi <= src.low || clip.low >= src.hi) {
+    // The src is completely outside of the clip, no intersection.
+    return null;
+  }
+
+  if (src.low >= clip.low && src.hi <= clip.hi) {
+    // Src is completely within the clip, return the entire src.
+    return src;
+  }
+
+  // Partial overlap.
+  return {
+    low: Math.max(src.low, clip.low),
+    hi: Math.min(src.hi, clip.hi)
+  };
 
   return result;
 }
