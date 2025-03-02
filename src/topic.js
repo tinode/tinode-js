@@ -1124,6 +1124,19 @@ export default class Topic {
     return this._aux[key];
   }
   /**
+   * Get alias (unique tag with alias: prefix), if present.
+   * @memberof Tinode.Topic#
+   * @return {string} alias or <code>undefined</code>.
+   */
+  alias() {
+    let alias = this._tags && this._tags.find(t => t.startsWith('alias:'));
+    if (alias) {
+      // Remove 'alias:' prefix.
+      alias = alias.substring(6);
+    }
+    return alias;
+  }
+  /**
    * Get cached subscription for the given user ID.
    * @memberof Tinode.Topic#
    *
