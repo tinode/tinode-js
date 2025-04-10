@@ -5763,6 +5763,9 @@ class Tinode {
   static isNullValue(str) {
     return str === _config_js__WEBPACK_IMPORTED_MODULE_1__.DEL_CHAR;
   }
+  static isServerAssignedSeq(seq) {
+    return seq > 0 && seq < _config_js__WEBPACK_IMPORTED_MODULE_1__.LOCAL_SEQID;
+  }
   getNextUniqueId() {
     return this._messageId != 0 ? '' + this._messageId++ : undefined;
   }
