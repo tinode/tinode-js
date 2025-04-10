@@ -1064,6 +1064,14 @@ export class Tinode {
   static isNullValue(str) {
     return str === Const.DEL_CHAR;
   }
+  /**
+   * Check if the given seq ID is likely to be issued by the server as oppisite to being temporary locally assigned ID.
+   * @param {int} seq - seq ID to check.
+   * @returns {boolean} <code>true</code> if seq is likely server-issued, <code>false</code> otherwise.
+   */
+  static isServerAssignedSeq(seq) {
+    return seq > 0 && seq < Const.LOCAL_SEQID;
+  }
 
   // Instance methods.
 
@@ -1878,6 +1886,7 @@ export class Tinode {
    * @param {string} topicName - Name of the topic where the mesage is being aknowledged.
    * @param {string} what - Action being aknowledged, either <code>"read"</code> or <code>"recv"</code>.
    * @param {number} seq - Maximum id of the message being acknowledged.
+   * @throws {Error} if <code>seq</code> is invalid.
    */
   note(topicName, what, seq) {
     if (seq <= 0 || seq >= Const.LOCAL_SEQID) {
