@@ -690,7 +690,7 @@ export default class DB {
             const entries = event.target.result;
             if (entries) {
               if (Array.isArray(entries)) {
-                result = result.concat(array.map(entry => {
+                result = result.concat(entries.map(entry => {
                   return {
                     low: entry.low,
                     hi: entry.hi
