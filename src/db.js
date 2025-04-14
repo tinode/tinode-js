@@ -1,17 +1,13 @@
 /**
  * @file Helper methods for dealing with IndexedDB cache of messages, users, and topics.
  *
- * @copyright 2015-2023 Tinode LLC.
+ * @copyright 2015-2025 Tinode LLC.
  */
 'use strict';
 
 // NOTE TO DEVELOPERS:
 // Localizable strings should be double quoted "строка на другом языке",
 // non-localizable strings should be single quoted 'non-localized'.
-
-import {
-  clipInRange
-} from './utils.js';
 
 const DB_VERSION = 3;
 const DB_NAME = 'tinode-web';
