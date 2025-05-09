@@ -1,7 +1,7 @@
 /**
  * @file Topic management.
  *
- * @copyright 2015-2023 Tinode LLC.
+ * @copyright 2015-2025 Tinode LLC.
  */
 'use strict';
 
@@ -1124,18 +1124,20 @@ export default class Topic {
     return this._aux[key];
   }
   /**
-   * Get alias (unique tag with alias: prefix), if present.
+   * Get alias value (unique tag with alias: prefix), if present.
+   * The prefix is stripped off.
    * @memberof Tinode.Topic#
    * @return {string} alias or <code>undefined</code>.
    */
   alias() {
-    let alias = this._tags && this._tags.find(t => t.startsWith('alias:'));
-    if (alias) {
-      // Remove 'alias:' prefix.
-      alias = alias.substring(6);
+    const alias = this._tags && this._tags.find(t => t.startsWith(Tinode.TAG_ALIAS));
+    if (!alias) {
+      return undefined;
     }
-    return alias;
+    // Remove 'alias:' prefix.
+    return alias.substring(Tinode.TAG_ALIAS.length);
   }
+
   /**
    * Get cached subscription for the given user ID.
    * @memberof Tinode.Topic#

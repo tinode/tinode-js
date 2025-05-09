@@ -79,6 +79,33 @@ export default class TopicFnd extends Topic {
   }
 
   /**
+   * Check if the given tag is unique by asking the server.
+   * @param tag tag to check.
+   * @return promise to be resolved with true if the tag is unique, false otherwise.
+   */
+  checkTagUniqueness(tag, caller) {
+    return new Promise((resolve, reject) => {
+      this.subscribe()
+        .then(_ => this.setMeta({
+          desc: {
+            public: tag
+          }
+        }))
+        .then(_ => this.getMeta(fnd.startMetaQuery().withTags().build()))
+        .then(meta => {
+          if (!meta || !Array.isArray(meta.tags) || meta.tags.length == 0) {
+            resolve(true);
+          }
+          const tags = meta.tags.filter(t => t !== caller);
+          resolve(tags.length == 0);
+        })
+        .catch(err => {
+          reject(err);
+        });
+    });
+  }
+
+  /**
    * Iterate over found contacts. If callback is undefined, use {@link this.onMetaSub}.
    * @function
    * @memberof Tinode.TopicFnd#

@@ -1,10 +1,10 @@
 /**
  * @module tinode-sdk
  *
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2025 Tinode LLC.
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.20
+ * @version 0.24
  *
  * See <a href="https://github.com/tinode/webapp">https://github.com/tinode/webapp</a> for real-life usage.
  *
@@ -1071,6 +1071,91 @@ export class Tinode {
    */
   static isServerAssignedSeq(seq) {
     return seq > 0 && seq < Const.LOCAL_SEQID;
+  }
+
+  /**
+   * Check if the given string is a valid tag value.
+   * @param {string} tag - string to check.
+   * @returns {boolean} <code>true</code> if the string is a valid tag value, <code>false</code> otherwise.
+   */
+  static isValidTagValue(tag) {
+    // 4-24 characters, starting with letter or digit, then letters, digits, hyphen, underscore.
+    const ALIAS_REGEX = /^[a-z0-9][a-z0-9_\-]{3,23}$/i;
+    return tag && typeof tag == 'string' && tag.length > 3 && tag.length < 24 && ALIAS_REGEX.test(tag);
+  }
+
+  /**
+   * Split fully-qualified tag into prefix and value.
+   */
+  static tagSplit(tag) {
+    if (!tag) {
+      return null;
+    }
+
+    tag = tag.trim();
+
+    const splitAt = tag.indexOf(':');
+    if (splitAt <= 0) {
+      // Invalid syntax.
+      return null;
+    }
+
+    const value = tag.substring(splitAt + 1);
+    if (!value) {
+      return null;
+    }
+    return {
+      prefix: tag.substring(0, splitAt),
+      value: value
+    };
+  }
+
+  /**
+   * Set a unique namespace tag.
+   * If the tag with this namespace is already present then it's replaced with the new tag.
+   * @param uniqueTag tag to add, must be fully-qualified; if null or empty, no action is taken.
+   */
+  static setUniqueTag(tags, uniqueTag) {
+    if (!tags || tags.length == 0) {
+      // No tags, just add the new one.
+      return [uniqueTag];
+    }
+
+    const parts = Tinode.tagSplit(uniqueTag)
+    if (!parts) {
+      // Invalid tag.
+      return tags;
+    }
+
+    // Remove the old tag with the same prefix.
+    tags = tags.filter(tag => tag && !tag.startsWith(parts.prefix));
+    // Add the new tag.
+    tags.push(uniqueTag);
+    return tags;
+  }
+
+  /**
+   * Remove a unique tag with the given prefix.
+   * @param prefix prefix to remove
+   */
+  static clearTagPrefix(tags, prefix) {
+    if (!tags || tags.length == 0) {
+      return [];
+    }
+    return tags.filter(tag => tag && !tag.startsWith(prefix));
+  }
+
+  /**
+   * Find the first tag with the given prefix.
+   * @param prefix prefix to search for.
+   * @return the first tag with the given prefix if found or <code>undefined</code>.
+   */
+  static tagByPrefix(tags, prefix) {
+    if (!tags) {
+      return undefined;
+    }
+
+    return tags.find(tag => tag && tag.startsWith(prefix));
   }
 
   // Instance methods.
@@ -2277,3 +2362,8 @@ Tinode.MSG_DELETE_AGE = 'msgDelAge';
 
 // Tinode URI topic ID prefix, 'scheme:path/'.
 Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';
+
+// Tag prefixes for alias, email, phone.
+Tinode.TAG_ALIAS = 'alias:';
+Tinode.TAG_EMAIL = 'email:';
+Tinode.TAG_PHONE = 'tel:';

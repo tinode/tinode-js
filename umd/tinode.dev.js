@@ -3174,6 +3174,23 @@ class TopicFnd extends _topic_js__WEBPACK_IMPORTED_MODULE_1__["default"] {
       }
     });
   }
+  checkTagUniqueness(tag, caller) {
+    return new Promise((resolve, reject) => {
+      this.subscribe().then(_ => this.setMeta({
+        desc: {
+          public: tag
+        }
+      })).then(_ => this.getMeta(fnd.startMetaQuery().withTags().build())).then(meta => {
+        if (!meta || !Array.isArray(meta.tags) || meta.tags.length == 0) {
+          resolve(true);
+        }
+        const tags = meta.tags.filter(t => t !== caller);
+        resolve(tags.length == 0);
+      }).catch(err => {
+        reject(err);
+      });
+    });
+  }
   contacts(callback, context) {
     const cb = callback || this.onMetaSub;
     if (cb) {
@@ -4472,11 +4489,11 @@ class Topic {
     return this._aux[key];
   }
   alias() {
-    let alias = this._tags && this._tags.find(t => t.startsWith('alias:'));
-    if (alias) {
-      alias = alias.substring(6);
+    const alias = this._tags && this._tags.find(t => t.startsWith(Tinode.TAG_ALIAS));
+    if (!alias) {
+      return undefined;
     }
-    return alias;
+    return alias.substring(Tinode.TAG_ALIAS.length);
   }
   subscriber(uid) {
     return this._users[uid];
@@ -5466,10 +5483,10 @@ __webpack_require__.r(__webpack_exports__);
 /**
  * @module tinode-sdk
  *
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2025 Tinode LLC.
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.20
+ * @version 0.24
  *
  * See <a href="https://github.com/tinode/webapp">https://github.com/tinode/webapp</a> for real-life usage.
  *
@@ -6212,6 +6229,52 @@ class Tinode {
   static isServerAssignedSeq(seq) {
     return seq > 0 && seq < _config_js__WEBPACK_IMPORTED_MODULE_1__.LOCAL_SEQID;
   }
+  static isValidTagValue(tag) {
+    const ALIAS_REGEX = /^[a-z0-9][a-z0-9_\-]{3,23}$/i;
+    return tag && typeof tag == 'string' && tag.length > 3 && tag.length < 24 && ALIAS_REGEX.test(tag);
+  }
+  static tagSplit(tag) {
+    if (!tag) {
+      return null;
+    }
+    tag = tag.trim();
+    const splitAt = tag.indexOf(':');
+    if (splitAt <= 0) {
+      return null;
+    }
+    const value = tag.substring(splitAt + 1);
+    if (!value) {
+      return null;
+    }
+    return {
+      prefix: tag.substring(0, splitAt),
+      value: value
+    };
+  }
+  static setUniqueTag(tags, uniqueTag) {
+    if (!tags || tags.length == 0) {
+      return [uniqueTag];
+    }
+    const parts = Tinode.tagSplit(uniqueTag);
+    if (!parts) {
+      return tags;
+    }
+    tags = tags.filter(tag => tag && !tag.startsWith(parts.prefix));
+    tags.push(uniqueTag);
+    return tags;
+  }
+  static clearTagPrefix(tags, prefix) {
+    if (!tags || tags.length == 0) {
+      return [];
+    }
+    return tags.filter(tag => tag && !tag.startsWith(prefix));
+  }
+  static tagByPrefix(tags, prefix) {
+    if (!tags) {
+      return undefined;
+    }
+    return tags.find(tag => tag && tag.startsWith(prefix));
+  }
   getNextUniqueId() {
     return this._messageId != 0 ? '' + this._messageId++ : undefined;
   }
@@ -6703,6 +6766,9 @@ Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
 Tinode.REQ_CRED_VALIDATORS = 'reqCred';
 Tinode.MSG_DELETE_AGE = 'msgDelAge';
 Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';
+Tinode.TAG_ALIAS = 'alias:';
+Tinode.TAG_EMAIL = 'email:';
+Tinode.TAG_PHONE = 'tel:';
 })();
 
 /******/ 	return __webpack_exports__;
