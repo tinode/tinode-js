@@ -1130,12 +1130,12 @@ export default class Topic {
    * @return {string} alias or <code>undefined</code>.
    */
   alias() {
-    const alias = this._tags && this._tags.find(t => t.startsWith(Tinode.TAG_ALIAS));
+    const alias = this._tags && this._tags.find(t => t.startsWith(Const.TAG_ALIAS));
     if (!alias) {
       return undefined;
     }
     // Remove 'alias:' prefix.
-    return alias.substring(Tinode.TAG_ALIAS.length);
+    return alias.substring(Const.TAG_ALIAS.length);
   }
 
   /**

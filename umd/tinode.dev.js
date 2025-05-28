@@ -395,6 +395,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   MESSAGE_STATUS_TO_ME: () => (/* binding */ MESSAGE_STATUS_TO_ME),
 /* harmony export */   PROTOCOL_VERSION: () => (/* binding */ PROTOCOL_VERSION),
 /* harmony export */   RECV_TIMEOUT: () => (/* binding */ RECV_TIMEOUT),
+/* harmony export */   TAG_ALIAS: () => (/* binding */ TAG_ALIAS),
+/* harmony export */   TAG_EMAIL: () => (/* binding */ TAG_EMAIL),
+/* harmony export */   TAG_PHONE: () => (/* binding */ TAG_PHONE),
 /* harmony export */   TOPIC_CHAN: () => (/* binding */ TOPIC_CHAN),
 /* harmony export */   TOPIC_FND: () => (/* binding */ TOPIC_FND),
 /* harmony export */   TOPIC_GRP: () => (/* binding */ TOPIC_GRP),
@@ -440,6 +443,9 @@ const RECV_TIMEOUT = 100;
 const DEFAULT_MESSAGES_PAGE = 24;
 const DEL_CHAR = '\u2421';
 const MAX_PINNED_COUNT = 5;
+const TAG_ALIAS = 'alias:';
+const TAG_EMAIL = 'email:';
+const TAG_PHONE = 'tel:';
 
 /***/ }),
 
@@ -3180,7 +3186,7 @@ class TopicFnd extends _topic_js__WEBPACK_IMPORTED_MODULE_1__["default"] {
         desc: {
           public: tag
         }
-      })).then(_ => this.getMeta(fnd.startMetaQuery().withTags().build())).then(meta => {
+      })).then(_ => this.getMeta(this.startMetaQuery().withTags().build())).then(meta => {
         if (!meta || !Array.isArray(meta.tags) || meta.tags.length == 0) {
           resolve(true);
         }
@@ -4489,11 +4495,11 @@ class Topic {
     return this._aux[key];
   }
   alias() {
-    const alias = this._tags && this._tags.find(t => t.startsWith(Tinode.TAG_ALIAS));
+    const alias = this._tags && this._tags.find(t => t.startsWith(_config_js__WEBPACK_IMPORTED_MODULE_3__.TAG_ALIAS));
     if (!alias) {
       return undefined;
     }
-    return alias.substring(Tinode.TAG_ALIAS.length);
+    return alias.substring(_config_js__WEBPACK_IMPORTED_MODULE_3__.TAG_ALIAS.length);
   }
   subscriber(uid) {
     return this._users[uid];
@@ -6766,9 +6772,9 @@ Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
 Tinode.REQ_CRED_VALIDATORS = 'reqCred';
 Tinode.MSG_DELETE_AGE = 'msgDelAge';
 Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';
-Tinode.TAG_ALIAS = 'alias:';
-Tinode.TAG_EMAIL = 'email:';
-Tinode.TAG_PHONE = 'tel:';
+Tinode.TAG_ALIAS = _config_js__WEBPACK_IMPORTED_MODULE_1__.TAG_ALIAS;
+Tinode.TAG_EMAIL = _config_js__WEBPACK_IMPORTED_MODULE_1__.TAG_EMAIL;
+Tinode.TAG_PHONE = _config_js__WEBPACK_IMPORTED_MODULE_1__.TAG_PHONE;
 })();
 
 /******/ 	return __webpack_exports__;

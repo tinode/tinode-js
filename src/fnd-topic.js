@@ -91,7 +91,7 @@ export default class TopicFnd extends Topic {
             public: tag
           }
         }))
-        .then(_ => this.getMeta(fnd.startMetaQuery().withTags().build()))
+        .then(_ => this.getMeta(this.startMetaQuery().withTags().build()))
         .then(meta => {
           if (!meta || !Array.isArray(meta.tags) || meta.tags.length == 0) {
             resolve(true);

@@ -2364,6 +2364,6 @@ Tinode.MSG_DELETE_AGE = 'msgDelAge';
 Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';
 
 // Tag prefixes for alias, email, phone.
-Tinode.TAG_ALIAS = 'alias:';
-Tinode.TAG_EMAIL = 'email:';
-Tinode.TAG_PHONE = 'tel:';
+Tinode.TAG_ALIAS = Const.TAG_ALIAS;
+Tinode.TAG_EMAIL = Const.TAG_EMAIL;
+Tinode.TAG_PHONE = Const.TAG_PHONE;

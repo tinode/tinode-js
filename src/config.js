@@ -56,3 +56,8 @@ export const DEL_CHAR = '\u2421';
 
 // Maximum number of pinnned messages;
 export const MAX_PINNED_COUNT = 5;
+
+// Tag prefixes for alias, email, phone.
+export const TAG_ALIAS = 'alias:';
+export const TAG_EMAIL = 'email:';
+export const TAG_PHONE = 'tel:';
