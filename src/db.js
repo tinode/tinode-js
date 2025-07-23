@@ -79,34 +79,50 @@ export default class DB {
         };
 
         // Individual object stores.
-        // Object store (table) for topics. The primary key is topic name.
-        this.db.createObjectStore('topic', {
-          keyPath: 'name'
-        });
 
-        // Users object store. UID is the primary key.
-        this.db.createObjectStore('user', {
-          keyPath: 'uid'
-        });
+        // Alternatively could use event.oldVersion and event.newVersion
+        // to determine which object stores to create or upgrade.
 
-        // Subscriptions object store topic <-> user. Topic name + UID is the primary key.
-        this.db.createObjectStore('subscription', {
-          keyPath: ['topic', 'uid']
-        });
+        if (!this.db.objectStoreNames.contains('topic')) {
+          // Object store (table) for topics. The primary key is the topic name.
+          this.db.createObjectStore('topic', {
+            keyPath: 'name'
+          });
+        }
 
-        // Messages object store. The primary key is topic name + seq.
-        this.db.createObjectStore('message', {
-          keyPath: ['topic', 'seq']
-        });
+        if (!this.db.objectStoreNames.contains('user')) {
+          // Users object store. UID is the primary key.
+          this.db.createObjectStore('user', {
+            keyPath: 'uid'
+          });
+        }
 
-        // Records of deleted message ranges. The primary key is topic name + low seq.
-        const dellog = this.db.createObjectStore('dellog', {
-          keyPath: ['topic', 'low', 'hi']
-        });
-        dellog.createIndex('topic_clear', ['topic', 'clear'], {
-          unique: false
-        });
-      };
+        if (!this.db.objectStoreNames.contains('subscription')) {
+          // Subscriptions object store topic <-> user. Topic name + UID is the primary key.
+          this.db.createObjectStore('subscription', {
+            keyPath: ['topic', 'uid']
+          });
+        }
+
+        if (!this.db.objectStoreNames.contains('message')) {
+          // Messages object store. The primary key is topic name + seq.
+          this.db.createObjectStore('message', {
+            keyPath: ['topic', 'seq']
+          });
+        }
+
+        if (!this.db.objectStoreNames.contains('dellog')) {
+          // Records of deleted message ranges. The primary key is topic name + low seq.
+          const dellog = this.db.createObjectStore('dellog', {
+            keyPath: ['topic', 'low', 'hi']
+          });
+          if (!dellog.indexNames.contains('topic_clear')) {
+            dellog.createIndex('topic_clear', ['topic', 'clear'], {
+              unique: false
+            });
+          }
+        }
+      }
     });
   }
 

@@ -842,24 +842,36 @@ class DB {
           this.#logger('PCache', "failed to create storage", event);
           this.#onError(event.target.error);
         };
-        this.db.createObjectStore('topic', {
-          keyPath: 'name'
-        });
-        this.db.createObjectStore('user', {
-          keyPath: 'uid'
-        });
-        this.db.createObjectStore('subscription', {
-          keyPath: ['topic', 'uid']
-        });
-        this.db.createObjectStore('message', {
-          keyPath: ['topic', 'seq']
-        });
-        const dellog = this.db.createObjectStore('dellog', {
-          keyPath: ['topic', 'low', 'hi']
-        });
-        dellog.createIndex('topic_clear', ['topic', 'clear'], {
-          unique: false
-        });
+        if (!this.db.objectStoreNames.contains('topic')) {
+          this.db.createObjectStore('topic', {
+            keyPath: 'name'
+          });
+        }
+        if (!this.db.objectStoreNames.contains('user')) {
+          this.db.createObjectStore('user', {
+            keyPath: 'uid'
+          });
+        }
+        if (!this.db.objectStoreNames.contains('subscription')) {
+          this.db.createObjectStore('subscription', {
+            keyPath: ['topic', 'uid']
+          });
+        }
+        if (!this.db.objectStoreNames.contains('message')) {
+          this.db.createObjectStore('message', {
+            keyPath: ['topic', 'seq']
+          });
+        }
+        if (!this.db.objectStoreNames.contains('dellog')) {
+          const dellog = this.db.createObjectStore('dellog', {
+            keyPath: ['topic', 'low', 'hi']
+          });
+          if (!dellog.indexNames.contains('topic_clear')) {
+            dellog.createIndex('topic_clear', ['topic', 'clear'], {
+              unique: false
+            });
+          }
+        }
       };
     });
   }
