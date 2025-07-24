@@ -63,6 +63,15 @@ export default class DB {
       req.onsuccess = event => {
         this.db = event.target.result;
         this.disabled = false;
+
+        // This handler is called when a different tab tries to upgrade the database.
+        this.db.onversionchange = _ => {
+          this.#logger('PCache', "another tab tries to upgrade DB, shutting down");
+          this.db.close();
+          this.db = null;
+          this.disabled = true;
+        };
+
         resolve(this.db);
       };
       req.onerror = event => {

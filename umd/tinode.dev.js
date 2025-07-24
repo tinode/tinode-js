@@ -829,6 +829,12 @@ class DB {
       req.onsuccess = event => {
         this.db = event.target.result;
         this.disabled = false;
+        this.db.onversionchange = _ => {
+          this.#logger('PCache', "another tab tries to upgrade DB, shutting down");
+          this.db.close();
+          this.db = null;
+          this.disabled = true;
+        };
         resolve(this.db);
       };
       req.onerror = event => {
