@@ -61,9 +61,11 @@
 const MAX_FORM_ELEMENTS = 8;
 const MAX_PREVIEW_ATTACHMENTS = 3;
 const MAX_PREVIEW_DATA_SIZE = 64;
-const JSON_MIME_TYPE = 'application/json+drafty';
-const JSON_MIME_TYPE_LEGACY = 'application/json'; // Remove in 2026.
 const DRAFTY_MIME_TYPE = 'text/x-drafty';
+// Drafty form-response MIME type.
+const DRAFTY_FR_MIME_TYPE = 'text/x-drafty-fr';
+// Legacy Drafty form-response MIME type.
+const DRAFTY_FR_MIME_TYPE_LEGACY = 'application/json'; // Remove in 2026.
 const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'incoming', 'mime', 'name', 'premime', 'preref', 'preview',
   'ref', 'size', 'state', 'url', 'val', 'width'
 ];
@@ -1353,7 +1355,7 @@ Drafty.attachJSON = function(content, data) {
   content.ent.push({
     tp: 'EX',
     data: {
-      mime: JSON_MIME_TYPE,
+      mime: DRAFTY_FR_MIME_TYPE,
       val: data
     }
   });
@@ -1861,7 +1863,7 @@ Drafty.sanitizeEntities = function(content) {
  */
 Drafty.getDownloadUrl = function(entData) {
   let url = null;
-  if (entData.mime != JSON_MIME_TYPE && entData.mime != JSON_MIME_TYPE_LEGACY && entData.val) {
+  if (!Drafty.isFormResponseType(entData.mime) && entData.val) {
     url = base64toObjectUrl(entData.val, entData.mime, Drafty.logger);
   } else if (typeof entData.ref == 'string') {
     url = entData.ref;
@@ -1963,6 +1965,18 @@ Drafty.attrValue = function(style, data) {
  */
 Drafty.getContentType = function() {
   return DRAFTY_MIME_TYPE;
+}
+
+/**
+ * Check if the given mime-type is a MIME type of drafty form response.
+ * @memberof Drafty
+ * @static
+ *
+ * @returns {boolean} <code>true</code> if given mime type is drafty form response, <code>false</code> otherwise.
+ */
+Drafty.isFormResponseType = function(mimeType) {
+  return mimeType === DRAFTY_FR_MIME_TYPE ||
+    mimeType === DRAFTY_FR_MIME_TYPE_LEGACY;
 }
 
 // =================
@@ -2574,8 +2588,8 @@ function attachmentsToEnd(tree, limit) {
           // Too many attachments to preview;
           continue;
         }
-        if (c.data['mime'] == JSON_MIME_TYPE || c.data['mime'] == JSON_MIME_TYPE_LEGACY) {
-          // JSON attachments are not shown in preview.
+        if (Drafty.isFormResponseType(c.data['mime'])) {
+          // Form response attachments are not shown in preview.
           continue;
         }
 
