@@ -420,4 +420,61 @@ export default class TopicMe extends Topic {
   getCredentials() {
     return this._credentials;
   }
+
+  /**
+   * Pin topic to the top of the contact list.
+   * @memberof Tinode.TopicMe#
+   *
+   * @param {string} topic - Name of the topic to pin.
+   * @param {boolean} [pin=false] - If true, pin the topic, otherwise unpin.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+   */
+  pinTopic(topic, pin) {
+    if (!this._attached) {
+      return Promise.reject(new Error("Cannot pin topic in inactive 'me' topic"));
+    }
+    if (!Topic.isCommTopicName(topic)) {
+      return Promise.reject(new Error("Invalid topic to pin"));
+    }
+
+    const tpin = Array.isArray(this.private && this.private.tpin) ? this.private.tpin : [];
+    const found = tpin.includes(topic);
+    if ((pin && found) || (!pin && !found)) {
+      // Nothing to do.
+      return Promise.resolve(tpin);
+    }
+
+    if (pin) {
+      // Add topic to the top of the pinned list.
+      tpin.unshift(topic);
+    } else {
+      // Remove topic from the pinned list.
+      tpin.splice(tpin.indexOf(topic), 1);
+    }
+
+    return this.setMeta({
+      desc: {
+        private: {
+          tpin: tpin.length > 0 ? tpin : Const.DEL_CHAR
+        }
+      }
+    });
+  }
+
+  /**
+   * Get the rank of the pinned topic.
+   * @memberof Tinode.TopicMe#
+   * @param {string} topic - Name of the topic to check.
+   *
+   * @returns {number} numeric rank of the pinned topic in the range 1..N (N being the top,
+   *      N - the number of pinned topics) or 0 if not pinned.
+   */
+  pinnedTopicRank(topic) {
+    if (!this.private || !this.private.tpin) {
+      return 0;
+    }
+    const idx = this.private.tpin.indexOf(topic);
+    return idx < 0 ? 0 : this.private.tpin.length - idx;
+  }
 }
