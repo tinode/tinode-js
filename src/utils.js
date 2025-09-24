@@ -1,7 +1,7 @@
 /**
  * @file Utilities used in multiple places.
  *
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2025 Tinode LLC.
  */
 'use strict';
 
@@ -58,9 +58,8 @@ export function rfc3339DateString(d) {
 }
 
 // Recursively merge src's own properties to dst.
-// Ignore properties where ignore[property] is true.
 // Array and Date objects are shallow-copied.
-export function mergeObj(dst, src, ignore) {
+export function mergeObj(dst, src) {
   if (typeof src != 'object') {
     if (src === undefined) {
       return dst;
@@ -72,7 +71,7 @@ export function mergeObj(dst, src, ignore) {
   }
   // JS is crazy: typeof null is 'object'.
   if (src === null) {
-    return src;
+    return dst;
   }
 
   // Handle Date
@@ -95,11 +94,11 @@ export function mergeObj(dst, src, ignore) {
   }
 
   for (let prop in src) {
-    if (src.hasOwnProperty(prop) && (!ignore || !ignore[prop]) && (prop != '_noForwarding')) {
+    if (src.hasOwnProperty(prop) && (prop != '_noForwarding')) {
       try {
         dst[prop] = mergeObj(dst[prop], src[prop]);
       } catch (err) {
-        // FIXME: probably need to log something here.
+        console.warn("Error merging property:", prop, err);
       }
     }
   }
@@ -107,8 +106,8 @@ export function mergeObj(dst, src, ignore) {
 }
 
 // Update object stored in a cache. Returns updated value.
-export function mergeToCache(cache, key, newval, ignore) {
-  cache[key] = mergeObj(cache[key], newval, ignore);
+export function mergeToCache(cache, key, newval) {
+  cache[key] = mergeObj(cache[key], newval);
   return cache[key];
 }
 

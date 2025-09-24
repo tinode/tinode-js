@@ -1,7 +1,7 @@
 /**
  * @file Definition of 'me' topic.
  *
- * @copyright 2015-2023 Tinode LLC.
+ * @copyright 2015-2025 Tinode LLC.
  */
 'use strict';
 

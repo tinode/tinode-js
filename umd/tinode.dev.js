@@ -5242,7 +5242,7 @@ function rfc3339DateString(d) {
   const millis = d.getUTCMilliseconds();
   return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) + 'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) + (millis ? '.' + pad(millis, 3) : '') + 'Z';
 }
-function mergeObj(dst, src, ignore) {
+function mergeObj(dst, src) {
   if (typeof src != 'object') {
     if (src === undefined) {
       return dst;
@@ -5253,7 +5253,7 @@ function mergeObj(dst, src, ignore) {
     return src;
   }
   if (src === null) {
-    return src;
+    return dst;
   }
   if (src instanceof Date && !isNaN(src)) {
     return !dst || !(dst instanceof Date) || isNaN(dst) || dst < src ? src : dst;
@@ -5268,16 +5268,18 @@ function mergeObj(dst, src, ignore) {
     dst = src.constructor();
   }
   for (let prop in src) {
-    if (src.hasOwnProperty(prop) && (!ignore || !ignore[prop]) && prop != '_noForwarding') {
+    if (src.hasOwnProperty(prop) && prop != '_noForwarding') {
       try {
         dst[prop] = mergeObj(dst[prop], src[prop]);
-      } catch (err) {}
+      } catch (err) {
+        console.warn("Error merging property:", prop, err);
+      }
     }
   }
   return dst;
 }
-function mergeToCache(cache, key, newval, ignore) {
-  cache[key] = mergeObj(cache[key], newval, ignore);
+function mergeToCache(cache, key, newval) {
+  cache[key] = mergeObj(cache[key], newval);
   return cache[key];
 }
 function simplify(obj) {
