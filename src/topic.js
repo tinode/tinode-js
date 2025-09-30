@@ -40,7 +40,7 @@ export default class Topic {
    * @param {callback} callbacks.onMetaSub - Called for a single subscription record change.
    * @param {callback} callbacks.onSubsUpdated - Called after a batch of subscription changes have been recieved and cached.
    * @param {callback} callbacks.onDeleteTopic - Called after the topic is deleted.
-   * @param {callback} callbacls.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
+   * @param {callback} callbacks.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
    */
   constructor(name, callbacks) {
     // Parent Tinode object.
