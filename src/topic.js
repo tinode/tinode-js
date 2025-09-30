@@ -1982,7 +1982,7 @@ export default class Topic {
         // Subscription is deleted, remove it from topic (but leave in Users cache)
         delete this._users[sub.user];
         user = sub;
-        this.subcnt --;
+        this.subcnt--;
       }
 
       if (this.onMetaSub) {
