@@ -40,7 +40,7 @@ export default class Topic {
    * @param {callback} callbacks.onMetaSub - Called for a single subscription record change.
    * @param {callback} callbacks.onSubsUpdated - Called after a batch of subscription changes have been recieved and cached.
    * @param {callback} callbacks.onDeleteTopic - Called after the topic is deleted.
-   * @param {callback} callbacls.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
+   * @param {callback} callbacks.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
    */
   constructor(name, callbacks) {
     // Parent Tinode object.
@@ -1951,8 +1951,8 @@ export default class Topic {
       this.onMetaDesc(this);
     }
   }
-  // Called by Tinode when meta.sub is recived or in response to received
-  // {ctrl} after setMeta-sub.
+  // Called by Tinode when meta.sub is recived, in response to received
+  // {ctrl} after setMeta-sub, or as a handler for {pres what=sub}.
   _processMetaSubs(subs) {
     for (let idx in subs) {
       const sub = subs[idx];
@@ -1973,11 +1973,16 @@ export default class Topic {
             acs: sub.acs
           });
         }
+        if (!this._users[sub.user]) {
+          // New subscription.
+          this.subcnt++;
+        }
         user = this._updateCachedUser(sub.user, sub);
       } else {
         // Subscription is deleted, remove it from topic (but leave in Users cache)
         delete this._users[sub.user];
         user = sub;
+        this.subcnt --;
       }
 
       if (this.onMetaSub) {
