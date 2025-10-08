@@ -72,7 +72,7 @@ export function mergeObj(dst, src, ignore) {
   }
   // JS is crazy: typeof null is 'object'.
   if (src === null) {
-    return src;
+    return dst;
   }
 
   // Handle Date

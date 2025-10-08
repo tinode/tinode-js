@@ -108,7 +108,10 @@ test('mergeObj', () => {
   expect(mergeObj({
     a: 1,
     b: 2
-  }, null)).toEqual(null);
+  }, null)).toEqual({
+    a: 1,
+    b: 2
+  });
   expect(mergeObj({
     a: 1,
     b: 2
