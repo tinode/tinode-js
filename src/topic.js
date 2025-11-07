@@ -765,7 +765,7 @@ export default class Topic {
 
   /**
    * Pin topic to the top of the contact list.
-   * @memberof Tinode.TopicMe#
+   * @memberof Tinode.Topic#
    *
    * @param {string} topic - Name of the topic to pin.
    * @param {boolean} [pin=false] - If true, pin the topic, otherwise unpin.
@@ -779,7 +779,7 @@ export default class Topic {
 
   /**
    * Get the rank of the pinned topic.
-   * @memberof Tinode.TopicMe#
+   * @memberof Tinode.Topic#
    * @param {string} topic - Name of the topic to check.
    *
    * @returns {number} numeric rank of the pinned topic in the range 1..N (N being the top,
