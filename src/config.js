@@ -11,7 +11,7 @@ import {
 
 // Global constants
 export const PROTOCOL_VERSION = '0'; // Major component of the version, e.g. '0' in '0.17.1'.
-export const VERSION = PACKAGE_VERSION || '0.24';
+export const VERSION = PACKAGE_VERSION || '0.25';
 export const LIBRARY = 'tinodejs/' + VERSION;
 
 // Topic name prefixes.
@@ -61,3 +61,11 @@ export const MAX_PINNED_COUNT = 5;
 export const TAG_ALIAS = 'alias:';
 export const TAG_EMAIL = 'email:';
 export const TAG_PHONE = 'tel:';
+
+// Parameters of exponential backoff for reconnect attempts.
+// 2000 milliseconds, minimum delay between reconnects.
+export const BACKOFF_BASE = 2_000;
+// Maximum delay between reconnects 2^10 * 2000 ~ 34 minutes.
+export const BACKOFF_MAX_ITER = 10;
+// Random jitter between reconnection attempts, 0.3 -> 30% jitter.
+export const BACKOFF_JITTER = 0.3;

@@ -1,14 +1,20 @@
 /**
  * @file Abstraction layer for websocket and long polling connections.
  *
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2025 Tinode LLC.
  */
 'use strict';
 
 import CommError from './comm-error.js';
 import {
+  BACKOFF_BASE,
+  BACKOFF_MAX_ITER,
+  BACKOFF_JITTER
+} from './config.js';
+import {
   jsonParseHelper
 } from './utils.js';
+
 
 let WebSocketProvider;
 let XHRProvider;
@@ -20,11 +26,6 @@ const NETWORK_ERROR_TEXT = "Connection failed";
 // Error code to return when user disconnected from server.
 const NETWORK_USER = 418;
 const NETWORK_USER_TEXT = "Disconnected by client";
-
-// Settings for exponential backoff
-const _BOFF_BASE = 2000; // 2000 milliseconds, minimum delay between reconnects
-const _BOFF_MAX_ITER = 10; // Maximum delay between reconnects 2^10 * 2000 ~ 34 minutes
-const _BOFF_JITTER = 0.3; // Add random delay
 
 // Helper function for creating an endpoint URL.
 function makeBaseUrl(host, protocol, version, apiKey) {
@@ -204,9 +205,9 @@ export default class Connection {
     // Clear timer
     clearTimeout(this.#boffTimer);
     // Calculate when to fire the reconnect attempt
-    const timeout = _BOFF_BASE * (Math.pow(2, this.#boffIteration) * (1.0 + _BOFF_JITTER * Math.random()));
+    const timeout = BACKOFF_BASE * (Math.pow(2, this.#boffIteration) * (1.0 + BACKOFF_JITTER * Math.random()));
     // Update iteration counter for future use
-    this.#boffIteration = (this.#boffIteration >= _BOFF_MAX_ITER ? this.#boffIteration : this.#boffIteration + 1);
+    this.#boffIteration = (this.#boffIteration >= BACKOFF_MAX_ITER ? this.#boffIteration : this.#boffIteration + 1);
     if (this.onAutoreconnectIteration) {
       this.onAutoreconnectIteration(timeout);
     }

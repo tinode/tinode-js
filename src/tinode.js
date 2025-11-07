@@ -4,7 +4,7 @@
  * @copyright 2015-2025 Tinode LLC.
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
- * @version 0.24
+ * @version 0.25
  *
  * See <a href="https://github.com/tinode/webapp">https://github.com/tinode/webapp</a> for real-life usage.
  *
