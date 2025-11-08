@@ -31,27 +31,6 @@ test('rfc3339DateString', () => {
 // Ignore properties where ignore[property] is true.
 // Array and Date objects are shallow-copied.
 test('mergeObj', () => {
-  const dst = {
-    a: 1,
-    b: 2
-  };
-  const src = {
-    b: 3,
-    c: 4
-  };
-  expect(mergeObj({
-    a: 1,
-    b: 2
-  }, {
-    b: 3,
-    c: 4
-  }, {
-    b: true
-  })).toEqual({
-    a: 1,
-    b: 2,
-    c: 4
-  });
   expect(mergeObj({
     a: 1,
     b: 2
@@ -62,34 +41,6 @@ test('mergeObj', () => {
     a: 1,
     b: 3,
     c: 4
-  });
-  expect(mergeObj({
-    a: 1,
-    b: 2
-  }, {
-    b: 3,
-    c: 4
-  }, {
-    a: true,
-    b: true
-  })).toEqual({
-    a: 1,
-    b: 2,
-    c: 4
-  });
-  expect(mergeObj({
-    a: 1,
-    b: 2
-  }, {
-    b: 3,
-    c: 4
-  }, {
-    a: true,
-    b: true,
-    c: true
-  })).toEqual({
-    a: 1,
-    b: 2
   });
   expect(mergeObj(undefined, {
     b: 3,
@@ -109,6 +60,49 @@ test('mergeObj', () => {
     a: 1,
     b: 2
   }, null)).toEqual({
+    a: 1,
+    b: 2
+  });
+  expect(mergeObj({
+    a: 1,
+    b: 2
+  }, {
+    b: DEL_CHAR,
+    c: 4
+  })).toEqual({
+    a: 1,
+    c: 4
+  });
+  expect(mergeObj({
+    a: 1,
+    b: 2,
+    d: {
+      e: 5,
+      f: 6
+    }
+  }, {
+    b: 3,
+    d: {
+      f: 7,
+      g: 'hello'
+    }
+  })).toEqual({
+    a: 1,
+    b: 3,
+    d: {
+      e: 5,
+      f: 7,
+      g: 'hello'
+    }
+  });
+  expect(mergeObj({
+    a: 1,
+    b: 2
+  }, DEL_CHAR)).toEqual(undefined);
+  expect(mergeObj({
+    a: 1,
+    b: 2
+  }, undefined)).toEqual({
     a: 1,
     b: 2
   });

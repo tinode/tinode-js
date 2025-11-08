@@ -762,6 +762,34 @@ export default class Topic {
     }
     return Promise.resolve();
   }
+
+  /**
+   * Pin topic to the top of the contact list.
+   * @memberof Tinode.Topic#
+   *
+   * @param {string} topic - Name of the topic to pin.
+   * @param {boolean} [pin=false] - If true, pin the topic, otherwise unpin.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
+   */
+  pinTopic(topic, pin) {
+    // Unsupported operation for non-me topics.
+    return Promise.reject(new Error("Pinning topics is not supported here"));
+  }
+
+  /**
+   * Get the rank of the pinned topic.
+   * @memberof Tinode.Topic#
+   * @param {string} topic - Name of the topic to check.
+   *
+   * @returns {number} numeric rank of the pinned topic in the range 1..N (N being the top,
+   *      N - the number of pinned topics) or 0 if not pinned.
+   */
+  pinnedTopicRank(topic) {
+    // Unsupported for non-me topics.
+    return 0;
+  }
+
   /**
    * Delete messages. Hard-deleting messages requires Deleter (D) permission.
    * Wrapper for {@link Tinode#delMessages}.
@@ -1923,8 +1951,8 @@ export default class Topic {
       this.onMetaDesc(this);
     }
   }
-  // Called by Tinode when meta.sub is recived or in response to received
-  // {ctrl} after setMeta-sub.
+  // Called by Tinode when meta.sub is recived, in response to received
+  // {ctrl} after setMeta-sub, or as a handler for {pres what=sub}.
   _processMetaSubs(subs) {
     for (let idx in subs) {
       const sub = subs[idx];
@@ -1945,11 +1973,16 @@ export default class Topic {
             acs: sub.acs
           });
         }
+        if (!this._users[sub.user]) {
+          // New subscription.
+          this.subcnt++;
+        }
         user = this._updateCachedUser(sub.user, sub);
       } else {
         // Subscription is deleted, remove it from topic (but leave in Users cache)
         delete this._users[sub.user];
         user = sub;
+        this.subcnt--;
       }
 
       if (this.onMetaSub) {
