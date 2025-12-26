@@ -1388,7 +1388,8 @@ Drafty.appendLineBreak = function(content) {
  * Given Drafty document, convert it to HTML.
  * No attempt is made to strip pre-existing html markup.
  * This is potentially unsafe because <code>content.txt</code> may contain malicious HTML
- * markup.
+ * markup. DO NOT use in production code.
+ *
  * @memberof Tinode.Drafty
  * @static
  *

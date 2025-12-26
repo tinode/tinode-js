@@ -1394,6 +1394,40 @@ const html_this = [
     },
     "<a href=\"#usrCPvFc6lpAsw\">➦ Alice Johnson</a><br/> <div><a href=\"#usrCPvFc6lpAsw\">Alice Johnson</a><br/> This is a simple reply</div>This is a reply to reply"
   ],
+  // Simple formatting.
+  [{
+      "txt": "Hello bold world",
+      "fmt": [{
+        "at": 6,
+        "len": 4,
+        "tp": "ST"
+      }]
+    },
+    "Hello <b>bold</b> world"
+  ],
+  // Link with a javascript: URL. This demonstrates UNSAFE behavior.
+  [{
+      "txt": "Click me for a surprise!",
+      "fmt": [{
+        "at": 0,
+        "len": 23,
+        "key": 0
+      }],
+      "ent": [{
+        "tp": "LN",
+        "data": {
+          "url": "javascript:alert('XSS')"
+        }
+      }]
+    },
+    "<a href=\"javascript:alert('XSS')\">Click me for a surprise</a>!"
+  ],
+  // Text containing unescaped HTML. This also demonstrates UNSAFE behavior.
+  [{
+      "txt": "Here is an image <img src=x onerror=alert('XSS')>",
+    },
+    "Here is an image <img src=x onerror=alert('XSS')>"
+  ],
 ];
 
 test.each(html_this)('Drafty.UNSAFE_toHTML %j', (src, exp) => {
