@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Tinode SDK",
-  "version": "0.25.0",
+  "version": "0.25.1",
   "scripts": {
     "format": "js-beautify -r src/*.js",
     "build": "npm run format && npm run vers && npm run build:prod && npm run build:dev",
@@ -12,7 +12,7 @@
     "vers": "echo \"export const PACKAGE_VERSION = \\\"`node -p -e \"require('./package.json').version\"`\\\";\" > version.js",
     "test": "jest"
   },
-  "browserslist": "> 0.5%, not IE 11, not op_mini all, not and_uc >0",
+  "browserslist": ["defaults"],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tinode/tinode-js.git"

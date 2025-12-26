@@ -1394,7 +1394,7 @@ const html_this = [
     },
     "<a href=\"#usrCPvFc6lpAsw\">➦ Alice Johnson</a><br/> <div><a href=\"#usrCPvFc6lpAsw\">Alice Johnson</a><br/> This is a simple reply</div>This is a reply to reply"
   ],
-    // Simple formatting.
+  // Simple formatting.
   [{
       "txt": "Hello bold world",
       "fmt": [{
