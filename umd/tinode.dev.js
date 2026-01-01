@@ -1119,15 +1119,40 @@ class DB {
       const req = trx.objectStore('message').get(IDBKeyRange.only([topicName, seq]));
       req.onsuccess = event => {
         const src = req.result || event.target.result;
-        if (!src || src._status == status) {
-          trx.commit();
-          return;
+        if (src && src._status != status) {
+          trx.objectStore('message').put(DB.#serializeMessage(src, {
+            topic: topicName,
+            seq: seq,
+            _status: status
+          }));
         }
-        trx.objectStore('message').put(DB.#serializeMessage(src, {
-          topic: topicName,
-          seq: seq,
-          _status: status
-        }));
+        trx.commit();
+      };
+    });
+  }
+  updMessageReact(topicName, seq, react) {
+    if (!this.isReady()) {
+      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
+    }
+    return new Promise((resolve, reject) => {
+      const trx = this.db.transaction(['message'], 'readwrite');
+      trx.onsuccess = event => {
+        resolve(event.target.result);
+      };
+      trx.onerror = event => {
+        this.#logger('PCache', 'updMessageReact', event.target.error);
+        reject(event.target.error);
+      };
+      const req = trx.objectStore('message').get(IDBKeyRange.only([topicName, seq]));
+      req.onsuccess = event => {
+        const src = req.result || event.target.result;
+        if (src && src.react !== react) {
+          trx.objectStore('message').put(DB.#serializeMessage(src, {
+            topic: topicName,
+            seq: seq,
+            react: react
+          }));
+        }
         trx.commit();
       };
     });
@@ -1377,7 +1402,7 @@ class DB {
     return res;
   }
   static #serializeMessage(dst, msg) {
-    const fields = ['topic', 'seq', 'ts', '_status', 'from', 'head', 'content'];
+    const fields = ['topic', 'seq', 'ts', '_status', 'from', 'head', 'content', 'react'];
     const res = dst || {};
     fields.forEach(f => {
       if (msg.hasOwnProperty(f)) {
@@ -4490,7 +4515,64 @@ class Topic {
     if (!this._attached && !['ringing', 'hang-up'].includes(evt)) {
       return;
     }
-    return this._tinode.videoCall(this.name, seq, evt, payload);
+    this._tinode.videoCall(this.name, seq, evt, payload);
+  }
+  react(seq, emo) {
+    if (!seq || !emo) {
+      this._tinode.logger("INFO: Invalid parameters to react()");
+      return;
+    }
+    if (!this._attached) {
+      this._tinode.logger("INFO: Cannot send react note in inactive topic");
+      return;
+    }
+    const msg = this.findMessage(seq);
+    if (!msg) {
+      return;
+    }
+    const reacts = msg.react || [];
+    const myUid = this._tinode.getCurrentUserID();
+    const found = reacts.findIndex(r => r.users.includes(myUid));
+    if (found >= 0) {
+      const existing = reacts[found];
+      if (existing.val == emo) {
+        existing.count--;
+        if (existing.count <= 0) {
+          reacts.splice(found, 1);
+        } else {
+          const userIdx = existing.users.indexOf(myUid);
+          existing.users.splice(userIdx, 1);
+        }
+        emo = _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR;
+      } else {
+        const userIdx = existing.users.indexOf(myUid);
+        existing.users.splice(userIdx, 1);
+        existing.count--;
+        if (existing.count <= 0) {
+          reacts.splice(found, 1);
+        }
+        const emoIndex = reacts.findIndex(r => r.val == emo);
+        if (emoIndex >= 0) {
+          reacts[emoIndex].users.push(myUid);
+          reacts[emoIndex].count++;
+        } else {
+          reacts.push({
+            users: [myUid],
+            count: 1,
+            val: emo
+          });
+        }
+      }
+    } else {
+      reacts.push({
+        users: [myUid],
+        count: 1,
+        val: emo
+      });
+    }
+    this._tinode.react(this.name, seq, emo);
+    this._tinode._db.updMessageReact(this.name, seq, reacts);
+    msg.react = reacts;
   }
   _updateMyReadRecv(what, seq, ts) {
     let oldVal,
@@ -4667,6 +4749,13 @@ class Topic {
   }
   msgRecvCount(seq) {
     return this.msgReceiptCount('recv', seq);
+  }
+  msgReactions(seq) {
+    const msg = this.findMessage(seq);
+    if (!msg) {
+      return [];
+    }
+    return msg.react || [];
   }
   msgHasMoreMessages(min, max, newer) {
     const gaps = [];
@@ -4878,6 +4967,13 @@ class Topic {
       }
       data.content = _drafty_js__WEBPACK_IMPORTED_MODULE_4___default().updateVideoCall(data.content, upd);
     }
+    if (data.react) {
+      data.react = (data.react || []).map(r => ({
+        val: r.val,
+        count: r.count | 0,
+        users: Array.isArray(r.users) ? r.users.slice() : []
+      }));
+    }
     if (!data._noForwarding) {
       this._messages.put(data);
       this._tinode._db.addMessage(data);
@@ -4916,6 +5012,23 @@ class Topic {
     }
     if (meta.aux) {
       this._processMetaAux(meta.aux);
+    }
+    if (meta.react && Array.isArray(meta.react)) {
+      meta.react.forEach(mr => {
+        const msg = this.findMessage(mr.seq);
+        if (msg) {
+          const reacts = (mr.data || []).map(r => ({
+            val: r.val,
+            count: r.count | 0,
+            users: Array.isArray(r.users) ? r.users.slice() : []
+          }));
+          msg.react = reacts;
+          this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
+        }
+      });
+      if (this.onData) {
+        this.onData();
+      }
     }
     if (this.onMeta) {
       this.onMeta(meta);
@@ -5449,7 +5562,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   PACKAGE_VERSION: function() { return /* binding */ PACKAGE_VERSION; }
 /* harmony export */ });
-const PACKAGE_VERSION = "0.25.1";
+const PACKAGE_VERSION = "0.26.0-alpha1";
 
 /***/ })
 
@@ -6727,7 +6840,16 @@ class Tinode {
     pkt.note.what = 'call';
     pkt.note.event = evt;
     pkt.note.payload = payload;
-    this.#send(pkt, pkt.note.id);
+    this.#send(pkt);
+  }
+  react(topicName, seq, emo) {
+    const pkt = this.#initPacket('note', topicName);
+    pkt.note.seq = seq;
+    pkt.note.what = 'react';
+    pkt.note.payload = {
+      emo
+    };
+    this.#send(pkt);
   }
   getTopic(topicName) {
     let topic = this.#cacheGet('topic', topicName);
@@ -6844,6 +6966,7 @@ Tinode.MAX_TAG_COUNT = 'maxTagCount';
 Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
 Tinode.REQ_CRED_VALIDATORS = 'reqCred';
 Tinode.MSG_DELETE_AGE = 'msgDelAge';
+Tinode.REACTION_LIST = 'reactions';
 Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';
 Tinode.TAG_ALIAS = _config_js__WEBPACK_IMPORTED_MODULE_1__.TAG_ALIAS;
 Tinode.TAG_EMAIL = _config_js__WEBPACK_IMPORTED_MODULE_1__.TAG_EMAIL;

@@ -2005,9 +2005,6 @@ export class Tinode {
    * @param {int} seq - ID of the call message the event pertains to.
    * @param {string} evt - Call event.
    * @param {string} payload - Payload associated with this event (e.g. SDP string).
-   *
-   * @returns {Promise} Promise (for some call events) which will
-   *                    be resolved/rejected on receiving server reply
    */
   videoCall(topicName, seq, evt, payload) {
     const pkt = this.#initPacket('note', topicName);
@@ -2015,7 +2012,24 @@ export class Tinode {
     pkt.note.what = 'call';
     pkt.note.event = evt;
     pkt.note.payload = payload;
-    this.#send(pkt, pkt.note.id);
+    this.#send(pkt);
+  }
+
+  /**
+   * Send a 'react' note to indicate the user reacted to (or removed reaction from) a message.
+   *
+   * @param {string} topicName - Name of the topic where the message to react to was posted.
+   * @param {int} seq - ID of the message to react to.
+   * @param {string} emo - Emoji string to add as reaction, or Tinode.DEL_CHAR to remove reaction.
+   */
+  react(topicName, seq, emo) {
+    const pkt = this.#initPacket('note', topicName);
+    pkt.note.seq = seq;
+    pkt.note.what = 'react';
+    pkt.note.payload = {
+      emo
+    };
+    this.#send(pkt);
   }
 
   /**
@@ -2359,6 +2373,7 @@ Tinode.MAX_TAG_COUNT = 'maxTagCount';
 Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
 Tinode.REQ_CRED_VALIDATORS = 'reqCred';
 Tinode.MSG_DELETE_AGE = 'msgDelAge';
+Tinode.REACTION_LIST = 'reactions';
 
 // Tinode URI topic ID prefix, 'scheme:path/'.
 Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';

@@ -506,15 +506,51 @@ export default class DB {
       const req = trx.objectStore('message').get(IDBKeyRange.only([topicName, seq]));
       req.onsuccess = event => {
         const src = req.result || event.target.result;
-        if (!src || src._status == status) {
-          trx.commit();
-          return;
+        if (src && src._status != status) {
+          trx.objectStore('message').put(DB.#serializeMessage(src, {
+            topic: topicName,
+            seq: seq,
+            _status: status
+          }));
         }
-        trx.objectStore('message').put(DB.#serializeMessage(src, {
-          topic: topicName,
-          seq: seq,
-          _status: status
-        }));
+        trx.commit();
+      };
+    });
+  }
+
+  /**
+   * Update reactions to a message.
+   * @memberOf DB
+   * @param {string} topicName - name of the topic which owns the message.
+   * @param {number} seq - ID of the message to update.
+   * @param {Array} react - updated reactions.
+   * @return {Promise} promise resolved/rejected on operation completion.
+   */
+  updMessageReact(topicName, seq, react) {
+    if (!this.isReady()) {
+      return this.disabled ?
+        Promise.resolve() :
+        Promise.reject(new Error("not initialized"));
+    }
+    return new Promise((resolve, reject) => {
+      const trx = this.db.transaction(['message'], 'readwrite');
+      trx.onsuccess = event => {
+        resolve(event.target.result);
+      };
+      trx.onerror = event => {
+        this.#logger('PCache', 'updMessageReact', event.target.error);
+        reject(event.target.error);
+      };
+      const req = trx.objectStore('message').get(IDBKeyRange.only([topicName, seq]));
+      req.onsuccess = event => {
+        const src = req.result || event.target.result;
+        if (src && src.react !== react) {
+          trx.objectStore('message').put(DB.#serializeMessage(src, {
+            topic: topicName,
+            seq: seq,
+            react: react
+          }));
+        }
         trx.commit();
       };
     });
@@ -858,7 +894,7 @@ export default class DB {
 
   static #serializeMessage(dst, msg) {
     // Serializable fields.
-    const fields = ['topic', 'seq', 'ts', '_status', 'from', 'head', 'content'];
+    const fields = ['topic', 'seq', 'ts', '_status', 'from', 'head', 'content', 'react'];
     const res = dst || {};
     fields.forEach((f) => {
       if (msg.hasOwnProperty(f)) {

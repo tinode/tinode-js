@@ -1034,16 +1034,84 @@ export default class Topic {
    * @param {string} evt - Call event.
    * @param {int} seq - ID of the call message the event pertains to.
    * @param {string} payload - Payload associated with this event (e.g. SDP string).
-   *
-   * @returns {Promise} Promise (for some call events) which will
-   *                    be resolved/rejected on receiving server reply
    */
   videoCall(evt, seq, payload) {
     if (!this._attached && !['ringing', 'hang-up'].includes(evt)) {
       // Cannot {call} on an inactive topic".
       return;
     }
-    return this._tinode.videoCall(this.name, seq, evt, payload);
+    this._tinode.videoCall(this.name, seq, evt, payload);
+  }
+
+  /**
+   * Send or remove a reaction for a message in this topic.
+   *
+   * @param {int} seq - ID of the message to react to.
+   * @param {string} emo - Emoji string to add as reaction, or Tinode.DEL_CHAR to remove reaction.
+   */
+  react(seq, emo) {
+    if (!seq || !emo) {
+      this._tinode.logger("INFO: Invalid parameters to react()");
+      return;
+    }
+    if (!this._attached) {
+      this._tinode.logger("INFO: Cannot send react note in inactive topic");
+      return;
+    }
+    const msg = this.findMessage(seq);
+    if (!msg) {
+      return;
+    }
+    const reacts = msg.react || [];
+    const myUid = this._tinode.getCurrentUserID();
+    // Find prior reaction from the current user.
+    const found = reacts.findIndex(r => r.users.includes(myUid));
+    if (found >= 0) {
+      const existing = reacts[found];
+      if (existing.val == emo) {
+        // Remove existing reaction.
+        existing.count--;
+        if (existing.count <= 0) {
+          reacts.splice(found, 1);
+        } else {
+          const userIdx = existing.users.indexOf(myUid);
+          existing.users.splice(userIdx, 1);
+        }
+        emo = Const.DEL_CHAR; // Delete reaction.
+      } else {
+        // User changed reaction.
+        const userIdx = existing.users.indexOf(myUid);
+        existing.users.splice(userIdx, 1);
+        existing.count--;
+        if (existing.count <= 0) {
+          reacts.splice(found, 1);
+        }
+        // Add user reaction as a different emoji.
+        const emoIndex = reacts.findIndex(r => r.val == emo);
+        if (emoIndex >= 0) {
+          // Add to existing reaction.
+          reacts[emoIndex].users.push(myUid);
+          reacts[emoIndex].count++;
+        } else {
+          // Create new reaction.
+          reacts.push({
+            users: [myUid],
+            count: 1,
+            val: emo
+          });
+        }
+      }
+    } else {
+      // Add new reaction.
+      reacts.push({
+        users: [myUid],
+        count: 1,
+        val: emo
+      });
+    }
+    this._tinode.react(this.name, seq, emo);
+    this._tinode._db.updMessageReact(this.name, seq, reacts);
+    msg.react = reacts;
   }
 
   // Update cached read/recv/unread counts for the current user.
@@ -1379,6 +1447,20 @@ export default class Topic {
    */
   msgRecvCount(seq) {
     return this.msgReceiptCount('recv', seq);
+  }
+
+  /**
+   * Return reactions for the message with the given seq id if present.
+   * @memberof Tinode.Topic#
+   * @param {number} seq - message seq id.
+   * @returns {Array} array of reaction objects or empty array.
+   */
+  msgReactions(seq) {
+    const msg = this.findMessage(seq);
+    if (!msg) {
+      return [];
+    }
+    return msg.react || [];
   }
   /**
    * Check if cached message IDs indicate that the server may have more messages.
@@ -1753,6 +1835,16 @@ export default class Topic {
       data.content = Drafty.updateVideoCall(data.content, upd);
     }
 
+    // Normalize reactions payload if present: server uses 'react' field with array of
+    // {value, count, users}.
+    if (data.react) {
+      data.react = (data.react || []).map(r => ({
+        val: r.val,
+        count: r.count | 0,
+        users: Array.isArray(r.users) ? r.users.slice() : []
+      }));
+    }
+
     if (!data._noForwarding) {
       this._messages.put(data);
       this._tinode._db.addMessage(data);
@@ -1801,6 +1893,27 @@ export default class Topic {
     if (meta.aux) {
       this._processMetaAux(meta.aux);
     }
+
+    // Process reactions metadata. meta.react is an array of {seq_id, data: [{value, count, users}]}
+    if (meta.react && Array.isArray(meta.react)) {
+      meta.react.forEach(mr => {
+        const msg = this.findMessage(mr.seq);
+        if (msg) {
+          const reacts = (mr.data || []).map(r => ({
+            val: r.val,
+            count: r.count | 0,
+            users: Array.isArray(r.users) ? r.users.slice() : []
+          }));
+          msg.react = reacts;
+          this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
+        }
+      });
+      // Notify UI listeners of changes.
+      if (this.onData) {
+        this.onData();
+      }
+    }
+
     if (this.onMeta) {
       this.onMeta(meta);
     }
