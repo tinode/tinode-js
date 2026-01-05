@@ -1853,7 +1853,7 @@ export class Tinode {
     const what = [];
 
     if (params) {
-      ['desc', 'sub', 'tags', 'cred', 'aux'].forEach(key => {
+      ['desc', 'sub', 'tags', 'cred', 'aux', 'react'].forEach(key => {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];

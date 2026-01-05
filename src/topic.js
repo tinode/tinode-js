@@ -24,15 +24,10 @@ import {
  */
 export default class Topic {
   /**
-   * @callback onData
-   * @param {Data} data - Data packet
-   */
-
-  /**
    * Create topic.
    * @param {string} name - Name of the topic to create.
    * @param {Object=} callbacks - Object with various event callbacks.
-   * @param {onData} callbacks.onData - Callback which receives a <code>{data}</code> message.
+   * @param {callback} callbacks.onData - Callback which receives a <code>{data}</code> message.
    * @param {callback} callbacks.onMeta - Callback which receives a <code>{meta}</code> message.
    * @param {callback} callbacks.onPres - Callback which receives a <code>{pres}</code> message.
    * @param {callback} callbacks.onInfo - Callback which receives an <code>{info}</code> message.
@@ -40,6 +35,10 @@ export default class Topic {
    * @param {callback} callbacks.onMetaSub - Called for a single subscription record change.
    * @param {callback} callbacks.onSubsUpdated - Called after a batch of subscription changes have been recieved and cached.
    * @param {callback} callbacks.onDeleteTopic - Called after the topic is deleted.
+   * @param {callback} callbacks.onTagsUpdated - Called after user discovery tags are updated.
+   * @param {callback} callbacks.onCredsUpdated - Called after credentials are updated.
+   * @param {callback} callbacks.onAuxUpdated - Called after auxiliary data is updated.
+   * @param {callback} callbacks.onReact - Called after message reactions are updated.
    * @param {callback} callbacks.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
    */
   constructor(name, callbacks) {
@@ -125,6 +124,7 @@ export default class Topic {
       this.onTagsUpdated = callbacks.onTagsUpdated;
       this.onCredsUpdated = callbacks.onCredsUpdated;
       this.onAuxUpdated = callbacks.onAuxUpdated;
+      this.onReact = callbacks.onReact;
       this.onDeleteTopic = callbacks.onDeleteTopic;
       this.onAllMessagesReceived = callbacks.onAllMessagesReceived;
     }
@@ -659,6 +659,9 @@ export default class Topic {
         if (params.aux) {
           this._processMetaAux(params.aux);
         }
+        if (params.react) {
+          this._processMetaReact(undefined, params.react);
+        }
 
         return ctrl;
       });
@@ -788,6 +791,30 @@ export default class Topic {
   pinnedTopicRank(topic) {
     // Unsupported for non-me topics.
     return 0;
+  }
+
+  /**
+   * Send or remove a reaction for a message in this topic.
+   * If the same reaction from the current user is already present, remove it.
+   *
+   * @param {int} seq - ID of the message to react to.
+   * @param {string} emo - Emoji string to add as reaction, or Tinode.DEL_CHAR to remove reaction.
+   */
+  react(seq, emo) {
+    if (!seq || !emo) {
+      return Promise.reject(new Error("Invalid parameters"));
+    }
+    const curr = this.msgMyReaction(seq);
+    if (curr == emo) {
+      // Treat the same value as toggle.
+      emo = Const.DEL_CHAR;
+    }
+    this.setMeta({
+      react: {
+        seq: seq,
+        val: emo
+      }
+    });
   }
 
   /**
@@ -1041,77 +1068,6 @@ export default class Topic {
       return;
     }
     this._tinode.videoCall(this.name, seq, evt, payload);
-  }
-
-  /**
-   * Send or remove a reaction for a message in this topic.
-   *
-   * @param {int} seq - ID of the message to react to.
-   * @param {string} emo - Emoji string to add as reaction, or Tinode.DEL_CHAR to remove reaction.
-   */
-  react(seq, emo) {
-    if (!seq || !emo) {
-      this._tinode.logger("INFO: Invalid parameters to react()");
-      return;
-    }
-    if (!this._attached) {
-      this._tinode.logger("INFO: Cannot send react note in inactive topic");
-      return;
-    }
-    const msg = this.findMessage(seq);
-    if (!msg) {
-      return;
-    }
-    const reacts = msg.react || [];
-    const myUid = this._tinode.getCurrentUserID();
-    // Find prior reaction from the current user.
-    const found = reacts.findIndex(r => r.users.includes(myUid));
-    if (found >= 0) {
-      const existing = reacts[found];
-      if (existing.val == emo) {
-        // Remove existing reaction.
-        existing.count--;
-        if (existing.count <= 0) {
-          reacts.splice(found, 1);
-        } else {
-          const userIdx = existing.users.indexOf(myUid);
-          existing.users.splice(userIdx, 1);
-        }
-        emo = Const.DEL_CHAR; // Delete reaction.
-      } else {
-        // User changed reaction.
-        const userIdx = existing.users.indexOf(myUid);
-        existing.users.splice(userIdx, 1);
-        existing.count--;
-        if (existing.count <= 0) {
-          reacts.splice(found, 1);
-        }
-        // Add user reaction as a different emoji.
-        const emoIndex = reacts.findIndex(r => r.val == emo);
-        if (emoIndex >= 0) {
-          // Add to existing reaction.
-          reacts[emoIndex].users.push(myUid);
-          reacts[emoIndex].count++;
-        } else {
-          // Create new reaction.
-          reacts.push({
-            users: [myUid],
-            count: 1,
-            val: emo
-          });
-        }
-      }
-    } else {
-      // Add new reaction.
-      reacts.push({
-        users: [myUid],
-        count: 1,
-        val: emo
-      });
-    }
-    this._tinode.react(this.name, seq, emo);
-    this._tinode._db.updMessageReact(this.name, seq, reacts);
-    msg.react = reacts;
   }
 
   // Update cached read/recv/unread counts for the current user.
@@ -1462,6 +1418,24 @@ export default class Topic {
     }
     return msg.react || [];
   }
+
+  /**
+   * Return current user's reaction value for the given message.
+   * @memberof Tinode.Topic#
+   * @param {number} seq - message seq id.
+   * @returns {string|null} current user's reaction value or null.
+   */
+  msgMyReaction(seq) {
+    const reactions = this.msgReactions(seq);
+    const me = this._tinode.getCurrentUserID();
+    for (let i = 0; i < reactions.length; i++) {
+      if ((reactions[i].users || []).includes(me)) {
+        return reactions[i].val;
+      }
+    }
+    return null;
+  }
+
   /**
    * Check if cached message IDs indicate that the server may have more messages.
    * @memberof Tinode.Topic#
@@ -1893,25 +1867,8 @@ export default class Topic {
     if (meta.aux) {
       this._processMetaAux(meta.aux);
     }
-
-    // Process reactions metadata. meta.react is an array of {seq_id, data: [{value, count, users}]}
-    if (meta.react && Array.isArray(meta.react)) {
-      meta.react.forEach(mr => {
-        const msg = this.findMessage(mr.seq);
-        if (msg) {
-          const reacts = (mr.data || []).map(r => ({
-            val: r.val,
-            count: r.count | 0,
-            users: Array.isArray(r.users) ? r.users.slice() : []
-          }));
-          msg.react = reacts;
-          this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
-        }
-      });
-      // Notify UI listeners of changes.
-      if (this.onData) {
-        this.onData();
-      }
+    if (meta.react) {
+      this._processMetaReact(meta.react);
     }
 
     if (this.onMeta) {
@@ -1952,6 +1909,14 @@ export default class Topic {
         // Auxiliary data updated.
         this.getMeta(this.startMetaQuery().withAux().build());
         break;
+      case 'react':
+        // Reaction to message.
+        this._processMetaReact(undefined, {
+          seq: pres.seq,
+          user: pres.actor,
+          val: pres.val
+        });
+        break;
       case 'acs':
         uid = pres.src || this._tinode.getCurrentUserID();
         user = this._users[uid];
@@ -1991,6 +1956,7 @@ export default class Topic {
       this.onPres(pres);
     }
   }
+
   // Process {info} message
   _routeInfo(info) {
     switch (info.what) {
@@ -2128,6 +2094,97 @@ export default class Topic {
     this._tinode._db.updTopic(this);
     if (this.onAuxUpdated) {
       this.onAuxUpdated(this._aux);
+    }
+  }
+
+  // Handle an incremental reaction update for a message.
+  _handleReactionDiff(msg, delta) {
+    const reacts = [...(msg.react || [])];
+    // Find if the given user has already reacted.
+    const user = delta.users[0];
+    const found = reacts.findIndex(r => r.users.includes(user));
+    if (found >= 0) {
+      const existing = reacts[found];
+      if (delta.val == Const.DEL_CHAR || existing.val == delta.val) {
+        // Remove existing reaction.
+        existing.count--;
+        if (existing.count <= 0) {
+          reacts.splice(found, 1);
+        } else {
+          const userIdx = existing.users.indexOf(user);
+          existing.users.splice(userIdx, 1);
+        }
+      } else {
+        // User changed reaction.
+        const userIdx = existing.users.indexOf(user);
+        existing.users.splice(userIdx, 1);
+        existing.count--;
+        if (existing.count <= 0) {
+          reacts.splice(found, 1);
+        }
+        // Add user reaction as a different emoji.
+        const emoIndex = reacts.findIndex(r => r.val == delta.val);
+        if (emoIndex >= 0) {
+          // Add to existing reaction.
+          reacts[emoIndex].users.push(user);
+          reacts[emoIndex].count++;
+        } else {
+          // Create new reaction.
+          reacts.push({
+            users: [user],
+            count: 1,
+            val: delta.val
+          });
+        }
+      }
+    } else if (delta.val != Const.DEL_CHAR) {
+      // Add new reaction.
+      reacts.push({
+        users: [user],
+        count: 1,
+        val: delta.val
+      });
+    }
+    return reacts;
+  }
+
+  // Called by Tinode when meta.aux is recived.
+  _processMetaReact(reacts, oneReaction) {
+    if (!Array.isArray(reacts)) {
+      reacts = [{
+        _diff: true, // Indicate that this is a delta update.
+        seq: oneReaction.seq,
+        data: [{
+          val: oneReaction.val,
+          count: 1,
+          users: [oneReaction.user || this._tinode.getCurrentUserID()]
+        }]
+      }];
+    }
+    // Process reactions metadata. meta.react is an array of {seq, data: [{val, count, users}]}
+    const seqIds = [];
+    reacts.forEach(mr => {
+      const msg = this.findMessage(mr.seq);
+      if (msg) {
+        seqIds.push(mr.seq);
+        let upd;
+        if (mr._diff) {
+          // Single incremental update.
+          upd = this._handleReactionDiff(msg, mr.data[0]);
+        } else {
+          upd = (mr.data || []).map(r => ({
+            val: r.val,
+            count: r.count | 0,
+            users: Array.isArray(r.users) ? r.users.slice() : []
+          }));
+        }
+        msg.react = upd;
+        this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
+      }
+    });
+    // Notify UI listeners of changes.
+    if (this.onReact) {
+      this.onReact(seqIds);
     }
   }
 

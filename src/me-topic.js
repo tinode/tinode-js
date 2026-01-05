@@ -220,7 +220,7 @@ export default class TopicMe extends Topic {
           // user agent changed.
           cont.seen = {
             when: new Date(),
-            ua: pres.ua
+            ua: pres.val
           };
           break;
         case 'recv':
@@ -248,6 +248,14 @@ export default class TopicMe extends Topic {
           break;
         case 'del':
           // Update topic.del value.
+          break;
+        case 'react':
+          // Reaction to message.
+          cont._processMetaReact(undefined, {
+            seq: pres.seq,
+            user: pres.actor,
+            val: pres.val
+          });
           break;
         default:
           this._tinode.logger("INFO: Unsupported presence update in 'me'", pres.what);
