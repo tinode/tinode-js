@@ -818,6 +818,34 @@ export default class Topic {
   }
 
   /**
+   * Get a list of allowed reactions for this topic.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {Array.<string>} Array of allowed reaction strings.
+   */
+  reactions() {
+    const react = this.aux('react');
+    if (react) {
+      return react.vals;
+    }
+    return this._tinode.getServerParam(Const.REACTION_LIST);
+  }
+
+  /**
+   * Get maximum number of allowed reaction types per message for this topic.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {number} maxumum number of allowed reaction types per message.
+   */
+  maxReactions() {
+    const react = this.aux('react');
+    if (react) {
+      return react.max;
+    }
+    return this._tinode.getServerParam(Const.MAX_REACTIONS, 0);
+  }
+
+  /**
    * Delete messages. Hard-deleting messages requires Deleter (D) permission.
    * Wrapper for {@link Tinode#delMessages}.
    * @memberof Tinode.Topic#

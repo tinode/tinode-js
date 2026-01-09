@@ -2365,15 +2365,16 @@ Tinode.MESSAGE_STATUS_TO_ME = Const.MESSAGE_STATUS_TO_ME;
 Tinode.DEL_CHAR = Const.DEL_CHAR;
 
 // Names of keys to server-provided configuration limits.
-Tinode.MAX_MESSAGE_SIZE = 'maxMessageSize';
-Tinode.MAX_SUBSCRIBER_COUNT = 'maxSubscriberCount';
-Tinode.MIN_TAG_LENGTH = 'minTagLength';
-Tinode.MAX_TAG_LENGTH = 'maxTagLength';
-Tinode.MAX_TAG_COUNT = 'maxTagCount';
-Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
-Tinode.REQ_CRED_VALIDATORS = 'reqCred';
-Tinode.MSG_DELETE_AGE = 'msgDelAge';
-Tinode.REACTION_LIST = 'reactions';
+Tinode.MAX_MESSAGE_SIZE = Const.MAX_MESSAGE_SIZE;
+Tinode.MAX_SUBSCRIBER_COUNT = Const.MAX_SUBSCRIBER_COUNT;
+Tinode.MIN_TAG_LENGTH = Const.MIN_TAG_LENGTH;
+Tinode.MAX_TAG_LENGTH = Const.MAX_TAG_LENGTH;
+Tinode.MAX_TAG_COUNT = Const.MAX_TAG_COUNT;
+Tinode.MAX_FILE_UPLOAD_SIZE = Const.MAX_FILE_UPLOAD_SIZE;
+Tinode.REQ_CRED_VALIDATORS = Const.REQ_CRED_VALIDATORS;
+Tinode.MSG_DELETE_AGE = Const.MSG_DELETE_AGE;
+Tinode.REACTION_LIST = Const.REACTION_LIST;
+Tinode.MAX_REACTIONS = Const.MAX_REACTIONS;
 
 // Tinode URI topic ID prefix, 'scheme:path/'.
 Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';
