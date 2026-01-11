@@ -1940,9 +1940,9 @@ export default class Topic {
       case 'react':
         // Reaction to message.
         this._processMetaReact(undefined, {
-          seq: pres.seq,
-          user: pres.actor,
-          val: pres.val
+          seq: pres.seq | 0,
+          user: pres.act,
+          val: pres.val,
         });
         break;
       case 'acs':
@@ -2179,6 +2179,10 @@ export default class Topic {
   // Called by Tinode when meta.aux is recived.
   _processMetaReact(reacts, oneReaction) {
     if (!Array.isArray(reacts)) {
+      if (!oneReaction.seq || !oneReaction.val) {
+        this._tinode.logger("WARNING: invalid reaction");
+        return;
+      }
       reacts = [{
         _diff: true, // Indicate that this is a delta update.
         seq: oneReaction.seq,

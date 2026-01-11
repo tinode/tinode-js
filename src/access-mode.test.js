@@ -10,7 +10,10 @@ describe('AccessMode', () => {
     });
 
     test('creates AccessMode from string representations', () => {
-      const am = new AccessMode({ given: 'RW', want: 'RWP' });
+      const am = new AccessMode({
+        given: 'RW',
+        want: 'RWP'
+      });
       expect(am.given).toBe(AccessMode._READ | AccessMode._WRITE);
       expect(am.want).toBe(AccessMode._READ | AccessMode._WRITE | AccessMode._PRES);
       expect(am.mode).toBe(AccessMode._READ | AccessMode._WRITE);
@@ -36,12 +39,18 @@ describe('AccessMode', () => {
     });
 
     test('calculates mode as given & want when mode not provided', () => {
-      const am = new AccessMode({ given: 'RWPS', want: 'RWP' });
+      const am = new AccessMode({
+        given: 'RWPS',
+        want: 'RWP'
+      });
       expect(am.mode).toBe(AccessMode._READ | AccessMode._WRITE | AccessMode._PRES);
     });
 
     test('copies from another AccessMode instance', () => {
-      const original = new AccessMode({ given: 'RWP', want: 'RW' });
+      const original = new AccessMode({
+        given: 'RWP',
+        want: 'RW'
+      });
       const copy = new AccessMode(original);
       expect(copy.given).toBe(original.given);
       expect(copy.want).toBe(original.want);
@@ -226,7 +235,10 @@ describe('AccessMode', () => {
   describe('instance methods', () => {
     describe('toString', () => {
       test('returns JSON string representation', () => {
-        const am = new AccessMode({ given: 'RW', want: 'RWP' });
+        const am = new AccessMode({
+          given: 'RW',
+          want: 'RWP'
+        });
         const str = am.toString();
         expect(str).toBe('{"mode": "RW", "given": "RW", "want": "RWP"}');
       });
@@ -234,7 +246,10 @@ describe('AccessMode', () => {
 
     describe('jsonHelper', () => {
       test('returns object with encoded values', () => {
-        const am = new AccessMode({ given: 'RW', want: 'RWP' });
+        const am = new AccessMode({
+          given: 'RW',
+          want: 'RWP'
+        });
         const obj = am.jsonHelper();
         expect(obj).toEqual({
           mode: 'RW',
@@ -265,20 +280,26 @@ describe('AccessMode', () => {
 
     describe('updateMode', () => {
       test('updates mode with delta string', () => {
-        const am = new AccessMode({ mode: 'R' });
+        const am = new AccessMode({
+          mode: 'R'
+        });
         am.updateMode('+W');
         expect(am.mode).toBe(AccessMode._READ | AccessMode._WRITE);
       });
 
       test('returns this for chaining', () => {
-        const am = new AccessMode({ mode: 'R' });
+        const am = new AccessMode({
+          mode: 'R'
+        });
         expect(am.updateMode('+W')).toBe(am);
       });
     });
 
     describe('getMode', () => {
       test('returns mode as string', () => {
-        const am = new AccessMode({ mode: 'RW' });
+        const am = new AccessMode({
+          mode: 'RW'
+        });
         expect(am.getMode()).toBe('RW');
       });
     });
@@ -298,20 +319,26 @@ describe('AccessMode', () => {
 
     describe('updateGiven', () => {
       test('updates given with delta string', () => {
-        const am = new AccessMode({ given: 'RW' });
+        const am = new AccessMode({
+          given: 'RW'
+        });
         am.updateGiven('+P');
         expect(am.given).toBe(AccessMode._READ | AccessMode._WRITE | AccessMode._PRES);
       });
 
       test('returns this for chaining', () => {
-        const am = new AccessMode({ given: 'RW' });
+        const am = new AccessMode({
+          given: 'RW'
+        });
         expect(am.updateGiven('+P')).toBe(am);
       });
     });
 
     describe('getGiven', () => {
       test('returns given as string', () => {
-        const am = new AccessMode({ given: 'RWP' });
+        const am = new AccessMode({
+          given: 'RWP'
+        });
         expect(am.getGiven()).toBe('RWP');
       });
     });
@@ -331,52 +358,76 @@ describe('AccessMode', () => {
 
     describe('updateWant', () => {
       test('updates want with delta string', () => {
-        const am = new AccessMode({ want: 'RW' });
+        const am = new AccessMode({
+          want: 'RW'
+        });
         am.updateWant('+PS');
         expect(am.want).toBe(AccessMode._READ | AccessMode._WRITE | AccessMode._PRES | AccessMode._SHARE);
       });
 
       test('returns this for chaining', () => {
-        const am = new AccessMode({ want: 'RW' });
+        const am = new AccessMode({
+          want: 'RW'
+        });
         expect(am.updateWant('+PS')).toBe(am);
       });
     });
 
     describe('getWant', () => {
       test('returns want as string', () => {
-        const am = new AccessMode({ want: 'JRWP' });
+        const am = new AccessMode({
+          want: 'JRWP'
+        });
         expect(am.getWant()).toBe('JRWP');
       });
     });
 
     describe('getMissing', () => {
       test('returns permissions in want but not in given', () => {
-        const am = new AccessMode({ given: 'RW', want: 'RWP' });
+        const am = new AccessMode({
+          given: 'RW',
+          want: 'RWP'
+        });
         expect(am.getMissing()).toBe('P');
       });
 
       test('returns N when nothing missing', () => {
-        const am = new AccessMode({ given: 'RWP', want: 'RW' });
+        const am = new AccessMode({
+          given: 'RWP',
+          want: 'RW'
+        });
         expect(am.getMissing()).toBe('N');
       });
     });
 
     describe('getExcessive', () => {
       test('returns permissions in given but not in want', () => {
-        const am = new AccessMode({ given: 'RWP', want: 'RW' });
+        const am = new AccessMode({
+          given: 'RWP',
+          want: 'RW'
+        });
         expect(am.getExcessive()).toBe('P');
       });
 
       test('returns N when nothing excessive', () => {
-        const am = new AccessMode({ given: 'RW', want: 'RWP' });
+        const am = new AccessMode({
+          given: 'RW',
+          want: 'RWP'
+        });
         expect(am.getExcessive()).toBe('N');
       });
     });
 
     describe('updateAll', () => {
       test('updates given, want, and mode from another AccessMode', () => {
-        const am = new AccessMode({ given: 'R', want: 'RW' });
-        const update = { given: '+WP', want: '+JP' };
+        const am = new AccessMode({
+          given: 'R',
+          want: 'RW'
+        });
+        const update = {
+          given: '+WP',
+          want: '+JP'
+        };
         am.updateAll(update);
         expect(am.given).toBe(AccessMode._READ | AccessMode._WRITE | AccessMode._PRES);
         expect(am.want).toBe(AccessMode._JOIN | AccessMode._READ | AccessMode._WRITE | AccessMode._PRES);
@@ -384,12 +435,21 @@ describe('AccessMode', () => {
       });
 
       test('returns this for chaining', () => {
-        const am = new AccessMode({ given: 'R', want: 'RW' });
-        expect(am.updateAll({ given: '+WP', want: '+JP' })).toBe(am);
+        const am = new AccessMode({
+          given: 'R',
+          want: 'RW'
+        });
+        expect(am.updateAll({
+          given: '+WP',
+          want: '+JP'
+        })).toBe(am);
       });
 
       test('handles null/undefined gracefully', () => {
-        const am = new AccessMode({ given: 'RW', want: 'RW' });
+        const am = new AccessMode({
+          given: 'RW',
+          want: 'RW'
+        });
         am.updateAll(null);
         expect(am.given).toBe(AccessMode._READ | AccessMode._WRITE);
       });
@@ -409,8 +469,12 @@ describe('AccessMode', () => {
 
     describe('isOwner', () => {
       test('checks mode by default', () => {
-        const owner = new AccessMode({ mode: 'O' });
-        const notOwner = new AccessMode({ mode: 'JRWP' });
+        const owner = new AccessMode({
+          mode: 'O'
+        });
+        const notOwner = new AccessMode({
+          mode: 'JRWP'
+        });
         expect(owner.isOwner()).toBe(true);
         expect(notOwner.isOwner()).toBe(false);
       });
@@ -436,7 +500,9 @@ describe('AccessMode', () => {
     describe('isMuted', () => {
       test('returns opposite of isPresencer', () => {
         expect(am.isMuted()).toBe(false);
-        const muted = new AccessMode({ mode: 'RW' });
+        const muted = new AccessMode({
+          mode: 'RW'
+        });
         expect(muted.isMuted()).toBe(true);
       });
     });
@@ -444,7 +510,9 @@ describe('AccessMode', () => {
     describe('isJoiner', () => {
       test('checks if J flag is set', () => {
         expect(am.isJoiner()).toBe(true);
-        const notJoiner = new AccessMode({ mode: 'RW' });
+        const notJoiner = new AccessMode({
+          mode: 'RW'
+        });
         expect(notJoiner.isJoiner()).toBe(false);
       });
     });
@@ -452,7 +520,9 @@ describe('AccessMode', () => {
     describe('isReader', () => {
       test('checks if R flag is set', () => {
         expect(am.isReader()).toBe(true);
-        const notReader = new AccessMode({ mode: 'W' });
+        const notReader = new AccessMode({
+          mode: 'W'
+        });
         expect(notReader.isReader()).toBe(false);
       });
     });
@@ -460,14 +530,18 @@ describe('AccessMode', () => {
     describe('isWriter', () => {
       test('checks if W flag is set', () => {
         expect(am.isWriter()).toBe(true);
-        const notWriter = new AccessMode({ mode: 'R' });
+        const notWriter = new AccessMode({
+          mode: 'R'
+        });
         expect(notWriter.isWriter()).toBe(false);
       });
     });
 
     describe('isApprover', () => {
       test('checks if A flag is set', () => {
-        const approver = new AccessMode({ mode: 'A' });
+        const approver = new AccessMode({
+          mode: 'A'
+        });
         expect(approver.isApprover()).toBe(true);
         expect(am.isApprover()).toBe(false);
         expect(am.isApprover('given')).toBe(true);
@@ -476,10 +550,18 @@ describe('AccessMode', () => {
 
     describe('isAdmin', () => {
       test('returns true if O or A is set', () => {
-        const owner = new AccessMode({ mode: 'O' });
-        const approver = new AccessMode({ mode: 'A' });
-        const both = new AccessMode({ mode: 'OA' });
-        const neither = new AccessMode({ mode: 'RW' });
+        const owner = new AccessMode({
+          mode: 'O'
+        });
+        const approver = new AccessMode({
+          mode: 'A'
+        });
+        const both = new AccessMode({
+          mode: 'OA'
+        });
+        const neither = new AccessMode({
+          mode: 'RW'
+        });
 
         expect(owner.isAdmin()).toBe(true);
         expect(approver.isAdmin()).toBe(true);
@@ -490,10 +572,18 @@ describe('AccessMode', () => {
 
     describe('isSharer', () => {
       test('returns true if O, A, or S is set', () => {
-        const owner = new AccessMode({ mode: 'O' });
-        const approver = new AccessMode({ mode: 'A' });
-        const sharer = new AccessMode({ mode: 'S' });
-        const notSharer = new AccessMode({ mode: 'RW' });
+        const owner = new AccessMode({
+          mode: 'O'
+        });
+        const approver = new AccessMode({
+          mode: 'A'
+        });
+        const sharer = new AccessMode({
+          mode: 'S'
+        });
+        const notSharer = new AccessMode({
+          mode: 'RW'
+        });
 
         expect(owner.isSharer()).toBe(true);
         expect(approver.isSharer()).toBe(true);
@@ -504,7 +594,9 @@ describe('AccessMode', () => {
 
     describe('isDeleter', () => {
       test('checks if D flag is set', () => {
-        const deleter = new AccessMode({ mode: 'D' });
+        const deleter = new AccessMode({
+          mode: 'D'
+        });
         expect(deleter.isDeleter()).toBe(true);
         expect(am.isDeleter()).toBe(false);
         expect(am.isDeleter('given')).toBe(true);

@@ -5061,8 +5061,8 @@ class Topic {
         break;
       case 'react':
         this._processMetaReact(undefined, {
-          seq: pres.seq,
-          user: pres.actor,
+          seq: pres.seq | 0,
+          user: pres.act,
           val: pres.val
         });
         break;
@@ -5248,6 +5248,10 @@ class Topic {
   }
   _processMetaReact(reacts, oneReaction) {
     if (!Array.isArray(reacts)) {
+      if (!oneReaction.seq || !oneReaction.val) {
+        this._tinode.logger("WARNING: invalid reaction");
+        return;
+      }
       reacts = [{
         _diff: true,
         seq: oneReaction.seq,
@@ -5763,7 +5767,7 @@ __webpack_require__.r(__webpack_exports__);
 /**
  * @module tinode-sdk
  *
- * @copyright 2015-2025 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
  * @version 0.25

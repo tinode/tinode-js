@@ -1,7 +1,7 @@
 /**
  * @module tinode-sdk
  *
- * @copyright 2015-2025 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
  * @version 0.25

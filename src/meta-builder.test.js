@@ -66,7 +66,13 @@ describe('MetaGetBuilder', () => {
 
   describe('withDataRanges', () => {
     test('normalizes and sets ranges', () => {
-      const ranges = [{low: 5, hi: 10}, {low: 20, hi: 30}];
+      const ranges = [{
+        low: 5,
+        hi: 10
+      }, {
+        low: 20,
+        hi: 30
+      }];
       builder.withDataRanges(ranges, 50);
       expect(builder.what.data.limit).toBe(50);
       expect(builder.what.data.ranges).toBeDefined();
@@ -106,12 +112,16 @@ describe('MetaGetBuilder', () => {
     test('sets desc query with timestamp', () => {
       const ims = new Date('2025-01-01T12:00:00Z');
       builder.withDesc(ims);
-      expect(builder.what.desc).toEqual({ ims });
+      expect(builder.what.desc).toEqual({
+        ims
+      });
     });
 
     test('sets desc query without timestamp', () => {
       builder.withDesc();
-      expect(builder.what.desc).toEqual({ ims: undefined });
+      expect(builder.what.desc).toEqual({
+        ims: undefined
+      });
     });
   });
 
