@@ -5207,7 +5207,7 @@ class Topic {
   _handleReactionDiff(msg, delta) {
     const reacts = [...(msg.react || [])];
     const user = delta.users[0];
-    const found = reacts.findIndex(r => r.users.includes(user));
+    const found = user ? reacts.findIndex(r => r.users.includes(user)) : -1;
     if (found >= 0) {
       const existing = reacts[found];
       if (delta.val == _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR || existing.val == delta.val) {
@@ -5238,11 +5238,19 @@ class Topic {
         }
       }
     } else if (delta.val != _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR) {
-      reacts.push({
-        users: [user],
-        count: 1,
-        val: delta.val
-      });
+      const emoIndex = reacts.findIndex(r => r.val == delta.val);
+      if (emoIndex >= 0) {
+        if (user) {
+          reacts[emoIndex].users.push(user);
+        }
+        reacts[emoIndex].count++;
+      } else {
+        reacts.push({
+          users: user ? [user] : [],
+          count: 1,
+          val: delta.val
+        });
+      }
     }
     return reacts;
   }

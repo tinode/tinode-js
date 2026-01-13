@@ -2126,11 +2126,17 @@ export default class Topic {
   }
 
   // Handle an incremental reaction update for a message.
+  // delta: {val, users: [user]}
+  // The users could be empty or contain exactly one user.
+  // 1. If user has already reacted with the same emoji, remove the reaction.
+  // 2. If user has already reacted with a different emoji, change the reaction.
+  // 3. If user has not reacted yet, add the reaction to the same emoji, if present.
+  // 4. If user has not reacted yet, and no one reacted that way, create a new reaction.
   _handleReactionDiff(msg, delta) {
     const reacts = [...(msg.react || [])];
     // Find if the given user has already reacted.
     const user = delta.users[0];
-    const found = reacts.findIndex(r => r.users.includes(user));
+    const found = user ? reacts.findIndex(r => r.users.includes(user)) : -1;
     if (found >= 0) {
       const existing = reacts[found];
       if (delta.val == Const.DEL_CHAR || existing.val == delta.val) {
@@ -2166,12 +2172,23 @@ export default class Topic {
         }
       }
     } else if (delta.val != Const.DEL_CHAR) {
-      // Add new reaction.
-      reacts.push({
-        users: [user],
-        count: 1,
-        val: delta.val
-      });
+      // Existing user has not reacted yet.
+      // Find reaction of the same type.
+      const emoIndex = reacts.findIndex(r => r.val == delta.val);
+      if (emoIndex >= 0) {
+        // Add to existing reaction.
+        if (user) {
+          reacts[emoIndex].users.push(user);
+        }
+        reacts[emoIndex].count++;
+      } else {
+        // Create new reaction.
+        reacts.push({
+          users: user ? [user] : [],
+          count: 1,
+          val: delta.val
+        });
+      }
     }
     return reacts;
   }
