@@ -836,7 +836,8 @@ export default class DB {
 
   // Serializable topic fields.
   static #topic_fields = ['created', 'updated', 'deleted', 'touched', 'read', 'recv', 'seq',
-    'clear', 'defacs', 'creds', 'public', 'trusted', 'private', '_aux', '_deleted'
+    'clear', 'mrrid', 'defacs', 'creds', 'public', 'trusted', 'private', '_aux', '_deleted',
+    '_mrrSeen'
   ];
 
   // Copy data from src to Topic object.

@@ -1374,7 +1374,7 @@ class DB {
       };
     });
   }
-  static #topic_fields = ['created', 'updated', 'deleted', 'touched', 'read', 'recv', 'seq', 'clear', 'defacs', 'creds', 'public', 'trusted', 'private', '_aux', '_deleted'];
+  static #topic_fields = ['created', 'updated', 'deleted', 'touched', 'read', 'recv', 'seq', 'clear', 'mrrid', 'defacs', 'creds', 'public', 'trusted', 'private', '_aux', '_deleted', '_mrrKnown', '_mrrSeen'];
   static #deserializeTopic(topic, src) {
     DB.#topic_fields.forEach(f => {
       if (src.hasOwnProperty(f)) {
@@ -4020,12 +4020,18 @@ class Topic {
     this.private = null;
     this.public = null;
     this.trusted = null;
+    this.seq = 0;
+    this.read = 0;
+    this.recv = 0;
+    this.clear = 0;
+    this.mrrid = 0;
     this._users = {};
     this._queuedSeqId = _config_js__WEBPACK_IMPORTED_MODULE_3__.LOCAL_SEQID;
     this._maxSeq = 0;
     this._minSeq = 0;
     this._noEarlierMsgs = false;
     this._maxDel = 0;
+    this._mrrSeen = 0;
     this._recvNotificationTimer = null;
     this._tags = [];
     this._credentials = [];
@@ -4341,6 +4347,7 @@ class Topic {
         this._processMetaAux(params.aux);
       }
       if (params.react) {
+        params.react.mrrid = ctrl.params?.mrrid | 0;
         this._processMetaReact(undefined, params.react);
       }
       return ctrl;
@@ -4442,6 +4449,9 @@ class Topic {
       return react.max;
     }
     return this._tinode.getServerParam(_config_js__WEBPACK_IMPORTED_MODULE_3__.MAX_REACTIONS, 0);
+  }
+  markReactionsSeen() {
+    this._mrrSeen = this.mrrid;
   }
   delMessages(ranges, hard) {
     if (!this._attached) {
@@ -4770,6 +4780,9 @@ class Topic {
     }
     return null;
   }
+  hasUnseenReactions() {
+    return this.mrrid > this._mrrSeen;
+  }
   msgHasMoreMessages(min, max, newer) {
     const gaps = [];
     if (min >= max) {
@@ -4981,11 +4994,19 @@ class Topic {
       data.content = _drafty_js__WEBPACK_IMPORTED_MODULE_4___default().updateVideoCall(data.content, upd);
     }
     if (data.react) {
-      data.react = (data.react || []).map(r => ({
-        val: r.val,
-        count: r.count | 0,
-        users: Array.isArray(r.users) ? r.users.slice() : []
-      }));
+      let maxReact = 0;
+      data.react = (data.react || []).map(r => {
+        maxReact = Math.max(maxReact, r.mrrid);
+        return {
+          mrrid: r.mrrid,
+          val: r.val,
+          count: r.count | 0,
+          users: Array.isArray(r.users) ? r.users.slice() : []
+        };
+      });
+      if (this.mrrid < maxReact) {
+        this.mrrid = maxReact;
+      }
     }
     if (!data._noForwarding) {
       this._messages.put(data);
@@ -5061,6 +5082,7 @@ class Topic {
         break;
       case 'react':
         this._processMetaReact(undefined, {
+          mrrid: pres.id2 | 0,
           seq: pres.seq | 0,
           user: pres.act,
           val: pres.val
@@ -5212,6 +5234,7 @@ class Topic {
       const existing = reacts[found];
       if (delta.val == _config_js__WEBPACK_IMPORTED_MODULE_3__.DEL_CHAR || existing.val == delta.val) {
         existing.count--;
+        existing.mrrid = Math.max(existing.mrrid, delta.mrrid);
         if (existing.count <= 0) {
           reacts.splice(found, 1);
         } else {
@@ -5229,8 +5252,10 @@ class Topic {
         if (emoIndex >= 0) {
           reacts[emoIndex].users.push(user);
           reacts[emoIndex].count++;
+          reacts[emoIndex].mrrid = Math.max(reacts[emoIndex].mrrid, delta.mrrid);
         } else {
           reacts.push({
+            mrrid: delta.mrrid,
             users: [user],
             count: 1,
             val: delta.val
@@ -5244,8 +5269,10 @@ class Topic {
           reacts[emoIndex].users.push(user);
         }
         reacts[emoIndex].count++;
+        reacts[emoIndex].mrrid = Math.max(reacts[emoIndex].mrrid, delta.mrrid);
       } else {
         reacts.push({
+          mrrid: delta.mrrid,
           users: user ? [user] : [],
           count: 1,
           val: delta.val
@@ -5264,6 +5291,7 @@ class Topic {
         _diff: true,
         seq: oneReaction.seq,
         data: [{
+          mrrid: oneReaction.mrrid,
           val: oneReaction.val,
           count: 1,
           users: [oneReaction.user || this._tinode.getCurrentUserID()]
@@ -5280,12 +5308,17 @@ class Topic {
           upd = this._handleReactionDiff(msg, mr.data[0]);
         } else {
           upd = (mr.data || []).map(r => ({
+            mrrid: r.mrrid,
             val: r.val,
             count: r.count | 0,
             users: Array.isArray(r.users) ? r.users.slice() : []
           }));
         }
         msg.react = upd;
+        const maxReact = upd.reduce((max, r) => Math.max(max, r.mrrid), 0);
+        if (this.mrrid < maxReact) {
+          this.mrrid = maxReact;
+        }
         this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
       }
     });
@@ -5339,6 +5372,8 @@ class Topic {
     this.trusted = null;
     this._maxSeq = 0;
     this._minSeq = 0;
+    this._maxDel = 0;
+    this._maxReact = 0;
     this._attached = false;
     const me = this._tinode.getMeTopic();
     if (me) {

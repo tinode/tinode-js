@@ -62,6 +62,16 @@ export default class Topic {
     this.public = null;
     // Per-topic system-provided data (accessible by all users).
     this.trusted = null;
+    // Last known messge sequence number.
+    this.seq = 0;
+    // Last known read message ID.
+    this.read = 0;
+    // Last known received message ID.
+    this.recv = 0;
+    // Last known deleted message ID.
+    this.clear = 0;
+    // Last known reaction ID.
+    this.mrrid = 0;
 
     // Locally cached data
     // Subscribed users, for tracking read/recv/msg notifications.
@@ -78,6 +88,8 @@ export default class Topic {
     this._noEarlierMsgs = false;
     // The maximum known deletion ID.
     this._maxDel = 0;
+    // The maximum seen reaction ID, same logic as read.
+    this._mrrSeen = 0;
     // Timer object used to send 'recv' notifications.
     this._recvNotificationTimer = null;
 
@@ -660,6 +672,7 @@ export default class Topic {
           this._processMetaAux(params.aux);
         }
         if (params.react) {
+          params.react.mrrid = ctrl.params?.mrrid | 0;
           this._processMetaReact(undefined, params.react);
         }
 
@@ -843,6 +856,13 @@ export default class Topic {
       return react.max;
     }
     return this._tinode.getServerParam(Const.MAX_REACTIONS, 0);
+  }
+
+  /**
+   * Mark all known reactions as seen.
+   */
+  markReactionsSeen() {
+    this._mrrSeen = this.mrrid;
   }
 
   /**
@@ -1465,6 +1485,16 @@ export default class Topic {
   }
 
   /**
+   * Check if topic has unseen reactions.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} true if there are unseen reactions, false otherwise.
+   */
+  hasUnseenReactions() {
+    return this.mrrid > this._mrrSeen;
+  }
+
+  /**
    * Check if cached message IDs indicate that the server may have more messages.
    * @memberof Tinode.Topic#
    *
@@ -1840,11 +1870,19 @@ export default class Topic {
     // Normalize reactions payload if present: server uses 'react' field with array of
     // {value, count, users}.
     if (data.react) {
-      data.react = (data.react || []).map(r => ({
-        val: r.val,
-        count: r.count | 0,
-        users: Array.isArray(r.users) ? r.users.slice() : []
-      }));
+      let maxReact = 0;
+      data.react = (data.react || []).map(r => {
+        maxReact = Math.max(maxReact, r.mrrid);
+        return {
+          mrrid: r.mrrid,
+          val: r.val,
+          count: r.count | 0,
+          users: Array.isArray(r.users) ? r.users.slice() : []
+        };
+      });
+      if (this.mrrid < maxReact) {
+        this.mrrid = maxReact;
+      }
     }
 
     if (!data._noForwarding) {
@@ -1940,6 +1978,7 @@ export default class Topic {
       case 'react':
         // Reaction to message.
         this._processMetaReact(undefined, {
+          mrrid: pres.id2 | 0,
           seq: pres.seq | 0,
           user: pres.act,
           val: pres.val,
@@ -2142,6 +2181,7 @@ export default class Topic {
       if (delta.val == Const.DEL_CHAR || existing.val == delta.val) {
         // Remove existing reaction.
         existing.count--;
+        existing.mrrid = Math.max(existing.mrrid, delta.mrrid);
         if (existing.count <= 0) {
           reacts.splice(found, 1);
         } else {
@@ -2162,9 +2202,11 @@ export default class Topic {
           // Add to existing reaction.
           reacts[emoIndex].users.push(user);
           reacts[emoIndex].count++;
+          reacts[emoIndex].mrrid = Math.max(reacts[emoIndex].mrrid, delta.mrrid);
         } else {
           // Create new reaction.
           reacts.push({
+            mrrid: delta.mrrid,
             users: [user],
             count: 1,
             val: delta.val
@@ -2181,9 +2223,11 @@ export default class Topic {
           reacts[emoIndex].users.push(user);
         }
         reacts[emoIndex].count++;
+        reacts[emoIndex].mrrid = Math.max(reacts[emoIndex].mrrid, delta.mrrid);
       } else {
         // Create new reaction.
         reacts.push({
+          mrrid: delta.mrrid,
           users: user ? [user] : [],
           count: 1,
           val: delta.val
@@ -2204,6 +2248,7 @@ export default class Topic {
         _diff: true, // Indicate that this is a delta update.
         seq: oneReaction.seq,
         data: [{
+          mrrid: oneReaction.mrrid,
           val: oneReaction.val,
           count: 1,
           users: [oneReaction.user || this._tinode.getCurrentUserID()]
@@ -2222,12 +2267,17 @@ export default class Topic {
           upd = this._handleReactionDiff(msg, mr.data[0]);
         } else {
           upd = (mr.data || []).map(r => ({
+            mrrid: r.mrrid,
             val: r.val,
             count: r.count | 0,
             users: Array.isArray(r.users) ? r.users.slice() : []
           }));
         }
         msg.react = upd;
+        const maxReact = upd.reduce((max, r) => Math.max(max, r.mrrid), 0);
+        if (this.mrrid < maxReact) {
+          this.mrrid = maxReact;
+        }
         this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
       }
     });
@@ -2290,6 +2340,8 @@ export default class Topic {
     this.trusted = null;
     this._maxSeq = 0;
     this._minSeq = 0;
+    this._maxDel = 0;
+    this._maxReact = 0;
     this._attached = false;
 
     const me = this._tinode.getMeTopic();
