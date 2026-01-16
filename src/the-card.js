@@ -25,6 +25,13 @@ TheCard.setFn = function(card, fn) {
   return card;
 }
 
+TheCard.getFn = function(card) {
+  if (card && card.fn) {
+    return card.fn;
+  }
+  return null;
+}
+
 TheCard.setNote = function(card, note) {
   note = note && note.trim();
   card = card || {};
@@ -49,6 +56,23 @@ TheCard.setPhoto = function(card, imageUrl, imageMimeType) {
         data: DEL_CHAR,
         ref: imageUrl
       };
+      // Get mime type from URL, if not provided.
+      if (!mimeType) {
+        const ext = /\.([a-z0-9]+)$/i.exec(imageUrl);
+        if (ext) {
+          const extLower = ext[1].toLowerCase();
+          const mimeMap = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'bmp': 'image/bmp',
+            'webp': 'image/webp',
+            'svg': 'image/svg+xml'
+          };
+          mimeType = mimeMap[extLower] || null;
+        }
+      }
     }
     card.photo.type = (mimeType || 'image/jpeg').substring('image/'.length);
   } else {
@@ -65,6 +89,13 @@ TheCard.getPhotoUrl = function(card) {
     } else if (card.photo.data && card.photo.data != DEL_CHAR) {
       return 'data:image/' + (card.photo.type || 'jpeg') + ';base64,' + card.photo.data;
     }
+  }
+  return null;
+}
+
+TheCard.getOrg = function(card) {
+  if (card && card.org) {
+    return card.org.fn || null;
   }
   return null;
 }
@@ -112,6 +143,21 @@ TheCard.getComm = function(card, proto) {
   return [];
 }
 
+TheCard.getEmails = function(card) {
+  return TheCard.getComm(card, 'email').map(c => c.value);
+}
+
+TheCard.getPhones = function(card) {
+  return TheCard.getComm(card, 'tel').map(c => c.value);
+}
+
+TheCard.getFirstTinodeID = function(card) {
+  const comms = TheCard.getComm(card, 'tinode');
+  if (comms.length > 0) {
+    return comms[0].value;
+  }
+  return null;
+}
 
 TheCard.exportVCard = function(card) {
   if (!card) {
@@ -253,6 +299,10 @@ TheCard.importVCard = function(vcardStr) {
   });
 
   return card;
+}
+
+TheCard.isFileSupported = function(type, name) {
+  return type == 'text/vcard' || (name || '').endsWith('.vcf') || (name || '').endsWith('.vcard');
 }
 
 function theCard(fn, imageUrl, imageMimeType, note) {

@@ -1,7 +1,7 @@
 /**
  * @module tinode-sdk
  *
- * @copyright 2015-2025 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  * @summary Javascript bindings for Tinode.
  * @license Apache 2.0
  * @version 0.25
@@ -60,6 +60,7 @@ import Topic from './topic.js';
 import TopicFnd from './fnd-topic.js';
 import TopicMe from './me-topic.js';
 
+import TheCard from './the-card.js';
 import {
   isUrlRelative,
   jsonParseHelper,
@@ -71,6 +72,11 @@ import {
 // Re-export AccessMode
 export {
   AccessMode
+};
+
+// Re-export TheCard
+export {
+  TheCard
 };
 
 let WebSocketProvider;

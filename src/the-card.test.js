@@ -53,6 +53,30 @@ describe('TheCard', () => {
     });
   });
 
+  describe('getFn', () => {
+    test('should get fn from card', () => {
+      const card = {
+        fn: 'Charlie'
+      };
+      expect(TheCard.getFn(card)).toBe('Charlie');
+    });
+
+    test('should return null if fn is missing', () => {
+      const card = {
+        note: 'Some note'
+      };
+      expect(TheCard.getFn(card)).toBeNull();
+    });
+
+    test('should return null if card is null', () => {
+      expect(TheCard.getFn(null)).toBeNull();
+    });
+
+    test('should return null if card is undefined', () => {
+      expect(TheCard.getFn(undefined)).toBeNull();
+    });
+  });
+
   describe('setNote', () => {
     test('should set note', () => {
       const card = TheCard.setNote({}, 'My Note');
@@ -93,6 +117,69 @@ describe('TheCard', () => {
         photo: {}
       }, null);
       expect(card.photo).toBe(DEL_CHAR);
+    });
+
+    test('should infer mime type from extension', () => {
+      const card = TheCard.setPhoto({}, 'http://example.com/a.jpg');
+      expect(card.photo).toEqual({
+        ref: 'http://example.com/a.jpg',
+        type: 'jpeg',
+        data: DEL_CHAR
+      });
+    });
+
+    test('should infer mime type from data URI', () => {
+      const dataUri = 'data:image/gif;base64,AQID';
+      const card = TheCard.setPhoto({}, dataUri);
+      expect(card.photo).toEqual({
+        data: 'AQID',
+        type: 'gif',
+        ref: DEL_CHAR
+      });
+    });
+
+    test('should use default mime type if unknown', () => {
+      const card = TheCard.setPhoto({}, 'http://example.com/a.unknown');
+      expect(card.photo).toEqual({
+        ref: 'http://example.com/a.unknown',
+        type: 'jpeg',
+        data: DEL_CHAR
+      });
+    });
+  });
+
+  describe('getPhotoUrl', () => {
+    test('should return null if no photo', () => {
+      expect(TheCard.getPhotoUrl({})).toBeNull();
+    });
+
+    test('should return ref url', () => {
+      const card = {
+        photo: {
+          ref: 'http://example.com/a.png',
+          type: 'png'
+        }
+      };
+      expect(TheCard.getPhotoUrl(card)).toBe('http://example.com/a.png');
+    });
+
+    test('should return data uri', () => {
+      const card = {
+        photo: {
+          data: 'AQID',
+          type: 'png'
+        }
+      };
+      expect(TheCard.getPhotoUrl(card)).toBe('data:image/png;base64,AQID');
+    });
+
+    test('should handle missing type in data uri', () => {
+      const card = {
+        photo: {
+          data: 'AQID'
+        }
+      };
+      expect(TheCard.getPhotoUrl(card)).toBe('data:image/jpeg;base64,AQID');
     });
   });
 

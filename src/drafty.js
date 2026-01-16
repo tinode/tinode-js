@@ -1,5 +1,5 @@
 /**
- * @copyright 2015-2024 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  * @summary Minimally rich text representation and formatting for Tinode.
  * @license Apache 2.0
  *
@@ -66,8 +66,8 @@ const DRAFTY_MIME_TYPE = 'text/x-drafty';
 const DRAFTY_FR_MIME_TYPE = 'text/x-drafty-fr';
 // Legacy Drafty form-response MIME type.
 const DRAFTY_FR_MIME_TYPE_LEGACY = 'application/json'; // Remove in 2026.
-const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'incoming', 'mime', 'name', 'premime', 'preref', 'preview',
-  'ref', 'size', 'state', 'url', 'val', 'width'
+const ALLOWED_ENT_FIELDS = ['act', 'height', 'duration', 'fn', 'incoming', 'mime', 'name',
+  'premime', 'preref', 'preview', 'ref', 'size', 'state', 'url', 'val', 'width'
 ];
 
 // Intl.Segmenter is not available in Firefox 124 and earlier. FF 125 with support for Intl.Segmenter
@@ -232,6 +232,11 @@ const FORMAT_TAGS = {
   ST: {
     html_tag: 'b',
     md_tag: '*',
+    isVoid: false
+  },
+  TC: { // TheCard
+    html_tag: 'div',
+    md_tag: undefined,
     isVoid: false
   },
   VC: {
@@ -433,6 +438,17 @@ const DECORATORS = {
     props: (data) => {
       return data ? {} : null;
     },
+  },
+  TC: { // TheCard
+    open: _ => '<div>',
+    close: _ => '</div>',
+    props: data => {
+      if (!data) return {};
+      return {
+        'data-fn': data.fn,
+        'data-title': data.title,
+      };
+    }
   },
   // Video call
   VC: {
@@ -1385,6 +1401,36 @@ Drafty.appendLineBreak = function(content) {
   return content;
 }
 /**
+ * Append TheCard to a Drafty document.
+ * @memberof Drafty
+ * @static
+ *
+ * @param {Drafty} content - Drafty document to append TheCard to.
+ * @param {Object} theCardData - TheCard data object.
+ * @returns {Drafty} the same document as <code>content</code>.
+ */
+Drafty.appendTheCard = function(content, theCardData) {
+  content = content || {
+    txt: ''
+  };
+  content.ent = content.ent || [];
+  content.fmt = content.fmt || [];
+
+  content.fmt.push({
+    at: stringToGraphemes(content.txt).length,
+    len: 1,
+    key: content.ent.length
+  });
+  content.txt += ' ';
+
+  content.ent.push({
+    tp: 'TC',
+    data: theCardData
+  });
+
+  return content;
+}
+/**
  * Given Drafty document, convert it to HTML.
  * No attempt is made to strip pre-existing html markup.
  * This is potentially unsafe because <code>content.txt</code> may contain malicious HTML
@@ -1542,7 +1588,6 @@ Drafty.replyContent = function(original, limit) {
   // Convert back to Drafty.
   return treeToDrafty({}, tree, []);
 }
-
 
 /**
  * Generate drafty preview:
