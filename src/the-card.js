@@ -133,6 +133,65 @@ TheCard.exportVCard = function(card) {
   return vcard;
 }
 
+TheCard.importVCard = function(vcardStr) {
+  if (!vcardStr || typeof vcardStr !== 'string') {
+    return null;
+  }
+
+  const lines = vcardStr.split(/\r\n|\n/);
+  let card = {};
+
+  lines.forEach(line => {
+    const [keyPart, ...valueParts] = line.split(':');
+    const key = keyPart.toUpperCase();
+    const value = valueParts.join(':');
+
+    if (key === 'FN') {
+      card.fn = value;
+    } else if (key === 'NOTE') {
+      card.note = value;
+    } else if (key.startsWith('PHOTO')) {
+      const params = keyPart.split(';').slice(1);
+      let type = 'jpeg';
+      let encoding = null;
+      params.forEach(param => {
+        const [pKey, pValue] = param.split('=');
+        if (pKey.toUpperCase() === 'TYPE') {
+          type = pValue.toLowerCase();
+        } else if (pKey.toUpperCase() === 'ENCODING') {
+          encoding = pValue.toLowerCase();
+        }
+      });
+      if (encoding === 'b') {
+        card.photo = {
+          type: type,
+          data: value,
+          ref: DEL_CHAR
+        };
+      } else {
+        card.photo = {
+          type: type,
+          data: DEL_CHAR,
+          ref: value
+        };
+      }
+    } else if (key.startsWith('TEL')) {
+      const des = keyPart.split(';').find(param => param.startsWith('TYPE='))?.split('=')[1].toLowerCase() || 'voice';
+      card = TheCard.addPhone(card, value, des);
+    } else if (key.startsWith('EMAIL')) {
+      const des = keyPart.split(';').find(param => param.startsWith('TYPE='))?.split('=')[1].toLowerCase() || 'home';
+      card = TheCard.addEmail(card, value, des);
+    } else if (key.startsWith('IMPP')) {
+      const des = keyPart.split(';').find(param => param.startsWith('TYPE='))?.split('=')[1].toLowerCase() || 'home';
+      const tinodeID = value.replace(/^tinode:/, '');
+      card = TheCard.addTinodeID(card, tinodeID, des);
+    }
+  });
+
+  return card;
+}
+
+
 function theCard(fn, imageUrl, imageMimeType, note) {
   let card = null;
   fn = fn && fn.trim();

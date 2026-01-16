@@ -165,5 +165,155 @@ describe('TheCard', () => {
       expect(card.comm).toHaveLength(1);
       expect(card.comm[0].value).toBe('456');
     });
+
+    test('setEmail', () => {
+      let card = {
+        comm: [{
+          value: 'old@example.com',
+          des: 'work',
+          proto: 'email'
+        }]
+      };
+      card = TheCard.setEmail(card, 'new@example.com', 'work');
+      expect(card.comm).toHaveLength(1);
+      expect(card.comm[0]).toEqual({
+        value: 'new@example.com',
+        des: 'work',
+        proto: 'email'
+      });
+    });
+
+    test('setTinodeID', () => {
+      let card = {
+        comm: [{
+          value: 'usr111',
+          des: 'home',
+          proto: 'tinode'
+        }]
+      };
+      card = TheCard.setTinodeID(card, 'usr222', 'home');
+      expect(card.comm).toHaveLength(1);
+      expect(card.comm[0]).toEqual({
+        value: 'usr222',
+        des: 'home',
+        proto: 'tinode'
+      });
+    });
+
+    test('clearEmail', () => {
+      let card = {
+        comm: [{
+          value: 'a@example.com',
+          des: 'home',
+          proto: 'email'
+        }, {
+          value: 'b@example.com',
+          des: 'work',
+          proto: 'email'
+        }]
+      };
+      card = TheCard.clearEmail(card, 'a@example.com', 'home');
+      expect(card.comm).toHaveLength(1);
+      expect(card.comm[0].value).toBe('b@example.com');
+    });
+
+    test('clearTinodeID', () => {
+      let card = {
+        comm: [{
+          value: 'usr1',
+          des: 'home',
+          proto: 'tinode'
+        }, {
+          value: 'usr2',
+          des: 'work',
+          proto: 'tinode'
+        }]
+      };
+      card = TheCard.clearTinodeID(card, 'usr1', 'home');
+      expect(card.comm).toHaveLength(1);
+      expect(card.comm[0].value).toBe('usr2');
+    });
+  });
+
+  describe('exportVCard', () => {
+    test('should return null for empty card', () => {
+      expect(TheCard.exportVCard(null)).toBeNull();
+    });
+
+    test('should export minimal card', () => {
+      const card = { fn: 'Alice' };
+      const vcard = TheCard.exportVCard(card);
+      expect(vcard).toContain('BEGIN:VCARD');
+      expect(vcard).toContain('VERSION:3.0');
+      expect(vcard).toContain('FN:Alice');
+      expect(vcard).toContain('END:VCARD');
+    });
+
+    test('should export full card', () => {
+      const card = {
+        fn: 'Alice',
+        note: 'My Note',
+        photo: {
+          type: 'jpeg',
+          data: 'base64data',
+          ref: DEL_CHAR
+        },
+        comm: [
+          { proto: 'tel', des: 'CELL', value: '123456' },
+          { proto: 'email', des: 'HOME', value: 'alice@example.com' },
+          { proto: 'tinode', des: 'HOME', value: 'usr123' }
+        ]
+      };
+      const vcard = TheCard.exportVCard(card);
+      expect(vcard).toContain('FN:Alice');
+      expect(vcard).toContain('NOTE:My Note');
+      expect(vcard).toContain('PHOTO;TYPE=JPEG;ENCODING=b:base64data');
+      expect(vcard).toContain('TEL;TYPE=CELL:123456');
+      expect(vcard).toContain('EMAIL;TYPE=HOME:alice@example.com');
+      expect(vcard).toContain('IMPP;TYPE=HOME;tinode:usr123');
+    });
+  });
+
+  describe('importVCard', () => {
+    test('should return null for invalid input', () => {
+      expect(TheCard.importVCard(null)).toBeNull();
+      expect(TheCard.importVCard(123)).toBeNull();
+    });
+
+    test('should import minimal card', () => {
+      const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Alice\r\nEND:VCARD';
+      const card = TheCard.importVCard(vcard);
+      expect(card).toEqual({ fn: 'Alice' });
+    });
+
+    test('should import full card', () => {
+      const vcard = 'BEGIN:VCARD\r\n' +
+        'VERSION:3.0\r\n' +
+        'FN:Alice\r\n' +
+        'NOTE:My Note\r\n' +
+        'PHOTO;TYPE=JPEG;ENCODING=b:base64data\r\n' +
+        'TEL;TYPE=CELL:123456\r\n' +
+        'EMAIL;TYPE=HOME:alice@example.com\r\n' +
+        'IMPP;TYPE=HOME;tinode:usr123\r\n' +
+        'END:VCARD';
+      const card = TheCard.importVCard(vcard);
+      expect(card.fn).toBe('Alice');
+      expect(card.note).toBe('My Note');
+      expect(card.photo).toEqual({ type: 'jpeg', data: 'base64data', ref: DEL_CHAR });
+      expect(card.comm).toContainEqual({ proto: 'tel', des: 'cell', value: '123456' });
+      expect(card.comm).toContainEqual({ proto: 'email', des: 'home', value: 'alice@example.com' });
+      expect(card.comm).toContainEqual({ proto: 'tinode', des: 'home', value: 'usr123' });
+    });
+
+    test('should import card with ref photo', () => {
+      const vcard = 'BEGIN:VCARD\r\n' +
+        'FN:Bob\r\n' +
+        'PHOTO;VALUE=URI:http://example.com/photo.jpg\r\n' +
+        'END:VCARD';
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.fn).toBe('Bob');
+      expect(card.photo).toEqual({ type: 'jpeg', data: DEL_CHAR, ref: 'http://example.com/photo.jpg' });
+    });
   });
 });
