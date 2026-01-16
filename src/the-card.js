@@ -16,6 +16,8 @@ export default class TheCard {
 
 TheCard.init = theCard
 
+TheCard.contentType = 'text/x-card';
+
 TheCard.setFn = function(card, fn) {
   fn = fn && fn.trim();
   card = card || {};
@@ -56,6 +58,17 @@ TheCard.setPhoto = function(card, imageUrl, imageMimeType) {
   return card;
 }
 
+TheCard.getPhotoUrl = function(card) {
+  if (card && card.photo) {
+    if (card.photo.ref && card.photo.ref != DEL_CHAR) {
+      return card.photo.ref;
+    } else if (card.photo.data && card.photo.data != DEL_CHAR) {
+      return 'data:image/' + (card.photo.type || 'jpeg') + ';base64,' + card.photo.data;
+    }
+  }
+  return null;
+}
+
 TheCard.setPhone = function(card, phone, type = 'voice') {
   return addOrSetComm(card, 'tel', phone, type, true);
 }
@@ -92,6 +105,14 @@ TheCard.clearTinodeID = function(card, tinodeID, type) {
   return clearComm(card, 'tinode', tinodeID, type);
 }
 
+TheCard.getComm = function(card, proto) {
+  if (card && Array.isArray(card.comm)) {
+    return card.comm.filter(c => c.proto == proto);
+  }
+  return [];
+}
+
+
 TheCard.exportVCard = function(card) {
   if (!card) {
     return null;
@@ -101,6 +122,19 @@ TheCard.exportVCard = function(card) {
 
   if (card.fn) {
     vcard += `FN:${card.fn}\r\n`;
+  }
+
+  if (card.n) {
+    vcard += `N:${card.n.surname || ''};${card.n.given || ''};${card.n.additional || ''};${card.n.prefix || ''};${card.n.suffix || ''}\r\n`;
+  }
+
+  if (card.org) {
+    if (card.org.fn) {
+      vcard += `ORG:${card.org.fn}\r\n`;
+    }
+    if (card.org.title) {
+      vcard += `TITLE:${card.org.title}\r\n`;
+    }
   }
 
   if (card.note && card.note != DEL_CHAR) {
@@ -143,23 +177,53 @@ TheCard.importVCard = function(vcardStr) {
 
   lines.forEach(line => {
     const [keyPart, ...valueParts] = line.split(':');
-    const key = keyPart.toUpperCase();
+    if (!keyPart || valueParts.length === 0) {
+      return;
+    }
     const value = valueParts.join(':');
+
+    const keyParams = keyPart.split(';');
+    const key = keyParams[0].trim().toUpperCase();
 
     if (key === 'FN') {
       card.fn = value;
+    } else if (key === 'N') {
+      const parts = value.split(';');
+      card.n = {
+        surname: parts[0] || undefined,
+        given: parts[1] || undefined,
+        additional: parts[2] || undefined,
+        prefix: parts[3] || undefined,
+        suffix: parts[4] || undefined,
+      };
+      // Clean up undefined properties.
+      Object.keys(card.n).forEach(key => card.n[key] === undefined && delete card.n[key]);
+      if (Object.keys(card.n).length === 0) {
+        delete card.n;
+      }
+    } else if (key === 'ORG') {
+      // Multiple values are separated by semicolon. We only use the first one as distinct name.
+      // The second one is usually the department, which we skip.
+      const parts = value.split(';');
+      card.org = card.org || {};
+      card.org.fn = parts[0] || undefined;
+      if (!card.org.fn) delete card.org.fn;
+    } else if (key === 'TITLE') {
+      card.org = card.org || {};
+      card.org.title = value || undefined;
+      if (!card.org.title) delete card.org.title;
     } else if (key === 'NOTE') {
       card.note = value;
-    } else if (key.startsWith('PHOTO')) {
+    } else if (key === 'PHOTO') {
       const params = keyPart.split(';').slice(1);
       let type = 'jpeg';
       let encoding = null;
       params.forEach(param => {
         const [pKey, pValue] = param.split('=');
-        if (pKey.toUpperCase() === 'TYPE') {
-          type = pValue.toLowerCase();
-        } else if (pKey.toUpperCase() === 'ENCODING') {
-          encoding = pValue.toLowerCase();
+        if (pKey && pKey.trim().toUpperCase() === 'TYPE') {
+          type = pValue ? pValue.trim().toLowerCase() : 'jpeg';
+        } else if (pKey && pKey.trim().toUpperCase() === 'ENCODING') {
+          encoding = pValue ? pValue.trim().toLowerCase() : null;
         }
       });
       if (encoding === 'b') {
@@ -175,14 +239,14 @@ TheCard.importVCard = function(vcardStr) {
           ref: value
         };
       }
-    } else if (key.startsWith('TEL')) {
-      const des = keyPart.split(';').find(param => param.startsWith('TYPE='))?.split('=')[1].toLowerCase() || 'voice';
+    } else if (key === 'TEL') {
+      const des = keyPart.split(';').find(param => param.trim().toUpperCase().startsWith('TYPE='))?.split('=')[1].trim().toLowerCase() || 'voice';
       card = TheCard.addPhone(card, value, des);
-    } else if (key.startsWith('EMAIL')) {
-      const des = keyPart.split(';').find(param => param.startsWith('TYPE='))?.split('=')[1].toLowerCase() || 'home';
+    } else if (key === 'EMAIL') {
+      const des = keyPart.split(';').find(param => param.trim().toUpperCase().startsWith('TYPE='))?.split('=')[1].trim().toLowerCase() || 'home';
       card = TheCard.addEmail(card, value, des);
-    } else if (key.startsWith('IMPP')) {
-      const des = keyPart.split(';').find(param => param.startsWith('TYPE='))?.split('=')[1].toLowerCase() || 'home';
+    } else if (key === 'IMPP') {
+      const des = keyPart.split(';').find(param => param.trim().toUpperCase().startsWith('TYPE='))?.split('=')[1].trim().toLowerCase() || 'home';
       const tinodeID = value.replace(/^tinode:/, '');
       card = TheCard.addTinodeID(card, tinodeID, des);
     }
@@ -190,7 +254,6 @@ TheCard.importVCard = function(vcardStr) {
 
   return card;
 }
-
 
 function theCard(fn, imageUrl, imageMimeType, note) {
   let card = null;

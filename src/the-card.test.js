@@ -241,7 +241,9 @@ describe('TheCard', () => {
     });
 
     test('should export minimal card', () => {
-      const card = { fn: 'Alice' };
+      const card = {
+        fn: 'Alice'
+      };
       const vcard = TheCard.exportVCard(card);
       expect(vcard).toContain('BEGIN:VCARD');
       expect(vcard).toContain('VERSION:3.0');
@@ -258,10 +260,21 @@ describe('TheCard', () => {
           data: 'base64data',
           ref: DEL_CHAR
         },
-        comm: [
-          { proto: 'tel', des: 'CELL', value: '123456' },
-          { proto: 'email', des: 'HOME', value: 'alice@example.com' },
-          { proto: 'tinode', des: 'HOME', value: 'usr123' }
+        comm: [{
+            proto: 'tel',
+            des: 'CELL',
+            value: '123456'
+          },
+          {
+            proto: 'email',
+            des: 'HOME',
+            value: 'alice@example.com'
+          },
+          {
+            proto: 'tinode',
+            des: 'HOME',
+            value: 'usr123'
+          }
         ]
       };
       const vcard = TheCard.exportVCard(card);
@@ -271,6 +284,25 @@ describe('TheCard', () => {
       expect(vcard).toContain('TEL;TYPE=CELL:123456');
       expect(vcard).toContain('EMAIL;TYPE=HOME:alice@example.com');
       expect(vcard).toContain('IMPP;TYPE=HOME;tinode:usr123');
+    });
+
+    test('should export card with N, ORG and TITLE', () => {
+      const card = {
+        fn: 'Alice',
+        n: {
+          surname: 'Wonderland',
+          given: 'Alice'
+        },
+        org: {
+          fn: 'Organization',
+          title: 'Boss'
+        }
+      };
+      const vcard = TheCard.exportVCard(card);
+      expect(vcard).toContain('FN:Alice');
+      expect(vcard).toContain('N:Wonderland;Alice;;;\r\n');
+      expect(vcard).toContain('ORG:Organization\r\n');
+      expect(vcard).toContain('TITLE:Boss\r\n');
     });
   });
 
@@ -283,7 +315,9 @@ describe('TheCard', () => {
     test('should import minimal card', () => {
       const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Alice\r\nEND:VCARD';
       const card = TheCard.importVCard(vcard);
-      expect(card).toEqual({ fn: 'Alice' });
+      expect(card).toEqual({
+        fn: 'Alice'
+      });
     });
 
     test('should import full card', () => {
@@ -299,10 +333,26 @@ describe('TheCard', () => {
       const card = TheCard.importVCard(vcard);
       expect(card.fn).toBe('Alice');
       expect(card.note).toBe('My Note');
-      expect(card.photo).toEqual({ type: 'jpeg', data: 'base64data', ref: DEL_CHAR });
-      expect(card.comm).toContainEqual({ proto: 'tel', des: 'cell', value: '123456' });
-      expect(card.comm).toContainEqual({ proto: 'email', des: 'home', value: 'alice@example.com' });
-      expect(card.comm).toContainEqual({ proto: 'tinode', des: 'home', value: 'usr123' });
+      expect(card.photo).toEqual({
+        type: 'jpeg',
+        data: 'base64data',
+        ref: DEL_CHAR
+      });
+      expect(card.comm).toContainEqual({
+        proto: 'tel',
+        des: 'cell',
+        value: '123456'
+      });
+      expect(card.comm).toContainEqual({
+        proto: 'email',
+        des: 'home',
+        value: 'alice@example.com'
+      });
+      expect(card.comm).toContainEqual({
+        proto: 'tinode',
+        des: 'home',
+        value: 'usr123'
+      });
     });
 
     test('should import card with ref photo', () => {
@@ -313,7 +363,81 @@ describe('TheCard', () => {
 
       const card = TheCard.importVCard(vcard);
       expect(card.fn).toBe('Bob');
-      expect(card.photo).toEqual({ type: 'jpeg', data: DEL_CHAR, ref: 'http://example.com/photo.jpg' });
+      expect(card.photo).toEqual({
+        type: 'jpeg',
+        data: DEL_CHAR,
+        ref: 'http://example.com/photo.jpg'
+      });
+    });
+
+    test('should import card with params in FN', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+N:Doe;John;Q.,Public
+FN;CHARSET=UTF-8:John Doe
+TEL;TYPE=WORK,VOICE:(111) 555-1212
+TEL;TYPE=HOME,VOICE:(404) 555-1212
+TEL;TYPE=HOME,TYPE=VOICE:(404) 555-1213
+EMAIL;TYPE=PREF,INTERNET:forrestgump@example.com
+EMAIL;TYPE=INTERNET:example@example.com
+ADR;TYPE=HOME:;;42 Plantation St.;Baytown;LA;30314;United States of America
+URL:https://www.google.com/
+PHOTO;VALUE=URL;TYPE=PNG:http://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Example_svg.svg/200px-Example_svg.svg.png
+AGENT:BEGIN:VCARD
+ VERSION:3.0
+ N:Doe;John;Q.,Public
+ FN:John Doe
+ TEL;TYPE=WORK,VOICE:(111) 555-1212
+ TEL;TYPE=HOME,VOICE:(404) 555-1212
+ TEL;TYPE=HOME,TYPE=VOICE:(404) 555-1213
+ EMAIL;TYPE=PREF,INTERNET:forrestgump@example.com
+ EMAIL;TYPE=INTERNET:example@example.com
+ PHOTO;VALUE=URL;TYPE=PNG:http://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Example_svg.svg/200px-Example_svg.svg.png
+ END:VCARD
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.fn).toBe('John Doe');
+      expect(card.photo).toBeDefined();
+      expect(card.photo.ref).toBe('http://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Example_svg.svg/200px-Example_svg.svg.png');
+      expect(card.comm).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          proto: 'tel',
+          value: '(111) 555-1212'
+        }),
+        expect.objectContaining({
+          proto: 'email',
+          value: 'forrestgump@example.com'
+        })
+      ]));
+      expect(card.n).toEqual({
+        surname: 'Doe',
+        given: 'John',
+        additional: 'Q.,Public'
+      });
+    });
+
+    test('should import card with N, ORG and TITLE', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+N:Miner;Coal;Diamond;Dr.;Jr.
+FN:Dr. Coal D. Miner
+ORG:Most Evil Corp;North American Division
+TITLE:CEO
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.n).toEqual({
+        surname: 'Miner',
+        given: 'Coal',
+        additional: 'Diamond',
+        prefix: 'Dr.',
+        suffix: 'Jr.'
+      });
+      expect(card.org).toEqual({
+        fn: 'Most Evil Corp',
+        title: 'CEO'
+      });
     });
   });
 });
