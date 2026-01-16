@@ -252,6 +252,7 @@ export default class TopicMe extends Topic {
         case 'react':
           // Reaction to message.
           cont._processMetaReact(undefined, {
+            mrrid: pres.id2 | 0,
             seq: pres.seq,
             user: pres.actor,
             val: pres.val

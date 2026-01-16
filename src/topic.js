@@ -860,9 +860,14 @@ export default class Topic {
 
   /**
    * Mark all known reactions as seen.
+   * @memberof Tinode.Topic#
    */
   markReactionsSeen() {
-    this._mrrSeen = this.mrrid;
+    if (this._mrrSeen != this.mrrid) {
+      this._mrrSeen = this.mrrid;
+      // Sent a notification to 'me' listeners.
+      this._tinode.getMeTopic()._refreshContact('react', this);
+    }
   }
 
   /**
@@ -2259,8 +2264,8 @@ export default class Topic {
     const seqIds = [];
     reacts.forEach(mr => {
       const msg = this.findMessage(mr.seq);
+      seqIds.push(mr.seq);
       if (msg) {
-        seqIds.push(mr.seq);
         let upd;
         if (mr._diff) {
           // Single incremental update.
