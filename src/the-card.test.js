@@ -611,8 +611,6 @@ END:VCARD`;
       const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\nTEL;TYPE=CELL:123456\r\nEND:VCARD';
       const card = TheCard.importVCard(vcard);
 
-      console.log('Imported card comm:', JSON.stringify(card.comm, null, 2));
-
       expect(card.comm).toHaveLength(1);
       expect(TheCard.getComm(card, 'tel')).toHaveLength(1);
     });
@@ -621,8 +619,6 @@ END:VCARD`;
       const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\nTEL;TYPE=CELL:111\r\nTEL;TYPE=HOME:222\r\nEND:VCARD';
       const card = TheCard.importVCard(vcard);
 
-      console.log('Imported card with 2 phones, comm:', JSON.stringify(card.comm, null, 2));
-
       expect(card.comm).toHaveLength(2);
       expect(TheCard.getComm(card, 'tel')).toHaveLength(2);
     });
@@ -630,8 +626,6 @@ END:VCARD`;
     test('should not create duplicates with mixed contact types', () => {
       const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\nTEL:111\r\nEMAIL:a@test.com\r\nTEL:222\r\nEND:VCARD';
       const card = TheCard.importVCard(vcard);
-
-      console.log('Imported mixed contacts, comm:', JSON.stringify(card.comm, null, 2));
 
       expect(card.comm).toHaveLength(3);
       expect(TheCard.getComm(card, 'tel')).toHaveLength(2);
@@ -642,8 +636,6 @@ END:VCARD`;
       // vCard spec allows folding lines by starting continuation with space/tab
       const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\nTEL;TYPE=CELL:\r\n 123456\r\nEND:VCARD';
       const card = TheCard.importVCard(vcard);
-
-      console.log('Folded line card comm:', JSON.stringify(card.comm, null, 2));
 
       // Should only have ONE phone entry, not duplicates
       expect(card.comm).toHaveLength(1);
