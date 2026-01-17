@@ -190,7 +190,7 @@ describe('TheCard', () => {
       expect(card.comm).toHaveLength(1);
       expect(card.comm[0]).toEqual({
         value: '1234567890',
-        des: 'mobile',
+        des: ['mobile'],
         proto: 'tel'
       });
     });
@@ -199,7 +199,7 @@ describe('TheCard', () => {
       let card = {
         comm: [{
           value: '000',
-          des: 'work',
+          des: ['work'],
           proto: 'tel'
         }]
       };
@@ -207,7 +207,7 @@ describe('TheCard', () => {
       expect(card.comm).toHaveLength(1);
       expect(card.comm[0]).toEqual({
         value: '1234567890',
-        des: 'work',
+        des: ['work'],
         proto: 'tel'
       });
     });
@@ -218,7 +218,7 @@ describe('TheCard', () => {
       expect(card.comm).toHaveLength(1);
       expect(card.comm[0]).toEqual({
         value: 'bob@example.com',
-        des: 'work',
+        des: ['work'],
         proto: 'email'
       });
     });
@@ -229,7 +229,7 @@ describe('TheCard', () => {
       expect(card.comm).toHaveLength(1);
       expect(card.comm[0]).toEqual({
         value: 'usr123',
-        des: 'home',
+        des: ['home'],
         proto: 'tinode'
       });
     });
@@ -238,12 +238,12 @@ describe('TheCard', () => {
       let card = {
         comm: [{
             value: '123',
-            des: 'mobile',
+            des: ['mobile'],
             proto: 'tel'
           },
           {
             value: '456',
-            des: 'work',
+            des: ['work'],
             proto: 'tel'
           }
         ]
@@ -257,7 +257,7 @@ describe('TheCard', () => {
       let card = {
         comm: [{
           value: 'old@example.com',
-          des: 'work',
+          des: ['work'],
           proto: 'email'
         }]
       };
@@ -265,7 +265,7 @@ describe('TheCard', () => {
       expect(card.comm).toHaveLength(1);
       expect(card.comm[0]).toEqual({
         value: 'new@example.com',
-        des: 'work',
+        des: ['work'],
         proto: 'email'
       });
     });
@@ -274,7 +274,7 @@ describe('TheCard', () => {
       let card = {
         comm: [{
           value: 'usr111',
-          des: 'home',
+          des: ['home'],
           proto: 'tinode'
         }]
       };
@@ -282,7 +282,7 @@ describe('TheCard', () => {
       expect(card.comm).toHaveLength(1);
       expect(card.comm[0]).toEqual({
         value: 'usr222',
-        des: 'home',
+        des: ['home'],
         proto: 'tinode'
       });
     });
@@ -291,11 +291,11 @@ describe('TheCard', () => {
       let card = {
         comm: [{
           value: 'a@example.com',
-          des: 'home',
+          des: ['home'],
           proto: 'email'
         }, {
           value: 'b@example.com',
-          des: 'work',
+          des: ['work'],
           proto: 'email'
         }]
       };
@@ -308,11 +308,11 @@ describe('TheCard', () => {
       let card = {
         comm: [{
           value: 'usr1',
-          des: 'home',
+          des: ['home'],
           proto: 'tinode'
         }, {
           value: 'usr2',
-          des: 'work',
+          des: ['work'],
           proto: 'tinode'
         }]
       };
@@ -349,18 +349,23 @@ describe('TheCard', () => {
         },
         comm: [{
             proto: 'tel',
-            des: 'CELL',
+            des: ['cell'],
             value: '123456'
           },
           {
             proto: 'email',
-            des: 'HOME',
+            des: ['home'],
             value: 'alice@example.com'
           },
           {
             proto: 'tinode',
-            des: 'HOME',
+            des: ['home'],
             value: 'usr123'
+          },
+          {
+            proto: 'http',
+            des: ['work'],
+            value: 'https://example.com'
           }
         ]
       };
@@ -371,6 +376,7 @@ describe('TheCard', () => {
       expect(vcard).toContain('TEL;TYPE=CELL:123456');
       expect(vcard).toContain('EMAIL;TYPE=HOME:alice@example.com');
       expect(vcard).toContain('IMPP;TYPE=HOME;tinode:usr123');
+      expect(vcard).toContain('URL;TYPE=WORK:https://example.com');
     });
 
     test('should export card with N, ORG and TITLE', () => {
@@ -415,7 +421,7 @@ describe('TheCard', () => {
         'PHOTO;TYPE=JPEG;ENCODING=b:base64data\r\n' +
         'TEL;TYPE=CELL:123456\r\n' +
         'EMAIL;TYPE=HOME:alice@example.com\r\n' +
-        'IMPP;TYPE=HOME;tinode:usr123\r\n' +
+        'IMPP;TYPE=HOME:tinode:usr123\r\n' +
         'END:VCARD';
       const card = TheCard.importVCard(vcard);
       expect(card.fn).toBe('Alice');
@@ -427,17 +433,17 @@ describe('TheCard', () => {
       });
       expect(card.comm).toContainEqual({
         proto: 'tel',
-        des: 'cell',
+        des: ['cell'],
         value: '123456'
       });
       expect(card.comm).toContainEqual({
         proto: 'email',
-        des: 'home',
+        des: ['home'],
         value: 'alice@example.com'
       });
       expect(card.comm).toContainEqual({
         proto: 'tinode',
-        des: 'home',
+        des: ['home'],
         value: 'usr123'
       });
     });
@@ -464,7 +470,7 @@ N:Doe;John;Q.,Public
 FN;CHARSET=UTF-8:John Doe
 TEL;TYPE=WORK,VOICE:(111) 555-1212
 TEL;TYPE=HOME,VOICE:(404) 555-1212
-TEL;TYPE=HOME,TYPE=VOICE:(404) 555-1213
+TEL;TYPE=HOME,TYPE=VOICE:(404) 555-1212
 EMAIL;TYPE=PREF,INTERNET:forrestgump@example.com
 EMAIL;TYPE=INTERNET:example@example.com
 ADR;TYPE=HOME:;;42 Plantation St.;Baytown;LA;30314;United States of America
@@ -487,14 +493,36 @@ END:VCARD`;
       expect(card.fn).toBe('John Doe');
       expect(card.photo).toBeDefined();
       expect(card.photo.ref).toBe('http://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Example_svg.svg/200px-Example_svg.svg.png');
+
+      // Verify deduplication: two phone entries with same number should be merged
+      const phones = card.comm.filter(c => c.proto === 'tel');
+      expect(phones).toHaveLength(2); // Only 2 phones, not 3 (deduplication worked)
+
       expect(card.comm).toEqual(expect.arrayContaining([
         expect.objectContaining({
           proto: 'tel',
-          value: '(111) 555-1212'
+          value: '(111) 555-1212',
+          des: expect.arrayContaining(['work', 'voice'])
+        }),
+        expect.objectContaining({
+          proto: 'tel',
+          value: '(404) 555-1212',
+          des: expect.arrayContaining(['home', 'voice'])
         }),
         expect.objectContaining({
           proto: 'email',
-          value: 'forrestgump@example.com'
+          value: 'forrestgump@example.com',
+          des: expect.arrayContaining(['pref']) // 'internet' is filtered out
+        }),
+        expect.objectContaining({
+          proto: 'email',
+          value: 'example@example.com',
+          des: [] // Only had 'internet' which is filtered out
+        }),
+        expect.objectContaining({
+          proto: 'http',
+          value: 'https://www.google.com/',
+          des: [] // URL typically has no TYPE
         })
       ]));
       expect(card.n).toEqual({
@@ -525,6 +553,280 @@ END:VCARD`;
         fn: 'Most Evil Corp',
         title: 'CEO'
       });
+    });
+  });
+
+  describe('getComm', () => {
+    test('should return array of matching comm entries', () => {
+      const card = {
+        comm: [{
+            proto: 'tel',
+            des: ['mobile'],
+            value: '123'
+          },
+          {
+            proto: 'email',
+            des: ['home'],
+            value: 'a@test.com'
+          },
+          {
+            proto: 'tel',
+            des: ['work'],
+            value: '456'
+          }
+        ]
+      };
+
+      const phones = TheCard.getComm(card, 'tel');
+      expect(phones).toHaveLength(2);
+      expect(phones[0].value).toBe('123');
+      expect(phones[1].value).toBe('456');
+
+      const emails = TheCard.getComm(card, 'email');
+      expect(emails).toHaveLength(1);
+      expect(emails[0].value).toBe('a@test.com');
+    });
+
+    test('should return empty array for non-existent proto', () => {
+      const card = {
+        comm: [{
+          proto: 'tel',
+          des: ['mobile'],
+          value: '123'
+        }]
+      };
+      expect(TheCard.getComm(card, 'email')).toEqual([]);
+    });
+
+    test('should return empty array for card without comm', () => {
+      const card = {
+        fn: 'Test'
+      };
+      expect(TheCard.getComm(card, 'tel')).toEqual([]);
+    });
+  });
+
+  describe('importVCard - duplication check', () => {
+    test('should not create duplicate entries when importing vCard with single phone', () => {
+      const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\nTEL;TYPE=CELL:123456\r\nEND:VCARD';
+      const card = TheCard.importVCard(vcard);
+
+      console.log('Imported card comm:', JSON.stringify(card.comm, null, 2));
+
+      expect(card.comm).toHaveLength(1);
+      expect(TheCard.getComm(card, 'tel')).toHaveLength(1);
+    });
+
+    test('should not create duplicate entries when importing vCard with multiple phones', () => {
+      const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\nTEL;TYPE=CELL:111\r\nTEL;TYPE=HOME:222\r\nEND:VCARD';
+      const card = TheCard.importVCard(vcard);
+
+      console.log('Imported card with 2 phones, comm:', JSON.stringify(card.comm, null, 2));
+
+      expect(card.comm).toHaveLength(2);
+      expect(TheCard.getComm(card, 'tel')).toHaveLength(2);
+    });
+
+    test('should not create duplicates with mixed contact types', () => {
+      const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\nTEL:111\r\nEMAIL:a@test.com\r\nTEL:222\r\nEND:VCARD';
+      const card = TheCard.importVCard(vcard);
+
+      console.log('Imported mixed contacts, comm:', JSON.stringify(card.comm, null, 2));
+
+      expect(card.comm).toHaveLength(3);
+      expect(TheCard.getComm(card, 'tel')).toHaveLength(2);
+      expect(TheCard.getComm(card, 'email')).toHaveLength(1);
+    });
+
+    test('should handle folded lines correctly', () => {
+      // vCard spec allows folding lines by starting continuation with space/tab
+      const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\nTEL;TYPE=CELL:\r\n 123456\r\nEND:VCARD';
+      const card = TheCard.importVCard(vcard);
+
+      console.log('Folded line card comm:', JSON.stringify(card.comm, null, 2));
+
+      // Should only have ONE phone entry, not duplicates
+      expect(card.comm).toHaveLength(1);
+      expect(TheCard.getComm(card, 'tel')).toHaveLength(1);
+    });
+
+    test('should deduplicate same phone with multiple TYPE values', () => {
+      const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\n' +
+        'TEL;TYPE=WORK,VOICE:(111) 555-1212\r\n' +
+        'TEL;TYPE=HOME,VOICE:(111) 555-1212\r\n' +
+        'END:VCARD';
+      const card = TheCard.importVCard(vcard);
+
+      // Should have ONE phone entry with all types combined
+      expect(card.comm).toHaveLength(1);
+      expect(card.comm[0]).toEqual({
+        proto: 'tel',
+        des: expect.arrayContaining(['work', 'voice', 'home']),
+        value: '(111) 555-1212'
+      });
+      expect(card.comm[0].des).toHaveLength(3);
+    });
+
+    test('should handle comma-separated TYPE values', () => {
+      const vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\n' +
+        'TEL;TYPE=WORK,VOICE,FAX:123-456-7890\r\n' +
+        'END:VCARD';
+      const card = TheCard.importVCard(vcard);
+
+      expect(card.comm).toHaveLength(1);
+      expect(card.comm[0].des).toEqual(expect.arrayContaining(['work', 'voice', 'fax']));
+      expect(card.comm[0].des).toHaveLength(3);
+    });
+  });
+
+  describe('Export/Import cycle', () => {
+    test('should not duplicate contacts after export/import cycle', () => {
+      // Create a card with contacts
+      let card = {};
+      card = TheCard.setFn(card, 'Alice Johnson');
+      card = TheCard.addPhone(card, '+15551234567', 'mobile');
+      card = TheCard.addPhone(card, '+15559876543', 'work');
+      card = TheCard.addEmail(card, 'alice@example.com', 'home');
+      card = TheCard.addEmail(card, 'alice.johnson@work.com', 'work');
+      card = TheCard.addTinodeID(card, 'usrAlice123', 'home');
+
+      // Verify original counts
+      expect(card.comm).toHaveLength(5);
+      expect(TheCard.getComm(card, 'tel')).toHaveLength(2);
+      expect(TheCard.getComm(card, 'email')).toHaveLength(2);
+      expect(TheCard.getComm(card, 'tinode')).toHaveLength(1);
+
+      // Export to vCard
+      const vcardStr = TheCard.exportVCard(card);
+      expect(vcardStr).toBeTruthy();
+
+      // Import back
+      const importedCard = TheCard.importVCard(vcardStr);
+
+      // Verify raw comm array length
+      expect(importedCard.comm).toHaveLength(5);
+
+      // Verify no duplicates
+      const phones = TheCard.getComm(importedCard, 'tel');
+      const emails = TheCard.getComm(importedCard, 'email');
+      const tinodeIds = TheCard.getComm(importedCard, 'tinode');
+
+      expect(phones).toHaveLength(2);
+      expect(emails).toHaveLength(2);
+      expect(tinodeIds).toHaveLength(1);
+
+      // Verify values are correct
+      expect(phones.map(p => p.value)).toContain('+15551234567');
+      expect(phones.map(p => p.value)).toContain('+15559876543');
+      expect(emails.map(e => e.value)).toContain('alice@example.com');
+      expect(emails.map(e => e.value)).toContain('alice.johnson@work.com');
+      expect(tinodeIds[0].value).toBe('usrAlice123');
+    });
+
+    test('should handle multiple export/import cycles without duplication', () => {
+      // Create initial card
+      let card = TheCard.setFn({}, 'Bob Smith');
+      card = TheCard.addPhone(card, '+15551111111', 'mobile');
+      card = TheCard.addEmail(card, 'bob@test.com', 'home');
+
+      // First cycle
+      let vcardStr = TheCard.exportVCard(card);
+      let imported1 = TheCard.importVCard(vcardStr);
+      expect(TheCard.getComm(imported1, 'tel')).toHaveLength(1);
+      expect(TheCard.getComm(imported1, 'email')).toHaveLength(1);
+
+      // Second cycle
+      vcardStr = TheCard.exportVCard(imported1);
+      let imported2 = TheCard.importVCard(vcardStr);
+      expect(TheCard.getComm(imported2, 'tel')).toHaveLength(1);
+      expect(TheCard.getComm(imported2, 'email')).toHaveLength(1);
+
+      // Third cycle
+      vcardStr = TheCard.exportVCard(imported2);
+      let imported3 = TheCard.importVCard(vcardStr);
+      expect(TheCard.getComm(imported3, 'tel')).toHaveLength(1);
+      expect(TheCard.getComm(imported3, 'email')).toHaveLength(1);
+    });
+
+    test('should correctly export and import IMPP/Tinode entries', () => {
+      let card = {};
+      card = TheCard.addTinodeID(card, 'usrTest123', 'home');
+      card = TheCard.addTinodeID(card, 'usrTest456', 'work');
+
+      const vcardStr = TheCard.exportVCard(card);
+
+      // Check that vCard contains IMPP entries
+      expect(vcardStr).toContain('IMPP');
+      expect(vcardStr).toContain('usrTest123');
+      expect(vcardStr).toContain('usrTest456');
+
+      const imported = TheCard.importVCard(vcardStr);
+      const tinodeIds = TheCard.getComm(imported, 'tinode');
+
+      expect(tinodeIds).toHaveLength(2);
+      expect(tinodeIds.map(t => t.value)).toContain('usrTest123');
+      expect(tinodeIds.map(t => t.value)).toContain('usrTest456');
+    });
+
+    test('should correctly export and import URL entries', () => {
+      let card = {};
+      card = TheCard.setFn(card, 'Test User');
+      // Manually add URL to comm array
+      card.comm = [{
+          proto: 'http',
+          des: ['work'],
+          value: 'https://example.com'
+        },
+        {
+          proto: 'http',
+          des: ['personal'],
+          value: 'https://mysite.org'
+        }
+      ];
+
+      const vcardStr = TheCard.exportVCard(card);
+
+      // Check that vCard contains URL entries
+      expect(vcardStr).toContain('URL');
+      expect(vcardStr).toContain('https://example.com');
+      expect(vcardStr).toContain('https://mysite.org');
+
+      const imported = TheCard.importVCard(vcardStr);
+      const urls = TheCard.getComm(imported, 'http');
+
+      expect(urls).toHaveLength(2);
+      expect(urls.map(u => u.value)).toContain('https://example.com');
+      expect(urls.map(u => u.value)).toContain('https://mysite.org');
+    });
+
+    test('should handle contacts without TYPE parameter', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:Test User
+TEL:(555) 123-4567
+EMAIL:test@example.com
+IMPP:tinode:usrNoType
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+
+      expect(card.fn).toBe('Test User');
+      expect(card.comm).toHaveLength(3);
+
+      const phone = card.comm.find(c => c.proto === 'tel');
+      expect(phone).toBeDefined();
+      expect(phone.value).toBe('(555) 123-4567');
+      expect(phone.des).toEqual([]);
+
+      const email = card.comm.find(c => c.proto === 'email');
+      expect(email).toBeDefined();
+      expect(email.value).toBe('test@example.com');
+      expect(email.des).toEqual([]);
+
+      const tinode = card.comm.find(c => c.proto === 'tinode');
+      expect(tinode).toBeDefined();
+      expect(tinode.value).toBe('usrNoType');
+      expect(tinode.des).toEqual([]);
     });
   });
 });

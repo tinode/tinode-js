@@ -197,14 +197,15 @@ TheCard.exportVCard = function(card) {
 
   if (Array.isArray(card.comm)) {
     card.comm.forEach(comm => {
+      const types = comm.des.join(',').toUpperCase();
       if (comm.proto === 'tel') {
-        vcard += `TEL;TYPE=${comm.des.toUpperCase()}:${comm.value}\r\n`;
+        vcard += `TEL;TYPE=${types}:${comm.value}\r\n`;
       } else if (comm.proto === 'email') {
-        vcard += `EMAIL;TYPE=${comm.des.toUpperCase()}:${comm.value}\r\n`;
+        vcard += `EMAIL;TYPE=${types}:${comm.value}\r\n`;
       } else if (comm.proto === 'tinode') {
-        vcard += `IMPP;TYPE=${comm.des.toUpperCase()};tinode:${comm.value}\r\n`;
+        vcard += `IMPP;TYPE=${types};tinode:${comm.value}\r\n`;
       } else if (comm.proto === 'http') {
-        vcard += `URL;TYPE=${comm.des.toUpperCase()}:${comm.value}\r\n`;
+        vcard += `URL;TYPE=${types}:${comm.value}\r\n`;
       }
     });
   }
@@ -218,8 +219,30 @@ TheCard.importVCard = function(vcardStr) {
     return null;
   }
 
-  const lines = vcardStr.split(/\r\n|\n/);
+  // Handle line folding: lines starting with space or tab are continuations
+  const rawLines = vcardStr.split(/\r\n|\n/);
+  const lines = [];
+  let currentLine = '';
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    if (line.startsWith(' ') || line.startsWith('\t')) {
+      // This is a continuation of the previous line
+      currentLine += line.substring(1);
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+      currentLine = line;
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
   let card = {};
+  // Temporary map to collect and dedupe comm entries
+  const commMap = new Map(); // key: "proto:value", value: Set of types
 
   lines.forEach(line => {
     const [keyPart, ...valueParts] = line.split(':');
@@ -286,23 +309,105 @@ TheCard.importVCard = function(vcardStr) {
         };
       }
     } else if (key === 'TEL') {
-      const des = keyPart.split(';').find(param => param.trim().toUpperCase().startsWith('TYPE='))?.split('=')[1].trim().toLowerCase() || 'voice';
-      card = TheCard.addPhone(card, value, des);
+      // Extract all TYPE values (can be comma-separated or multiple TYPE= params)
+      const typeParams = keyPart.split(';').filter(param => param.trim().toUpperCase().startsWith('TYPE='));
+      const types = typeParams.flatMap(param => {
+        // Split by first '=' only to get the value part
+        const equalIndex = param.indexOf('=');
+        const valuesPart = param.substring(equalIndex + 1);
+        // Split by comma and clean up any 'TYPE=' prefix
+        return valuesPart.split(',').map(t => {
+          const cleaned = t.trim().toLowerCase();
+          return cleaned.startsWith('type=') ? cleaned.substring(5) : cleaned;
+        });
+      }).filter(t => t !== 'internet'); // Skip 'internet' type
+
+      const mapKey = `tel|${value}`;
+      if (!commMap.has(mapKey)) {
+        commMap.set(mapKey, new Set());
+      }
+      types.forEach(t => commMap.get(mapKey).add(t));
     } else if (key === 'EMAIL') {
-      const des = keyPart.split(';').find(param => param.trim().toUpperCase().startsWith('TYPE='))?.split('=')[1].trim().toLowerCase() || 'home';
-      card = TheCard.addEmail(card, value, des);
+      // Extract all TYPE values (can be comma-separated or multiple TYPE= params)
+      const typeParams = keyPart.split(';').filter(param => param.trim().toUpperCase().startsWith('TYPE='));
+      const types = typeParams.flatMap(param => {
+        // Split by first '=' only to get the value part
+        const equalIndex = param.indexOf('=');
+        const valuesPart = param.substring(equalIndex + 1);
+        // Split by comma and clean up any 'TYPE=' prefix
+        return valuesPart.split(',').map(t => {
+          const cleaned = t.trim().toLowerCase();
+          return cleaned.startsWith('type=') ? cleaned.substring(5) : cleaned;
+        });
+      }).filter(t => t !== 'internet'); // Skip 'internet' type
+
+      const mapKey = `email|${value}`;
+      if (!commMap.has(mapKey)) {
+        commMap.set(mapKey, new Set());
+      }
+      types.forEach(t => commMap.get(mapKey).add(t));
     } else if (key === 'IMPP') {
-      const des = keyPart.split(';').find(param => param.trim().toUpperCase().startsWith('TYPE='))?.split('=')[1].trim().toLowerCase() || 'home';
+      // Extract all TYPE values (can be comma-separated or multiple TYPE= params)
+      const typeParams = keyPart.split(';').filter(param => param.trim().toUpperCase().startsWith('TYPE='));
+      const types = typeParams.flatMap(param => {
+        // Split by first '=' only to get the value part
+        const equalIndex = param.indexOf('=');
+        const valuesPart = param.substring(equalIndex + 1);
+        // Split by comma and clean up any 'TYPE=' prefix
+        return valuesPart.split(',').map(t => {
+          const cleaned = t.trim().toLowerCase();
+          return cleaned.startsWith('type=') ? cleaned.substring(5) : cleaned;
+        });
+      }).filter(t => t !== 'internet'); // Skip 'internet' type
+
       const tinodeID = value.replace(/^tinode:/, '');
-      card = TheCard.addTinodeID(card, tinodeID, des);
+      const mapKey = `tinode|${tinodeID}`;
+      if (!commMap.has(mapKey)) {
+        commMap.set(mapKey, new Set());
+      }
+      types.forEach(t => commMap.get(mapKey).add(t));
+    } else if (key === 'URL') {
+      // Extract all TYPE values (can be comma-separated or multiple TYPE= params)
+      const typeParams = keyPart.split(';').filter(param => param.trim().toUpperCase().startsWith('TYPE='));
+      const types = typeParams.flatMap(param => {
+        // Split by first '=' only to get the value part
+        const equalIndex = param.indexOf('=');
+        const valuesPart = param.substring(equalIndex + 1);
+        // Split by comma and clean up any 'TYPE=' prefix
+        return valuesPart.split(',').map(t => {
+          const cleaned = t.trim().toLowerCase();
+          return cleaned.startsWith('type=') ? cleaned.substring(5) : cleaned;
+        });
+      }).filter(t => t !== 'internet'); // Skip 'internet' type
+
+      const mapKey = `http|${value}`;
+      if (!commMap.has(mapKey)) {
+        commMap.set(mapKey, new Set());
+      }
+      types.forEach(t => commMap.get(mapKey).add(t));
     }
   });
+
+  // Convert commMap to comm array
+  if (commMap.size > 0) {
+    card.comm = [];
+    commMap.forEach((types, key) => {
+      const [proto, value] = key.split('|', 2);
+      card.comm.push({
+        proto: proto,
+        des: Array.from(types),
+        value: value
+      });
+    });
+  }
 
   return card;
 }
 
 TheCard.isFileSupported = function(type, name) {
-  return type == 'text/vcard' || (name || '').endsWith('.vcf') || (name || '').endsWith('.vcard');
+  return type == 'text/vcard' ||
+    (name || '').endsWith('.vcf') ||
+    (name || '').endsWith('.vcard');
 }
 
 function theCard(fn, imageUrl, imageMimeType, note) {
@@ -352,11 +457,14 @@ function addOrSetComm(card, proto, value, type, setOnly) {
     card.comm = card.comm || [];
     if (setOnly) {
       // Remove existing entries with the same proto and type.
-      card.comm = card.comm.filter(c => !(c.proto == proto && c.des == type));
+      card.comm = card.comm.filter(c => {
+        if (c.proto != proto) return true;
+        return !c.des.includes(type);
+      });
     }
     card.comm.push({
       proto: proto,
-      des: type,
+      des: [type], // Always use array
       value: value
     });
   }
@@ -365,7 +473,14 @@ function addOrSetComm(card, proto, value, type, setOnly) {
 
 function clearComm(card, proto, value, type) {
   if (card && Array.isArray(card.comm)) {
-    card.comm = card.comm.filter(c => !(c.proto == proto && (!type || c.des == type) && (!value || c.value == value)));
+    card.comm = card.comm.filter(c => {
+      if (c.proto != proto) return true;
+      if (value && c.value != value) return true;
+      if (type) {
+        return !c.des.includes(type);
+      }
+      return false;
+    });
   }
   return card;
 }
