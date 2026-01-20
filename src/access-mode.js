@@ -1,7 +1,7 @@
 /**
  * @file Access control model.
  *
- * @copyright 2015-2022 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  */
 'use strict';
 
@@ -39,7 +39,7 @@ export default class AccessMode {
    * @memberof Tinode.AccessMode
    * @static
    *
-   * @param {string | Number} mode - either a String representation of the access mode to parse or a set of bits to assign.
+   * @param {string | number} mode - either a String representation of the access mode to parse or a set of bits to assign.
    * @returns {number} - Access mode as a numeric value.
    */
   static decode(str) {
@@ -170,12 +170,6 @@ export default class AccessMode {
     return a1 & ~a2;
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Custom formatter
    */
   toString() {
@@ -183,12 +177,6 @@ export default class AccessMode {
       '", "given": "' + AccessMode.encode(this.given) +
       '", "want": "' + AccessMode.encode(this.want) + '"}';
   }
-  /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
   /**
    * Converts numeric values to strings.
    */
@@ -200,28 +188,16 @@ export default class AccessMode {
     };
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Assign value to 'mode'.
    * @memberof Tinode.AccessMode
    *
-   * @param {string | Number} m - either a string representation of the access mode or a set of bits.
+   * @param {string | number} m - either a string representation of the access mode or a set of bits.
    * @returns {AccessMode} - <code>this</code> AccessMode.
    */
   setMode(m) {
     this.mode = AccessMode.decode(m);
     return this;
   }
-  /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
   /**
    * Update <code>mode</code> value.
    * @memberof Tinode.AccessMode
@@ -234,12 +210,6 @@ export default class AccessMode {
     return this;
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Get <code>mode</code> value as a string.
    * @memberof Tinode.AccessMode
    *
@@ -249,28 +219,16 @@ export default class AccessMode {
     return AccessMode.encode(this.mode);
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Assign <code>given</code>  value.
    * @memberof Tinode.AccessMode
    *
-   * @param {string | Number} g - either a string representation of the access mode or a set of bits.
+   * @param {string | number} g - either a string representation of the access mode or a set of bits.
    * @returns {AccessMode} - <code>this</code> AccessMode.
    */
   setGiven(g) {
     this.given = AccessMode.decode(g);
     return this;
   }
-  /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
   /**
    * Update 'given' value.
    * @memberof Tinode.AccessMode
@@ -283,12 +241,6 @@ export default class AccessMode {
     return this;
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Get 'given' value as a string.
    * @memberof Tinode.AccessMode
    *
@@ -298,28 +250,16 @@ export default class AccessMode {
     return AccessMode.encode(this.given);
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Assign 'want' value.
    * @memberof Tinode.AccessMode
    *
-   * @param {string | Number} w - either a string representation of the access mode or a set of bits.
+   * @param {string | number} w - either a string representation of the access mode or a set of bits.
    * @returns {AccessMode} - <code>this</code> AccessMode.
    */
   setWant(w) {
     this.want = AccessMode.decode(w);
     return this;
   }
-  /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
   /**
    * Update 'want' value.
    * @memberof Tinode.AccessMode
@@ -332,12 +272,6 @@ export default class AccessMode {
     return this;
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Get 'want' value as a string.
    * @memberof Tinode.AccessMode
    *
@@ -346,12 +280,6 @@ export default class AccessMode {
   getWant() {
     return AccessMode.encode(this.want);
   }
-  /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
   /**
    * Get permissions present in 'want' but missing in 'given'.
    * Inverse of {@link Tinode.AccessMode#getExcessive}
@@ -364,12 +292,6 @@ export default class AccessMode {
     return AccessMode.encode(this.want & ~this.given);
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Get permissions present in 'given' but missing in 'want'.
    * Inverse of {@link Tinode.AccessMode#getMissing}
    * @memberof Tinode.AccessMode
@@ -379,12 +301,6 @@ export default class AccessMode {
   getExcessive() {
     return AccessMode.encode(this.given & ~this.want);
   }
-  /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
   /**
    * Update 'want', 'give', and 'mode' values.
    * @memberof Tinode.AccessMode
@@ -401,12 +317,6 @@ export default class AccessMode {
     return this;
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Check if Owner (O) flag is set.
    * @memberof Tinode.AccessMode
    * @param {string=} side - which permission to check: given, want, mode; default: mode.
@@ -415,12 +325,6 @@ export default class AccessMode {
   isOwner(side) {
     return AccessMode.#checkFlag(this, side, AccessMode._OWNER);
   }
-  /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
   /**
    * Check if Presence (P) flag is set.
    * @memberof Tinode.AccessMode
@@ -431,12 +335,6 @@ export default class AccessMode {
     return AccessMode.#checkFlag(this, side, AccessMode._PRES);
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Check if Presence (P) flag is NOT set.
    * @memberof Tinode.AccessMode
    * @param {string=} side - which permission to check: given, want, mode; default: mode.
@@ -445,12 +343,6 @@ export default class AccessMode {
   isMuted(side) {
     return !this.isPresencer(side);
   }
-  /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
   /**
    * Check if Join (J) flag is set.
    * @memberof Tinode.AccessMode
@@ -461,12 +353,6 @@ export default class AccessMode {
     return AccessMode.#checkFlag(this, side, AccessMode._JOIN);
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Check if Reader (R) flag is set.
    * @memberof Tinode.AccessMode
    * @param {string=} side - which permission to check: given, want, mode; default: mode.
@@ -475,12 +361,6 @@ export default class AccessMode {
   isReader(side) {
     return AccessMode.#checkFlag(this, side, AccessMode._READ);
   }
-  /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
   /**
    * Check if Writer (W) flag is set.
    * @memberof Tinode.AccessMode
@@ -491,12 +371,6 @@ export default class AccessMode {
     return AccessMode.#checkFlag(this, side, AccessMode._WRITE);
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Check if Approver (A) flag is set.
    * @memberof Tinode.AccessMode
    * @param {string=} side - which permission to check: given, want, mode; default: mode.
@@ -505,12 +379,6 @@ export default class AccessMode {
   isApprover(side) {
     return AccessMode.#checkFlag(this, side, AccessMode._APPROVE);
   }
-  /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
   /**
    * Check if either one of Owner (O) or Approver (A) flags is set.
    * @memberof Tinode.AccessMode
@@ -521,12 +389,6 @@ export default class AccessMode {
     return this.isOwner(side) || this.isApprover(side);
   }
   /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
-  /**
    * Check if either one of Owner (O), Approver (A), or Sharer (S) flags is set.
    * @memberof Tinode.AccessMode
    * @param {string=} side - which permission to check: given, want, mode; default: mode.
@@ -535,12 +397,6 @@ export default class AccessMode {
   isSharer(side) {
     return this.isAdmin(side) || AccessMode.#checkFlag(this, side, AccessMode._SHARE);
   }
-  /**
-   * AccessMode is a class representing topic access mode.
-   *
-   * @memberof Tinode
-   * @class AccessMode
-   */
   /**
    * Check if Deleter (D) flag is set.
    * @memberof Tinode.AccessMode

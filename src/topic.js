@@ -1,7 +1,7 @@
 /**
  * @file Topic management.
  *
- * @copyright 2015-2025 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  */
 'use strict';
 
@@ -27,19 +27,19 @@ export default class Topic {
    * Create topic.
    * @param {string} name - Name of the topic to create.
    * @param {Object=} callbacks - Object with various event callbacks.
-   * @param {callback} callbacks.onData - Callback which receives a <code>{data}</code> message.
-   * @param {callback} callbacks.onMeta - Callback which receives a <code>{meta}</code> message.
-   * @param {callback} callbacks.onPres - Callback which receives a <code>{pres}</code> message.
-   * @param {callback} callbacks.onInfo - Callback which receives an <code>{info}</code> message.
-   * @param {callback} callbacks.onMetaDesc - Callback which receives changes to topic desctioption {@link desc}.
-   * @param {callback} callbacks.onMetaSub - Called for a single subscription record change.
-   * @param {callback} callbacks.onSubsUpdated - Called after a batch of subscription changes have been recieved and cached.
-   * @param {callback} callbacks.onDeleteTopic - Called after the topic is deleted.
-   * @param {callback} callbacks.onTagsUpdated - Called after user discovery tags are updated.
-   * @param {callback} callbacks.onCredsUpdated - Called after credentials are updated.
-   * @param {callback} callbacks.onAuxUpdated - Called after auxiliary data is updated.
-   * @param {callback} callbacks.onReact - Called after message reactions are updated.
-   * @param {callback} callbacks.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
+   * @param {Function} callbacks.onData - Callback which receives a <code>{data}</code> message.
+   * @param {Function} callbacks.onMeta - Callback which receives a <code>{meta}</code> message.
+   * @param {Function} callbacks.onPres - Callback which receives a <code>{pres}</code> message.
+   * @param {Function} callbacks.onInfo - Callback which receives an <code>{info}</code> message.
+   * @param {Function} callbacks.onMetaDesc - Callback which receives changes to topic desctioption {@link desc}.
+   * @param {Function} callbacks.onMetaSub - Called for a single subscription record change.
+   * @param {Function} callbacks.onSubsUpdated - Called after a batch of subscription changes have been recieved and cached.
+   * @param {Function} callbacks.onDeleteTopic - Called after the topic is deleted.
+   * @param {Function} callbacks.onTagsUpdated - Called after user discovery tags are updated.
+   * @param {Function} callbacks.onCredsUpdated - Called after credentials are updated.
+   * @param {Function} callbacks.onAuxUpdated - Called after auxiliary data is updated.
+   * @param {Function} callbacks.onReact - Called after message reactions are updated.
+   * @param {Function} callbacks.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
    */
   constructor(name, callbacks) {
     // Parent Tinode object.
@@ -118,7 +118,7 @@ export default class Topic {
     // The topic is deleted at the server, this is a local copy.
     this._deleted = false;
 
-    // Timer used to trgger {leave} request after a delay.
+    // Timer used to trigger {leave} request after a delay.
     this._delayedLeaveTimer = null;
 
     // Callbacks
@@ -368,6 +368,7 @@ export default class Topic {
 
     // Extract refereces to attachments and out of band image records.
     let attachments = null;
+    console.log("Publishing message", pub);
     if (Drafty.hasEntities(pub.content)) {
       attachments = [];
       Drafty.entities(pub.content, data => {
@@ -505,7 +506,7 @@ export default class Topic {
    * Request topic metadata from the local cache or from the server.
    * @memberof Tinode.Topic#
    *
-   * @param {Tinode.GetQuery} request parameters
+   * @param {Tinode.GetQuery} params - request parameters
    *
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
@@ -520,10 +521,11 @@ export default class Topic {
    * (newer=false).
    * @memberof Tinode.Topic#
    *
-   * @param {number} limit number of messages to get.
+   * @param {number} limit - number of messages to get.
    * @param {Array.<Range>} gaps - ranges of messages to load.
-   * @param {number} min if non-negative, request newer messages with seq >= min.
-   * @param {number} max if positive, request older messages with seq < max.
+   * @param {number} min - if non-negative, request newer messages with seq >= min.
+   * @param {number} max - if positive, request older messages with seq < max.
+   * @param {boolean} newer - if true, fetch newer messages; if false, fetch older messages.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   getMessagesPage(limit, gaps, min, max, newer) {
@@ -620,7 +622,7 @@ export default class Topic {
    * Update topic metadata.
    * @memberof Tinode.Topic#
    *
-   * @param {Tinode.SetParams} params parameters to update.
+   * @param {Tinode.SetParams} params - parameters to update.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   setMeta(params) {
@@ -680,7 +682,7 @@ export default class Topic {
       });
   }
   /**
-   * Update access mode of the current user or of another topic subsriber.
+   * Update access mode of the current user or of another topic subscriber.
    * @memberof Tinode.Topic#
    *
    * @param {string} uid - UID of the user to update or null to update current user.
@@ -982,7 +984,7 @@ export default class Topic {
    * Delete topic. Requires Owner permission. Wrapper for {@link Tinode#delTopic}.
    * @memberof Tinode.Topic#
    *
-   * @param {boolean} hard - had-delete topic.
+   * @param {boolean} hard - hard-delete topic.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to the request.
    */
   delTopic(hard) {
@@ -1066,7 +1068,7 @@ export default class Topic {
    * Send a 'recv' receipt. Wrapper for {@link Tinode#noteRecv}.
    * @memberof Tinode.Topic#
    *
-   * @param {number} seq - ID of the message to aknowledge.
+   * @param {number} seq - ID of the message to acknowledge.
    */
   noteRecv(seq) {
     this.note('recv', seq);
@@ -1075,7 +1077,7 @@ export default class Topic {
    * Send a 'read' receipt. Wrapper for {@link Tinode#noteRead}.
    * @memberof Tinode.Topic#
    *
-   * @param {number} seq - ID of the message to aknowledge or 0/undefined to acknowledge the latest messages.
+   * @param {number} seq - ID of the message to acknowledge or 0/undefined to acknowledge the latest messages.
    */
   noteRead(seq) {
     seq = seq || this._maxSeq;
@@ -1095,9 +1097,9 @@ export default class Topic {
     }
   }
   /**
-   * Send a notification than a video or audio message is . Wrapper for {@link Tinode#noteKeyPress}.
+   * Send a notification that a video or audio message is being recorded. Wrapper for {@link Tinode#noteKeyPress}.
    * @memberof Tinode.Topic#
-   * @param audioOnly - true if the recording is audio-only, false if it's a video recording.
+   * @param {boolean} audioOnly - true if the recording is audio-only, false if it's a video recording.
    */
   noteRecording(audioOnly) {
     if (this._attached) {
@@ -1112,7 +1114,7 @@ export default class Topic {
    * @memberof Tinode#
    *
    * @param {string} evt - Call event.
-   * @param {int} seq - ID of the call message the event pertains to.
+   * @param {number} seq - ID of the call message the event pertains to.
    * @param {string} payload - Payload associated with this event (e.g. SDP string).
    */
   videoCall(evt, seq, payload) {
@@ -2102,7 +2104,7 @@ export default class Topic {
       this.onMetaDesc(this);
     }
   }
-  // Called by Tinode when meta.sub is recived, in response to received
+  // Called by Tinode when meta.sub is received, in response to received
   // {ctrl} after setMeta-sub, or as a handler for {pres what=sub}.
   _processMetaSubs(subs) {
     for (let idx in subs) {
@@ -2145,7 +2147,7 @@ export default class Topic {
       this.onSubsUpdated(Object.keys(this._users));
     }
   }
-  // Called by Tinode when meta.tags is recived.
+  // Called by Tinode when meta.tags is received.
   _processMetaTags(tags) {
     if (tags == Const.DEL_CHAR || (tags.length == 1 && tags[0] == Const.DEL_CHAR)) {
       tags = [];
@@ -2159,7 +2161,7 @@ export default class Topic {
   // Do nothing for topics other than 'me'
   _processMetaCreds(creds) {}
 
-  // Called by Tinode when meta.aux is recived.
+  // Called by Tinode when meta.aux is received.
   _processMetaAux(aux) {
     aux = (!aux || aux == Const.DEL_CHAR) ? {} : aux;
     this._aux = mergeObj(this._aux, aux);
@@ -2371,7 +2373,7 @@ export default class Topic {
     cached = mergeObj(cached || {}, obj);
     // Save to global cache
     this._cachePutUser(uid, cached);
-    // Save to the list of topic subsribers.
+    // Save to the list of topic subscribers.
     return mergeToCache(this._users, uid, cached);
   }
   // Get local seqId for a queued message.

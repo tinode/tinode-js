@@ -1,7 +1,7 @@
 /**
  * @file Utilities for uploading and downloading files.
  *
- * @copyright 2015-2023 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  */
 'use strict';
 
@@ -44,12 +44,12 @@ export default class LargeFileHelper {
    *
    * @memberof Tinode.LargeFileHelper#
    *
-   * @param {string} baseUrl base URL of upload server.
-   * @param {File|Blob} data data to upload.
-   * @param {string} avatarFor topic name if the upload represents an avatar.
-   * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
-   * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
-   * @param {Callback} onFailure callback. Called in case of a failure.
+   * @param {string} baseUrl - base URL of upload server.
+   * @param {File|Blob} data - data to upload.
+   * @param {string} avatarFor - topic name if the upload represents an avatar.
+   * @param {Function} onProgress - callback. Takes one {number} parameter 0..1
+   * @param {Function} onSuccess - callback. Called when the file is successfully uploaded.
+   * @param {Function} onFailure - callback. Called in case of a failure.
    *
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
@@ -172,11 +172,11 @@ export default class LargeFileHelper {
    *
    * @memberof Tinode.LargeFileHelper#
    *
-   * @param {File|Blob} data to upload
-   * @param {string} avatarFor topic name if the upload represents an avatar.
-   * @param {Callback} onProgress callback. Takes one {float} parameter 0..1
-   * @param {Callback} onSuccess callback. Called when the file is successfully uploaded.
-   * @param {Callback} onFailure callback. Called in case of a failure.
+   * @param {File|Blob} data - data to upload.
+   * @param {string} avatarFor - topic name if the upload represents an avatar.
+   * @param {Function} onProgress - callback. Takes one {number} parameter 0..1
+   * @param {Function} onSuccess - callback. Called when the file is successfully uploaded.
+   * @param {Function} onFailure - callback. Called in case of a failure.
    *
    * @returns {Promise} resolved/rejected when the upload is completed/failed.
    */
@@ -317,7 +317,7 @@ export default class LargeFileHelper {
    * To use LargeFileHelper in a non browser context, supply XMLHttpRequest provider.
    * @static
    * @memberof LargeFileHelper
-   * @param xhrProvider XMLHttpRequest provider, e.g. for node <code>require('xhr')</code>.
+   * @param {Object} xhrProvider - XMLHttpRequest provider, e.g. for node <code>require('xhr')</code>.
    */
   static setNetworkProvider(xhrProvider) {
     XHRProvider = xhrProvider;

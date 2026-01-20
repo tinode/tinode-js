@@ -1,7 +1,7 @@
 /**
  * @file Definition of 'me' topic.
  *
- * @copyright 2015-2025 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  */
 'use strict';
 
@@ -121,7 +121,7 @@ export default class TopicMe extends Topic {
     }
   }
 
-  // Called by Tinode when meta.sub is recived.
+  // Called by Tinode when meta.sub is received.
   _processMetaCreds(creds, upd) {
     if (creds.length == 1 && creds[0] == Const.DEL_CHAR) {
       creds = [];
@@ -206,7 +206,7 @@ export default class TopicMe extends Topic {
         case 'acs': // access mode changed
           // If 'tgt' is not set then this is an update to the permissions of the current user.
           // Otherwise it's an update to group topic subscriber permissions while the topic is offline.
-          // Just gnore it then.
+          // Just ignore it then.
           if (!pres.tgt) {
             if (cont.acs) {
               cont.acs.updateAll(pres.dacs);
@@ -313,7 +313,7 @@ export default class TopicMe extends Topic {
   }
 
   /**
-   * Publishing to TopicMe is not supported. {@link Topic#publish} is overriden and thows an {Error} if called.
+   * Publishing to TopicMe is not supported. {@link Topic#publish} is overridden and throws an {Error} if called.
    * @memberof Tinode.TopicMe#
    * @throws {Error} Always throws an error.
    */
@@ -325,8 +325,8 @@ export default class TopicMe extends Topic {
    * Delete validation credential.
    * @memberof Tinode.TopicMe#
    *
-   * @param {string} topic - Name of the topic to delete
-   * @param {string} user - User ID to remove.
+   * @param {string} method - Validation method such as 'email' or 'tel'.
+   * @param {string} value - Credential value to delete.
    * @returns {Promise} Promise which will be resolved/rejected on receiving server reply.
    */
   delCredential(method, value) {
@@ -352,7 +352,7 @@ export default class TopicMe extends Topic {
 
   /**
    * @callback contactFilter
-   * @param {Object} contact to check for inclusion.
+   * @param {Object} contact - contact to check for inclusion.
    * @returns {boolean} <code>true</code> if contact should be processed, <code>false</code> to exclude it.
    */
   /**

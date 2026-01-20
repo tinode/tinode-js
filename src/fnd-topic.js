@@ -1,7 +1,7 @@
 /**
  * @file Definition of 'fnd' topic.
  *
- * @copyright 2015-2023 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  */
 'use strict';
 
@@ -64,7 +64,7 @@ export default class TopicFnd extends Topic {
   /**
    * setMeta to TopicFnd resets contact list in addition to sending the message.
    * @memberof Tinode.TopicFnd#
-   * @param {Tinode.SetParams} params parameters to update.
+   * @param {Tinode.SetParams} params - parameters to update.
    * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   setMeta(params) {
@@ -80,8 +80,9 @@ export default class TopicFnd extends Topic {
 
   /**
    * Check if the given tag is unique by asking the server.
-   * @param tag tag to check.
-   * @return promise to be resolved with true if the tag is unique, false otherwise.
+   * @param {string} tag - tag to check.
+   * @param {string} caller - identifier of the caller.
+   * @returns {Promise} promise to be resolved with true if the tag is unique, false otherwise.
    */
   checkTagUniqueness(tag, caller) {
     return new Promise((resolve, reject) => {
