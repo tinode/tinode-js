@@ -1429,7 +1429,6 @@ Drafty.appendTheCard = function(content, theCardData) {
     data: theCardData
   });
 
-  console.log('Appended TheCard entity:', content);
   return content;
 }
 /**

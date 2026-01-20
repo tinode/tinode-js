@@ -1665,7 +1665,6 @@ export class Tinode {
     }
     pkt.pub.noecho = noEcho;
     pkt.pub.content = content;
-    console.log("Tinode.createMessage", pkt.pub);
     return pkt.pub;
   }
 

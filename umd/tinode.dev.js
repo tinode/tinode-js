@@ -2391,7 +2391,6 @@ Drafty.appendTheCard = function (content, theCardData) {
     tp: 'TC',
     data: theCardData
   });
-  console.log('Appended TheCard entity:', content);
   return content;
 };
 Drafty.UNSAFE_toHTML = function (doc) {
@@ -4733,7 +4732,6 @@ class Topic {
     pub._sending = true;
     pub._failed = false;
     let attachments = null;
-    console.log("Publishing message", pub);
     if (_drafty_js__WEBPACK_IMPORTED_MODULE_4___default().hasEntities(pub.content)) {
       attachments = [];
       _drafty_js__WEBPACK_IMPORTED_MODULE_4___default().entities(pub.content, data => {
@@ -7386,7 +7384,6 @@ class Tinode {
     }
     pkt.pub.noecho = noEcho;
     pkt.pub.content = content;
-    console.log("Tinode.createMessage", pkt.pub);
     return pkt.pub;
   }
   publish(topicName, content, noEcho) {

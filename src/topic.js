@@ -368,7 +368,6 @@ export default class Topic {
 
     // Extract refereces to attachments and out of band image records.
     let attachments = null;
-    console.log("Publishing message", pub);
     if (Drafty.hasEntities(pub.content)) {
       attachments = [];
       Drafty.entities(pub.content, data => {
