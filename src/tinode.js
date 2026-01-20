@@ -1863,7 +1863,7 @@ export class Tinode {
     const what = [];
 
     if (params) {
-      ['desc', 'sub', 'tags', 'cred', 'aux'].forEach(key => {
+      ['desc', 'sub', 'tags', 'cred', 'aux', 'react'].forEach(key => {
         if (params.hasOwnProperty(key)) {
           what.push(key);
           pkt.set[key] = params[key];
@@ -2015,9 +2015,6 @@ export class Tinode {
    * @param {number} seq - ID of the call message the event pertains to.
    * @param {string} evt - Call event.
    * @param {string} payload - Payload associated with this event (e.g. SDP string).
-   *
-   * @returns {Promise} Promise (for some call events) which will
-   *                    be resolved/rejected on receiving server reply
    */
   videoCall(topicName, seq, evt, payload) {
     const pkt = this.#initPacket('note', topicName);
@@ -2025,7 +2022,24 @@ export class Tinode {
     pkt.note.what = 'call';
     pkt.note.event = evt;
     pkt.note.payload = payload;
-    this.#send(pkt, pkt.note.id);
+    this.#send(pkt);
+  }
+
+  /**
+   * Send a 'react' note to indicate the user reacted to (or removed reaction from) a message.
+   *
+   * @param {string} topicName - Name of the topic where the message to react to was posted.
+   * @param {int} seq - ID of the message to react to.
+   * @param {string} emo - Emoji string to add as reaction, or Tinode.DEL_CHAR to remove reaction.
+   */
+  react(topicName, seq, emo) {
+    const pkt = this.#initPacket('note', topicName);
+    pkt.note.seq = seq;
+    pkt.note.what = 'react';
+    pkt.note.payload = {
+      emo
+    };
+    this.#send(pkt);
   }
 
   /**
@@ -2361,14 +2375,16 @@ Tinode.MESSAGE_STATUS_TO_ME = Const.MESSAGE_STATUS_TO_ME;
 Tinode.DEL_CHAR = Const.DEL_CHAR;
 
 // Names of keys to server-provided configuration limits.
-Tinode.MAX_MESSAGE_SIZE = 'maxMessageSize';
-Tinode.MAX_SUBSCRIBER_COUNT = 'maxSubscriberCount';
-Tinode.MIN_TAG_LENGTH = 'minTagLength';
-Tinode.MAX_TAG_LENGTH = 'maxTagLength';
-Tinode.MAX_TAG_COUNT = 'maxTagCount';
-Tinode.MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
-Tinode.REQ_CRED_VALIDATORS = 'reqCred';
-Tinode.MSG_DELETE_AGE = 'msgDelAge';
+Tinode.MAX_MESSAGE_SIZE = Const.MAX_MESSAGE_SIZE;
+Tinode.MAX_SUBSCRIBER_COUNT = Const.MAX_SUBSCRIBER_COUNT;
+Tinode.MIN_TAG_LENGTH = Const.MIN_TAG_LENGTH;
+Tinode.MAX_TAG_LENGTH = Const.MAX_TAG_LENGTH;
+Tinode.MAX_TAG_COUNT = Const.MAX_TAG_COUNT;
+Tinode.MAX_FILE_UPLOAD_SIZE = Const.MAX_FILE_UPLOAD_SIZE;
+Tinode.REQ_CRED_VALIDATORS = Const.REQ_CRED_VALIDATORS;
+Tinode.MSG_DELETE_AGE = Const.MSG_DELETE_AGE;
+Tinode.REACTION_LIST = Const.REACTION_LIST;
+Tinode.MAX_REACTIONS = Const.MAX_REACTIONS;
 
 // Tinode URI topic ID prefix, 'scheme:path/'.
 Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';

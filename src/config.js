@@ -69,3 +69,15 @@ export const BACKOFF_BASE = 2_000;
 export const BACKOFF_MAX_ITER = 10;
 // Random jitter between reconnection attempts, 0.3 -> 30% jitter.
 export const BACKOFF_JITTER = 0.3;
+
+// Names of keys to server-provided configuration limits.
+export const MAX_MESSAGE_SIZE = 'maxMessageSize';
+export const MAX_SUBSCRIBER_COUNT = 'maxSubscriberCount';
+export const MIN_TAG_LENGTH = 'minTagLength';
+export const MAX_TAG_LENGTH = 'maxTagLength';
+export const MAX_TAG_COUNT = 'maxTagCount';
+export const MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
+export const REQ_CRED_VALIDATORS = 'reqCred';
+export const MSG_DELETE_AGE = 'msgDelAge';
+export const REACTION_LIST = 'reactions';
+export const MAX_REACTIONS = 'maxReactions';

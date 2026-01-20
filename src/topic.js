@@ -1,7 +1,7 @@
 /**
  * @file Topic management.
  *
- * @copyright 2015-2025 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  */
 'use strict';
 
@@ -24,23 +24,22 @@ import {
  */
 export default class Topic {
   /**
-   * @callback onData
-   * @param {Data} data - Data packet
-   */
-
-  /**
    * Create topic.
    * @param {string} name - Name of the topic to create.
    * @param {Object=} callbacks - Object with various event callbacks.
-   * @param {onData} callbacks.onData - Callback which receives a <code>{data}</code> message.
+   * @param {Function} callbacks.onData - Callback which receives a <code>{data}</code> message.
    * @param {Function} callbacks.onMeta - Callback which receives a <code>{meta}</code> message.
    * @param {Function} callbacks.onPres - Callback which receives a <code>{pres}</code> message.
    * @param {Function} callbacks.onInfo - Callback which receives an <code>{info}</code> message.
-   * @param {Function} callbacks.onMetaDesc - Callback which receives changes to topic description {@link desc}.
+   * @param {Function} callbacks.onMetaDesc - Callback which receives changes to topic desctioption {@link desc}.
    * @param {Function} callbacks.onMetaSub - Called for a single subscription record change.
-   * @param {Function} callbacks.onSubsUpdated - Called after a batch of subscription changes have been received and cached.
+   * @param {Function} callbacks.onSubsUpdated - Called after a batch of subscription changes have been recieved and cached.
    * @param {Function} callbacks.onDeleteTopic - Called after the topic is deleted.
-   * @param {Function} callbacks.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been received.
+   * @param {Function} callbacks.onTagsUpdated - Called after user discovery tags are updated.
+   * @param {Function} callbacks.onCredsUpdated - Called after credentials are updated.
+   * @param {Function} callbacks.onAuxUpdated - Called after auxiliary data is updated.
+   * @param {Function} callbacks.onReact - Called after message reactions are updated.
+   * @param {Function} callbacks.onAllMessagesReceived - Called when all requested <code>{data}</code> messages have been recived.
    */
   constructor(name, callbacks) {
     // Parent Tinode object.
@@ -63,6 +62,16 @@ export default class Topic {
     this.public = null;
     // Per-topic system-provided data (accessible by all users).
     this.trusted = null;
+    // Last known messge sequence number.
+    this.seq = 0;
+    // Last known read message ID.
+    this.read = 0;
+    // Last known received message ID.
+    this.recv = 0;
+    // Last known deleted message ID.
+    this.clear = 0;
+    // Last known reaction ID.
+    this.mrrid = 0;
 
     // Locally cached data
     // Subscribed users, for tracking read/recv/msg notifications.
@@ -79,6 +88,8 @@ export default class Topic {
     this._noEarlierMsgs = false;
     // The maximum known deletion ID.
     this._maxDel = 0;
+    // The maximum seen reaction ID, same logic as read.
+    this._mrrSeen = 0;
     // Timer object used to send 'recv' notifications.
     this._recvNotificationTimer = null;
 
@@ -125,6 +136,7 @@ export default class Topic {
       this.onTagsUpdated = callbacks.onTagsUpdated;
       this.onCredsUpdated = callbacks.onCredsUpdated;
       this.onAuxUpdated = callbacks.onAuxUpdated;
+      this.onReact = callbacks.onReact;
       this.onDeleteTopic = callbacks.onDeleteTopic;
       this.onAllMessagesReceived = callbacks.onAllMessagesReceived;
     }
@@ -660,6 +672,10 @@ export default class Topic {
         if (params.aux) {
           this._processMetaAux(params.aux);
         }
+        if (params.react) {
+          params.react.mrrid = ctrl.params?.mrrid | 0;
+          this._processMetaReact(undefined, params.react);
+        }
 
         return ctrl;
       });
@@ -789,6 +805,70 @@ export default class Topic {
   pinnedTopicRank(topic) {
     // Unsupported for non-me topics.
     return 0;
+  }
+
+  /**
+   * Send or remove a reaction for a message in this topic.
+   * If the same reaction from the current user is already present, remove it.
+   *
+   * @param {int} seq - ID of the message to react to.
+   * @param {string} emo - Emoji string to add as reaction, or Tinode.DEL_CHAR to remove reaction.
+   */
+  react(seq, emo) {
+    if (!seq || !emo) {
+      return Promise.reject(new Error("Invalid parameters"));
+    }
+    const curr = this.msgMyReaction(seq);
+    if (curr == emo) {
+      // Treat the same value as toggle.
+      emo = Const.DEL_CHAR;
+    }
+    this.setMeta({
+      react: {
+        seq: seq,
+        val: emo
+      }
+    });
+  }
+
+  /**
+   * Get a list of allowed reactions for this topic.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {Array.<string>} Array of allowed reaction strings.
+   */
+  reactions() {
+    const react = this.aux('react');
+    if (react) {
+      return react.vals;
+    }
+    return this._tinode.getServerParam(Const.REACTION_LIST);
+  }
+
+  /**
+   * Get maximum number of allowed reaction types per message for this topic.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {number} maxumum number of allowed reaction types per message.
+   */
+  maxReactions() {
+    const react = this.aux('react');
+    if (react) {
+      return react.max;
+    }
+    return this._tinode.getServerParam(Const.MAX_REACTIONS, 0);
+  }
+
+  /**
+   * Mark all known reactions as seen.
+   * @memberof Tinode.Topic#
+   */
+  markReactionsSeen() {
+    if (this._mrrSeen != this.mrrid) {
+      this._mrrSeen = this.mrrid;
+      // Sent a notification to 'me' listeners.
+      this._tinode.getMeTopic()._refreshContact('react', this);
+    }
   }
 
   /**
@@ -1035,16 +1115,13 @@ export default class Topic {
    * @param {string} evt - Call event.
    * @param {number} seq - ID of the call message the event pertains to.
    * @param {string} payload - Payload associated with this event (e.g. SDP string).
-   *
-   * @returns {Promise} Promise (for some call events) which will
-   *                    be resolved/rejected on receiving server reply
    */
   videoCall(evt, seq, payload) {
     if (!this._attached && !['ringing', 'hang-up'].includes(evt)) {
       // Cannot {call} on an inactive topic".
       return;
     }
-    return this._tinode.videoCall(this.name, seq, evt, payload);
+    this._tinode.videoCall(this.name, seq, evt, payload);
   }
 
   // Update cached read/recv/unread counts for the current user.
@@ -1381,6 +1458,48 @@ export default class Topic {
   msgRecvCount(seq) {
     return this.msgReceiptCount('recv', seq);
   }
+
+  /**
+   * Return reactions for the message with the given seq id if present.
+   * @memberof Tinode.Topic#
+   * @param {number} seq - message seq id.
+   * @returns {Array} array of reaction objects or empty array.
+   */
+  msgReactions(seq) {
+    const msg = this.findMessage(seq);
+    if (!msg) {
+      return [];
+    }
+    return msg.react || [];
+  }
+
+  /**
+   * Return current user's reaction value for the given message.
+   * @memberof Tinode.Topic#
+   * @param {number} seq - message seq id.
+   * @returns {string|null} current user's reaction value or null.
+   */
+  msgMyReaction(seq) {
+    const reactions = this.msgReactions(seq);
+    const me = this._tinode.getCurrentUserID();
+    for (let i = 0; i < reactions.length; i++) {
+      if ((reactions[i].users || []).includes(me)) {
+        return reactions[i].val;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if topic has unseen reactions.
+   * @memberof Tinode.Topic#
+   *
+   * @returns {boolean} true if there are unseen reactions, false otherwise.
+   */
+  hasUnseenReactions() {
+    return this.mrrid > this._mrrSeen;
+  }
+
   /**
    * Check if cached message IDs indicate that the server may have more messages.
    * @memberof Tinode.Topic#
@@ -1754,6 +1873,24 @@ export default class Topic {
       data.content = Drafty.updateVideoCall(data.content, upd);
     }
 
+    // Normalize reactions payload if present: server uses 'react' field with array of
+    // {value, count, users}.
+    if (data.react) {
+      let maxReact = 0;
+      data.react = (data.react || []).map(r => {
+        maxReact = Math.max(maxReact, r.mrrid);
+        return {
+          mrrid: r.mrrid,
+          val: r.val,
+          count: r.count | 0,
+          users: Array.isArray(r.users) ? r.users.slice() : []
+        };
+      });
+      if (this.mrrid < maxReact) {
+        this.mrrid = maxReact;
+      }
+    }
+
     if (!data._noForwarding) {
       this._messages.put(data);
       this._tinode._db.addMessage(data);
@@ -1802,6 +1939,10 @@ export default class Topic {
     if (meta.aux) {
       this._processMetaAux(meta.aux);
     }
+    if (meta.react) {
+      this._processMetaReact(meta.react);
+    }
+
     if (this.onMeta) {
       this.onMeta(meta);
     }
@@ -1839,6 +1980,15 @@ export default class Topic {
       case 'aux':
         // Auxiliary data updated.
         this.getMeta(this.startMetaQuery().withAux().build());
+        break;
+      case 'react':
+        // Reaction to message.
+        this._processMetaReact(undefined, {
+          mrrid: pres.id2 | 0,
+          seq: pres.seq | 0,
+          user: pres.act,
+          val: pres.val,
+        });
         break;
       case 'acs':
         uid = pres.src || this._tinode.getCurrentUserID();
@@ -1879,6 +2029,7 @@ export default class Topic {
       this.onPres(pres);
     }
   }
+
   // Process {info} message
   _routeInfo(info) {
     switch (info.what) {
@@ -2019,6 +2170,129 @@ export default class Topic {
     }
   }
 
+  // Handle an incremental reaction update for a message.
+  // delta: {val, users: [user]}
+  // The users could be empty or contain exactly one user.
+  // 1. If user has already reacted with the same emoji, remove the reaction.
+  // 2. If user has already reacted with a different emoji, change the reaction.
+  // 3. If user has not reacted yet, add the reaction to the same emoji, if present.
+  // 4. If user has not reacted yet, and no one reacted that way, create a new reaction.
+  _handleReactionDiff(msg, delta) {
+    const reacts = [...(msg.react || [])];
+    // Find if the given user has already reacted.
+    const user = delta.users[0];
+    const found = user ? reacts.findIndex(r => r.users.includes(user)) : -1;
+    if (found >= 0) {
+      const existing = reacts[found];
+      if (delta.val == Const.DEL_CHAR || existing.val == delta.val) {
+        // Remove existing reaction.
+        existing.count--;
+        existing.mrrid = Math.max(existing.mrrid, delta.mrrid);
+        if (existing.count <= 0) {
+          reacts.splice(found, 1);
+        } else {
+          const userIdx = existing.users.indexOf(user);
+          existing.users.splice(userIdx, 1);
+        }
+      } else {
+        // User changed reaction.
+        const userIdx = existing.users.indexOf(user);
+        existing.users.splice(userIdx, 1);
+        existing.count--;
+        if (existing.count <= 0) {
+          reacts.splice(found, 1);
+        }
+        // Add user reaction as a different emoji.
+        const emoIndex = reacts.findIndex(r => r.val == delta.val);
+        if (emoIndex >= 0) {
+          // Add to existing reaction.
+          reacts[emoIndex].users.push(user);
+          reacts[emoIndex].count++;
+          reacts[emoIndex].mrrid = Math.max(reacts[emoIndex].mrrid, delta.mrrid);
+        } else {
+          // Create new reaction.
+          reacts.push({
+            mrrid: delta.mrrid,
+            users: [user],
+            count: 1,
+            val: delta.val
+          });
+        }
+      }
+    } else if (delta.val != Const.DEL_CHAR) {
+      // Existing user has not reacted yet.
+      // Find reaction of the same type.
+      const emoIndex = reacts.findIndex(r => r.val == delta.val);
+      if (emoIndex >= 0) {
+        // Add to existing reaction.
+        if (user) {
+          reacts[emoIndex].users.push(user);
+        }
+        reacts[emoIndex].count++;
+        reacts[emoIndex].mrrid = Math.max(reacts[emoIndex].mrrid, delta.mrrid);
+      } else {
+        // Create new reaction.
+        reacts.push({
+          mrrid: delta.mrrid,
+          users: user ? [user] : [],
+          count: 1,
+          val: delta.val
+        });
+      }
+    }
+    return reacts;
+  }
+
+  // Called by Tinode when meta.aux is recived.
+  _processMetaReact(reacts, oneReaction) {
+    if (!Array.isArray(reacts)) {
+      if (!oneReaction.seq || !oneReaction.val) {
+        this._tinode.logger("WARNING: invalid reaction");
+        return;
+      }
+      reacts = [{
+        _diff: true, // Indicate that this is a delta update.
+        seq: oneReaction.seq,
+        data: [{
+          mrrid: oneReaction.mrrid,
+          val: oneReaction.val,
+          count: 1,
+          users: [oneReaction.user || this._tinode.getCurrentUserID()]
+        }]
+      }];
+    }
+    // Process reactions metadata. meta.react is an array of {seq, data: [{val, count, users}]}
+    const seqIds = [];
+    reacts.forEach(mr => {
+      const msg = this.findMessage(mr.seq);
+      seqIds.push(mr.seq);
+      if (msg) {
+        let upd;
+        if (mr._diff) {
+          // Single incremental update.
+          upd = this._handleReactionDiff(msg, mr.data[0]);
+        } else {
+          upd = (mr.data || []).map(r => ({
+            mrrid: r.mrrid,
+            val: r.val,
+            count: r.count | 0,
+            users: Array.isArray(r.users) ? r.users.slice() : []
+          }));
+        }
+        msg.react = upd;
+        const maxReact = upd.reduce((max, r) => Math.max(max, r.mrrid), 0);
+        if (this.mrrid < maxReact) {
+          this.mrrid = maxReact;
+        }
+        this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
+      }
+    });
+    // Notify UI listeners of changes.
+    if (this.onReact) {
+      this.onReact(seqIds);
+    }
+  }
+
   // Delete cached messages and update cached transaction IDs
   _processDelMessages(clear, delseq) {
     this._maxDel = Math.max(clear, this._maxDel);
@@ -2072,6 +2346,8 @@ export default class Topic {
     this.trusted = null;
     this._maxSeq = 0;
     this._minSeq = 0;
+    this._maxDel = 0;
+    this._maxReact = 0;
     this._attached = false;
 
     const me = this._tinode.getMeTopic();
