@@ -8,19 +8,19 @@ describe('TheCard', () => {
 
   describe('constructor', () => {
     test('should create empty card', () => {
-      const card = new TheCard().getCard();
+      const card = new TheCard();
       expect(card || {}).toEqual({});
     });
 
     test('should create card with fn', () => {
-      const card = new TheCard('Alice').getCard();
+      const card = new TheCard('Alice');
       expect(card).toEqual({
         fn: 'Alice'
       });
     });
 
     test('should create card with all fields', () => {
-      const card = new TheCard('Alice', 'http://example.com/img.jpg', 'image/jpeg', 'Note').getCard();
+      const card = new TheCard('Alice', 'http://example.com/img.jpg', 'image/jpeg', 'Note');
       expect(card).toEqual({
         fn: 'Alice',
         note: 'Note',
@@ -397,6 +397,31 @@ describe('TheCard', () => {
       expect(vcard).toContain('ORG:Organization\r\n');
       expect(vcard).toContain('TITLE:Boss\r\n');
     });
+
+    test('should export card with birthday (full date)', () => {
+      const card = {
+        fn: 'Alice',
+        bday: {
+          y: 1985,
+          m: 6,
+          d: 15
+        }
+      };
+      const vcard = TheCard.exportVCard(card);
+      expect(vcard).toContain('BDAY:1985-06-15');
+    });
+
+    test('should export card with birthday (no year)', () => {
+      const card = {
+        fn: 'Alice',
+        bday: {
+          m: 6,
+          d: 15
+        }
+      };
+      const vcard = TheCard.exportVCard(card);
+      expect(vcard).toContain('BDAY:---06-15');
+    });
   });
 
   describe('importVCard', () => {
@@ -553,6 +578,199 @@ END:VCARD`;
         fn: 'Most Evil Corp',
         title: 'CEO'
       });
+    });
+
+    test('should unescape commas and other special characters in vCard fields', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John\\, Doe
+N:Doe;John\\, Jr.;;;
+NOTE:John Doe has a long and varied history\\, being documented on more police files that anyone
+ORG:Company\\, Inc.
+TITLE:CEO\\; Founder
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.fn).toBe('John, Doe');
+      expect(card.n.surname).toBe('Doe');
+      expect(card.n.given).toBe('John, Jr.');
+      expect(card.note).toBe('John Doe has a long and varied history, being documented on more police files that anyone');
+      expect(card.org.fn).toBe('Company, Inc.');
+      expect(card.org.title).toBe('CEO; Founder');
+    });
+
+    test('should decode Quoted-Printable encoded fields', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:2.1
+FN;CHARSET=UTF-8;QUOTED-PRINTABLE:=E5=8D=81=E5=9F=8E=E7=9B=AE=E7=AE=A1=E7=90=86=E5=A4=A7=E5=9E=8B=E7=9F=A5=E5=
+=BA=A7
+N;CHARSET=UTF-8;QUOTED-PRINTABLE:=E5=8D=81=E5=9F=8E;=E7=9B=AE=E7=AE=A1;;;
+ORG;ENCODING=QUOTED-PRINTABLE:=E4=BC=9A=E7=A4=BE
+TITLE;QUOTED-PRINTABLE:=E7=A4=BE=E9=95=B7
+NOTE;QUOTED-PRINTABLE:This is a note with=20special characters
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      // These are the decoded UTF-8 bytes for the Chinese characters
+      expect(card.fn).toBe('十城目管理大型知座');
+      expect(card.n.surname).toBe('十城');
+      expect(card.n.given).toBe('目管');
+      expect(card.org.fn).toBe('会社');
+      expect(card.org.title).toBe('社長');
+      expect(card.note).toBe('This is a note with special characters');
+    });
+
+    test('should parse BDAY in YYYY-MM-DD format', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+BDAY:1985-06-15
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.bday).toEqual({
+        y: 1985,
+        m: 6,
+        d: 15
+      });
+    });
+
+    test('should parse BDAY in YYYYMMDD format', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+BDAY:19850615
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.bday).toEqual({
+        y: 1985,
+        m: 6,
+        d: 15
+      });
+    });
+
+    test('should parse BDAY in YYMMDD format with YY >= 35 as 19XX', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+BDAY:850615
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.bday).toEqual({
+        y: 1985,
+        m: 6,
+        d: 15
+      });
+    });
+
+    test('should parse BDAY in YYMMDD format with YY < 35 as 20XX', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+BDAY:240315
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.bday).toEqual({
+        y: 2024,
+        m: 3,
+        d: 15
+      });
+    });
+
+    test('should parse BDAY in --MMDD format without year', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+BDAY:--0615
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.bday).toEqual({
+        m: 6,
+        d: 15
+      });
+      expect(card.bday.y).toBeUndefined();
+    });
+
+    test('should parse BDAY in ----MMDD format without year', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+BDAY:----0615
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.bday).toEqual({
+        m: 6,
+        d: 15
+      });
+      expect(card.bday.y).toBeUndefined();
+    });
+
+    test('should parse BDAY in --MM-DD format without year', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+BDAY:--06-15
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.bday).toEqual({
+        m: 6,
+        d: 15
+      });
+      expect(card.bday.y).toBeUndefined();
+    });
+
+    test('should ignore time in BDAY field', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+BDAY:1985-06-15T12:30:00Z
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.bday).toEqual({
+        y: 1985,
+        m: 6,
+        d: 15
+      });
+    });
+
+    test('should discard invalid BDAY with invalid month', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+BDAY:19851315
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.bday).toBeUndefined();
+    });
+
+    test('should discard invalid BDAY with invalid day', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+BDAY:19850632
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.bday).toBeUndefined();
+    });
+
+    test('should discard obviously invalid BDAY', () => {
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+BDAY:10007059
+END:VCARD`;
+
+      const card = TheCard.importVCard(vcard);
+      expect(card.bday).toBeUndefined();
     });
   });
 

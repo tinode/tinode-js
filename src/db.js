@@ -1,7 +1,7 @@
 /**
  * @file Helper methods for dealing with IndexedDB cache of messages, users, and topics.
  *
- * @copyright 2015-2025 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  */
 'use strict';
 
@@ -299,7 +299,7 @@ export default class DB {
    */
   updUser(uid, pub) {
     if (arguments.length < 2 || pub === undefined) {
-      // No point inupdating user with invalid data.
+      // No point in updating user with invalid data.
       return;
     }
     if (!this.isReady()) {

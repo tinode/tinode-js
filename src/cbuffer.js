@@ -6,15 +6,32 @@
 'use strict';
 
 /**
+ * Callback for iterating contents of buffer. See {@link Tinode.CBuffer#forEach}.
+ * @callback Tinode.ForEachCallbackType
+ * @param {Object} elem - Current element of the buffer.
+ * @param {Object} prev - Previous element of the buffer.
+ * @param {Object} next - Next element of the buffer.
+ * @param {number} index - Index of the current element.
+ */
+
+/**
+ * Callback for filtering the buffer. See {@link Tinode.CBuffer#filter}.
+ * @callback Tinode.FilterCallbackType
+ * @param {Object} elem - Current element of the buffer.
+ * @param {number} index - Index of the current element.
+ * @returns {boolean} <code>true</code> to keep the element, <code>false</code> to remove.
+ */
+
+/**
  * In-memory sorted cache of objects.
  *
  * @class CBuffer
  * @memberof Tinode
  * @protected
  *
- * @param {function} compare custom comparator of objects. Takes two parameters <code>a</code> and <code>b</code>;
+ * @param {Function} compare - custom comparator of objects. Takes two parameters <code>a</code> and <code>b</code>;
  *    returns <code>-1</code> if <code>a < b</code>, <code>0</code> if <code>a == b</code>, <code>1</code> otherwise.
- * @param {boolean} unique enforce element uniqueness: when <code>true</code> replace existing element with a new
+ * @param {boolean} unique - enforce element uniqueness: when <code>true</code> replace existing element with a new
  *    one on conflict; when <code>false</code> keep both elements.
  */
 export default class CBuffer {
@@ -162,16 +179,6 @@ export default class CBuffer {
   }
 
   /**
-   * Callback for iterating contents of buffer. See {@link Tinode.CBuffer#forEach}.
-   * @callback ForEachCallbackType
-   * @memberof Tinode.CBuffer#
-   * @param {Object} elem - Current element of the buffer.
-   * @param {Object} prev - Previous element of the buffer.
-   * @param {Object} next - Next element of the buffer.
-   * @param {number} index - Index of the current element.
-   */
-
-  /**
    * Apply given <code>callback</code> to all elements of the buffer.
    * @memberof Tinode.CBuffer#
    *
@@ -205,15 +212,6 @@ export default class CBuffer {
     } = this.#findNearest(elem, this.buffer, !nearest);
     return idx;
   }
-
-  /**
-   * Callback for filtering the buffer. See {@link Tinode.CBuffer#filter}.
-   * @callback FilterCallbackType
-   * @memberof Tinode.CBuffer#
-   * @param {Object} elem - Current element of the buffer.
-   * @param {number} index - Index of the current element.
-   * @returns {boolen} <code>true</code> to keep the element, <code>false</code> to remove.
-   */
 
   /**
    * Remove all elements that do not pass the test implemented by the provided callback function.

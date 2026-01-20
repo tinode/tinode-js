@@ -359,7 +359,7 @@ export class Tinode {
    * @param {string} config.transport - See {@link Tinode.Connection#transport}.
    * @param {boolean} config.secure - Use Secure WebSocket if <code>true</code>.
    * @param {string} config.platform - Optional platform identifier, one of <code>"ios"</code>, <code>"web"</code>, <code>"android"</code>.
-   * @param {boolen} config.persist - Use IndexedDB persistent storage.
+   * @param {boolean} config.persist - Use IndexedDB persistent storage.
    * @param {function} onComplete - callback to call when initialization is completed.
    */
   constructor(config, onComplete) {
@@ -1032,8 +1032,8 @@ export class Tinode {
    * To use Tinode in a non browser context, supply WebSocket and XMLHttpRequest providers.
    * @static
    *
-   * @param wsProvider <code>WebSocket</code> provider, e.g. for nodeJS , <code>require('ws')</code>.
-   * @param xhrProvider <code>XMLHttpRequest</code> provider, e.g. for node <code>require('xhr')</code>.
+   * @param {Object} wsProvider - <code>WebSocket</code> provider, e.g. for nodeJS, <code>require('ws')</code>.
+   * @param {Object} xhrProvider - <code>XMLHttpRequest</code> provider, e.g. for node <code>require('xhr')</code>.
    */
   static setNetworkProviders(wsProvider, xhrProvider) {
     WebSocketProvider = wsProvider;
@@ -1046,7 +1046,7 @@ export class Tinode {
    * To use Tinode in a non browser context, supply <code>indexedDB</code> provider.
    * @static
    *
-   * @param idbProvider <code>indexedDB</code> provider, e.g. for nodeJS , <code>require('fake-indexeddb')</code>.
+   * @param {Object} idbProvider - <code>indexedDB</code> provider, e.g. for nodeJS, <code>require('fake-indexeddb')</code>.
    */
   static setDatabaseProvider(idbProvider) {
     IndexedDBProvider = idbProvider;
@@ -1057,7 +1057,7 @@ export class Tinode {
    * Return information about the current name and version of this Tinode library.
    * @static
    *
-   * @returns {string} the name of the library and it's version.
+   * @returns {string} the name of the library and its version.
    */
   static getLibrary() {
     return Const.LIBRARY;
@@ -1071,8 +1071,8 @@ export class Tinode {
     return str === Const.DEL_CHAR;
   }
   /**
-   * Check if the given seq ID is likely to be issued by the server as oppisite to being temporary locally assigned ID.
-   * @param {int} seq - seq ID to check.
+   * Check if the given seq ID is likely to be issued by the server as opposite to being temporary locally assigned ID.
+   * @param {number} seq - seq ID to check.
    * @returns {boolean} <code>true</code> if seq is likely server-issued, <code>false</code> otherwise.
    */
   static isServerAssignedSeq(seq) {
@@ -1119,7 +1119,9 @@ export class Tinode {
   /**
    * Set a unique namespace tag.
    * If the tag with this namespace is already present then it's replaced with the new tag.
-   * @param uniqueTag tag to add, must be fully-qualified; if null or empty, no action is taken.
+   * @param {Array.<string>} tags - array of tags to modify.
+   * @param {string} uniqueTag - tag to add, must be fully-qualified; if null or empty, no action is taken.
+   * @returns {Array.<string>} modified array of tags.
    */
   static setUniqueTag(tags, uniqueTag) {
     if (!tags || tags.length == 0) {
@@ -1142,7 +1144,9 @@ export class Tinode {
 
   /**
    * Remove a unique tag with the given prefix.
-   * @param prefix prefix to remove
+   * @param {Array.<string>} tags - array of tags to modify.
+   * @param {string} prefix - prefix to remove.
+   * @returns {Array.<string>} array of tags without the ones with the given prefix.
    */
   static clearTagPrefix(tags, prefix) {
     if (!tags || tags.length == 0) {
@@ -1153,8 +1157,9 @@ export class Tinode {
 
   /**
    * Find the first tag with the given prefix.
-   * @param prefix prefix to search for.
-   * @return the first tag with the given prefix if found or <code>undefined</code>.
+   * @param {Array.<string>} tags - array of tags to search.
+   * @param {string} prefix - prefix to search for.
+   * @returns {string} the first tag with the given prefix if found or <code>undefined</code>.
    */
   static tagByPrefix(tags, prefix) {
     if (!tags) {
@@ -1166,7 +1171,7 @@ export class Tinode {
 
   // Instance methods.
 
-  // Generates unique message IDs
+  /** Generates unique message IDs */
   getNextUniqueId() {
     return (this._messageId != 0) ? '' + this._messageId++ : undefined;
   };
@@ -1660,7 +1665,7 @@ export class Tinode {
     }
     pkt.pub.noecho = noEcho;
     pkt.pub.content = content;
-
+    console.log("Tinode.createMessage", pkt.pub);
     return pkt.pub;
   }
 
@@ -2008,7 +2013,7 @@ export class Tinode {
    * hangup, etc.).
    *
    * @param {string} topicName - Name of the topic to broadcast to.
-   * @param {int} seq - ID of the call message the event pertains to.
+   * @param {number} seq - ID of the call message the event pertains to.
    * @param {string} evt - Call event.
    * @param {string} payload - Payload associated with this event (e.g. SDP string).
    *
@@ -2185,8 +2190,8 @@ export class Tinode {
   /**
    * Return server-provided configuration value.
    *
-   * @param {string} name of the value to return.
-   * @param {Object} defaultValue to return in case the parameter is not set or not found.
+   * @param {string} name - name of the value to return.
+   * @param {Object} defaultValue - value to return in case the parameter is not set or not found.
    *
    * @returns {Object} named value.
    */
@@ -2219,7 +2224,7 @@ export class Tinode {
   /**
    * Check if given topic is online.
    *
-   * @param {string} name of the topic to test.
+   * @param {string} name - name of the topic to test.
    * @returns {boolean} true if topic is online, false otherwise.
    */
   isTopicOnline(name) {
@@ -2230,7 +2235,7 @@ export class Tinode {
   /**
    * Get access mode for the given contact.
    *
-   * @param {string} name of the topic to query.
+   * @param {string} name - name of the topic to query.
    * @returns {AccessMode} access mode if topic is found, null otherwise.
    */
   getTopicAccessMode(name) {
@@ -2239,10 +2244,10 @@ export class Tinode {
   }
 
   /**
-   * Include message ID into all subsequest messages to server instructin it to send aknowledgemens.
+   * Include message ID into all subsequent messages to server instructing it to send acknowledgements.
    * Required for promises to function. Default is <code>"on"</code>.
    *
-   * @param {boolean} status - Turn aknowledgemens on or off.
+   * @param {boolean} status - Turn acknowledgements on or off.
    * @deprecated
    */
   wantAkn(status) {
@@ -2368,6 +2373,7 @@ Tinode.MSG_DELETE_AGE = 'msgDelAge';
 
 // Tinode URI topic ID prefix, 'scheme:path/'.
 Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';
+Tinode.URI_TOPIC_ALIAS_PREFIX = 'tinode:alias/';
 
 // Tag prefixes for alias, email, phone.
 Tinode.TAG_ALIAS = Const.TAG_ALIAS;

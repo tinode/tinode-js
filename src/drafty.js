@@ -1423,11 +1423,13 @@ Drafty.appendTheCard = function(content, theCardData) {
   });
   content.txt += ' ';
 
+  // const {...object} = classInstance;
   content.ent.push({
     tp: 'TC',
     data: theCardData
   });
 
+  console.log('Appended TheCard entity:', content);
   return content;
 }
 /**
@@ -1767,11 +1769,11 @@ Drafty.hasAttachments = function(content) {
  * @static
  *
  * @callback EntityCallback
- * @param {Object} data entity data.
- * @param {string} entity type.
- * @param {number} index entity's index in `content.ent`.
+ * @param {Object} data - entity data.
+ * @param {string} tp - entity type.
+ * @param {number} index - entity's index in `content.ent`.
  *
- * @return 'true-ish' to stop processing, 'false-ish' otherwise.
+ * @returns {boolean} 'true-ish' to stop processing, 'false-ish' otherwise.
  */
 
 /**
@@ -2012,6 +2014,8 @@ Drafty.attrValue = function(style, data) {
 Drafty.getContentType = function() {
   return DRAFTY_MIME_TYPE;
 }
+
+Drafty.contentType = DRAFTY_MIME_TYPE;
 
 /**
  * Check if the given mime-type is a MIME type of drafty form response.

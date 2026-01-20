@@ -1,7 +1,7 @@
 /**
  * @file Abstraction layer for websocket and long polling connections.
  *
- * @copyright 2015-2025 Tinode LLC.
+ * @copyright 2015-2026 Tinode LLC.
  */
 'use strict';
 
@@ -113,8 +113,8 @@ export default class Connection {
    * To use Connection in a non browser context, supply WebSocket and XMLHttpRequest providers.
    * @static
    * @memberof Connection
-   * @param wsProvider WebSocket provider, e.g. for nodeJS , <code>require('ws')</code>.
-   * @param xhrProvider XMLHttpRequest provider, e.g. for node <code>require('xhr')</code>.
+   * @param {Object} wsProvider - WebSocket provider, e.g. for nodeJS, <code>require('ws')</code>.
+   * @param {Object} xhrProvider - XMLHttpRequest provider, e.g. for node <code>require('xhr')</code>.
    */
   static setNetworkProviders(wsProvider, xhrProvider) {
     WebSocketProvider = wsProvider;
@@ -125,7 +125,7 @@ export default class Connection {
    * Assign a non-default logger.
    * @static
    * @memberof Connection
-   * @param {function} l variadic logging function.
+   * @param {Function} l - variadic logging function.
    */
   static set logger(l) {
     Connection.#log = l;
@@ -134,9 +134,9 @@ export default class Connection {
   /**
    * Initiate a new connection
    * @memberof Tinode.Connection#
-   * @param {string} host_ Host name to connect to; if <code>null</code> the old host name will be used.
-   * @param {boolean} force Force new connection even if one already exists.
-   * @return {Promise} Promise resolved/rejected when the connection call completes, resolution is called without
+   * @param {string} host_ - Host name to connect to; if <code>null</code> the old host name will be used.
+   * @param {boolean} force - Force new connection even if one already exists.
+   * @returns {Promise} Promise resolved/rejected when the connection call completes, resolution is called without
    *  parameters, rejection passes the {Error} as parameter.
    */
   connect(host_, force) {
@@ -520,11 +520,11 @@ export default class Connection {
    * @memberof Tinode.Connection
    * @callback AutoreconnectIterationType
    * @param {string} timeout - time till the next reconnect attempt in milliseconds. <code>-1</code> means reconnect was skipped.
-   * @param {Promise} promise resolved or rejected when the reconnect attemp completes.
+   * @param {Promise} promise - promise resolved or rejected when the reconnect attempt completes.
    *
    */
   /**
-   * A callback to inform when the next attampt to reconnect will happen and to receive connection promise.
+   * A callback to inform when the next attempt to reconnect will happen and to receive connection promise.
    * @memberof Tinode.Connection#
    * @type {Tinode.Connection.AutoreconnectIterationType}
    */
