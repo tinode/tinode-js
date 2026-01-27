@@ -956,10 +956,10 @@ export class Tinode {
   }
 
   /**
-   * Determine topic type from topic's name: grp, p2p, me, fnd, sys.
+   * Determine topic type from topic's name: grp, p2p, me, fnd, sys, slf.
    * @param {string} name - Name of the topic to test.
    * @returns {string} One of <code>"me"</code>, <code>"fnd"</code>, <code>"sys"</code>, <code>"grp"</code>,
-   *    <code>"p2p"</code> or <code>undefined</code>.
+   *    <code>"p2p"</code>, <code>"slf"</code> or <code>undefined</code>.
    */
   static topicType(name) {
     return Topic.topicType(name);
@@ -1077,6 +1077,26 @@ export class Tinode {
    */
   static isServerAssignedSeq(seq) {
     return seq > 0 && seq < Const.LOCAL_SEQID;
+  }
+
+  /**
+   * Parse user ID from a Tinode URL.
+   *
+   * @param {*} tinodeUrl
+   * @returns {string} user ID extracted from the given Tinode URL or the original input if the URL cannot be parsed as tinode: URL.
+   */
+  static parseTinodeUrl(tinodeUrl) {
+    if (!tinodeUrl || typeof tinodeUrl != 'string') {
+      return null;
+    }
+    if (!tinodeUrl.startsWith('tinode:')) {
+      return tinodeUrl;
+    }
+    const parts = tinodeUrl.substring(7).split("/");
+    if (parts.length < 2 || 'id' !== parts[parts.length - 2]) {
+      return tinodeUrl;
+    }
+    return parts[parts.length - 1];
   }
 
   /**
@@ -2386,9 +2406,9 @@ Tinode.MSG_DELETE_AGE = Const.MSG_DELETE_AGE;
 Tinode.REACTION_LIST = Const.REACTION_LIST;
 Tinode.MAX_REACTIONS = Const.MAX_REACTIONS;
 
-// Tinode URI topic ID prefix, 'scheme:path/'.
-Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';
-Tinode.URI_TOPIC_ALIAS_PREFIX = 'tinode:alias/';
+// Tinode URI topic ID prefix, 'scheme://[host]/path/'.
+Tinode.URI_TOPIC_ID_PREFIX = 'tinode:///id/';
+Tinode.URI_TOPIC_ALIAS_PREFIX = 'tinode:///alias/';
 
 // Tag prefixes for alias, email, phone.
 Tinode.TAG_ALIAS = Const.TAG_ALIAS;

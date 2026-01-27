@@ -7132,6 +7132,19 @@ class Tinode {
   static isServerAssignedSeq(seq) {
     return seq > 0 && seq < _config_js__WEBPACK_IMPORTED_MODULE_1__.LOCAL_SEQID;
   }
+  static parseTinodeUrl(tinodeUrl) {
+    if (!tinodeUrl || typeof tinodeUrl != 'string') {
+      return null;
+    }
+    if (!tinodeUrl.startsWith('tinode:')) {
+      return tinodeUrl;
+    }
+    const parts = tinodeUrl.substring(7).split("/");
+    if (parts.length < 2 || 'id' !== parts[parts.length - 2]) {
+      return tinodeUrl;
+    }
+    return parts[parts.length - 1];
+  }
   static isValidTagValue(tag) {
     const ALIAS_REGEX = /^[a-z0-9][a-z0-9_\-]{3,23}$/i;
     return tag && typeof tag == 'string' && tag.length > 3 && tag.length < 24 && ALIAS_REGEX.test(tag);
@@ -7679,8 +7692,8 @@ Tinode.REQ_CRED_VALIDATORS = _config_js__WEBPACK_IMPORTED_MODULE_1__.REQ_CRED_VA
 Tinode.MSG_DELETE_AGE = _config_js__WEBPACK_IMPORTED_MODULE_1__.MSG_DELETE_AGE;
 Tinode.REACTION_LIST = _config_js__WEBPACK_IMPORTED_MODULE_1__.REACTION_LIST;
 Tinode.MAX_REACTIONS = _config_js__WEBPACK_IMPORTED_MODULE_1__.MAX_REACTIONS;
-Tinode.URI_TOPIC_ID_PREFIX = 'tinode:topic/';
-Tinode.URI_TOPIC_ALIAS_PREFIX = 'tinode:alias/';
+Tinode.URI_TOPIC_ID_PREFIX = 'tinode:///id/';
+Tinode.URI_TOPIC_ALIAS_PREFIX = 'tinode:///alias/';
 Tinode.TAG_ALIAS = _config_js__WEBPACK_IMPORTED_MODULE_1__.TAG_ALIAS;
 Tinode.TAG_EMAIL = _config_js__WEBPACK_IMPORTED_MODULE_1__.TAG_EMAIL;
 Tinode.TAG_PHONE = _config_js__WEBPACK_IMPORTED_MODULE_1__.TAG_PHONE;

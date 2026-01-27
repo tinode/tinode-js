@@ -360,7 +360,7 @@ describe('TheCard', () => {
           {
             proto: 'tinode',
             des: ['home'],
-            value: 'tinode:topic/usr123'
+            value: 'tinode:id/usr123'
           },
           {
             proto: 'http',
@@ -375,7 +375,7 @@ describe('TheCard', () => {
       expect(vcard).toContain('PHOTO;TYPE=JPEG;ENCODING=b:base64data');
       expect(vcard).toContain('TEL;TYPE=CELL:123456');
       expect(vcard).toContain('EMAIL;TYPE=HOME:alice@example.com');
-      expect(vcard).toContain('IMPP;TYPE=HOME:tinode:topic/usr123');
+      expect(vcard).toContain('IMPP;TYPE=HOME:tinode:id/usr123');
       expect(vcard).toContain('URL;TYPE=WORK:https://example.com');
     });
 
@@ -446,7 +446,7 @@ describe('TheCard', () => {
         'PHOTO;TYPE=JPEG;ENCODING=b:base64data\r\n' +
         'TEL;TYPE=CELL:123456\r\n' +
         'EMAIL;TYPE=HOME:alice@example.com\r\n' +
-        'IMPP;TYPE=HOME:tinode:topic/usr123\r\n' +
+        'IMPP;TYPE=HOME:tinode:id/usr123\r\n' +
         'END:VCARD';
       const card = TheCard.importVCard(vcard);
       expect(card.fn).toBe('Alice');
@@ -469,7 +469,7 @@ describe('TheCard', () => {
       expect(card.comm).toContainEqual({
         proto: 'tinode',
         des: ['home'],
-        value: 'tinode:topic/usr123'
+        value: 'tinode:id/usr123'
       });
     });
 
@@ -898,7 +898,7 @@ END:VCARD`;
       card = TheCard.addPhone(card, '+15559876543', 'work');
       card = TheCard.addEmail(card, 'alice@example.com', 'home');
       card = TheCard.addEmail(card, 'alice.johnson@work.com', 'work');
-      card = TheCard.addTinodeID(card, 'tinode:topic/usrAlice123', 'home');
+      card = TheCard.addTinodeID(card, 'tinode:id/usrAlice123', 'home');
 
       // Verify original counts
       expect(card.comm).toHaveLength(5);
@@ -930,7 +930,7 @@ END:VCARD`;
       expect(phones.map(p => p.value)).toContain('+15559876543');
       expect(emails.map(e => e.value)).toContain('alice@example.com');
       expect(emails.map(e => e.value)).toContain('alice.johnson@work.com');
-      expect(tinodeIds[0].value).toBe('tinode:topic/usrAlice123');
+      expect(tinodeIds[0].value).toBe('tinode:id/usrAlice123');
     });
 
     test('should handle multiple export/import cycles without duplication', () => {
@@ -960,22 +960,22 @@ END:VCARD`;
 
     test('should correctly export and import IMPP/Tinode entries', () => {
       let card = {};
-      card = TheCard.addTinodeID(card, 'tinode:topic/usrTest123', 'home');
-      card = TheCard.addTinodeID(card, 'tinode:topic/usrTest456', 'work');
+      card = TheCard.addTinodeID(card, 'tinode:id/usrTest123', 'home');
+      card = TheCard.addTinodeID(card, 'tinode:id/usrTest456', 'work');
 
       const vcardStr = TheCard.exportVCard(card);
 
       // Check that vCard contains IMPP entries
       expect(vcardStr).toContain('IMPP');
-      expect(vcardStr).toContain('tinode:topic/usrTest123');
-      expect(vcardStr).toContain('tinode:topic/usrTest456');
+      expect(vcardStr).toContain('tinode:id/usrTest123');
+      expect(vcardStr).toContain('tinode:id/usrTest456');
 
       const imported = TheCard.importVCard(vcardStr);
       const tinodeIds = TheCard.getComm(imported, 'tinode');
 
       expect(tinodeIds).toHaveLength(2);
-      expect(tinodeIds.map(t => t.value)).toContain('tinode:topic/usrTest123');
-      expect(tinodeIds.map(t => t.value)).toContain('tinode:topic/usrTest456');
+      expect(tinodeIds.map(t => t.value)).toContain('tinode:id/usrTest123');
+      expect(tinodeIds.map(t => t.value)).toContain('tinode:id/usrTest456');
     });
 
     test('should correctly export and import URL entries', () => {
@@ -1015,7 +1015,7 @@ VERSION:3.0
 FN:Test User
 TEL:(555) 123-4567
 EMAIL:test@example.com
-IMPP:tinode:topic/usrNoType
+IMPP:tinode:id/usrNoType
 END:VCARD`;
 
       const card = TheCard.importVCard(vcard);
@@ -1035,7 +1035,7 @@ END:VCARD`;
 
       const tinode = card.comm.find(c => c.proto === 'tinode');
       expect(tinode).toBeDefined();
-      expect(tinode.value).toBe('tinode:topic/usrNoType');
+      expect(tinode.value).toBe('tinode:id/usrNoType');
       expect(tinode.des).toEqual([]);
     });
   });
