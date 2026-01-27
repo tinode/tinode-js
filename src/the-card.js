@@ -370,7 +370,7 @@ TheCard.exportVCard = function(card) {
       } else if (comm.proto === 'email') {
         vcard += `EMAIL;TYPE=${types}:${comm.value}\r\n`;
       } else if (comm.proto === 'tinode') {
-        vcard += `IMPP;TYPE=${types};tinode:${comm.value}\r\n`;
+        vcard += `IMPP;TYPE=${types}:${comm.value}\r\n`;
       } else if (comm.proto === 'http') {
         vcard += `URL;TYPE=${types}:${comm.value}\r\n`;
       }
@@ -672,8 +672,7 @@ TheCard.importVCard = function(vcardStr) {
         });
       }).filter(t => t !== 'internet'); // Skip 'internet' type
 
-      const tinodeID = value.replace(/^tinode:/, '');
-      const mapKey = `tinode|${tinodeID}`;
+      const mapKey = value.startsWith('tinode:') ? `tinode|${value}` : `impp|${value}`;
       if (!commMap.has(mapKey)) {
         commMap.set(mapKey, new Set());
       }
