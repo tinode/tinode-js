@@ -1,14 +1,20 @@
-import { Tinode } from './tinode.js';
+import {
+  Tinode
+} from './tinode.js';
 import * as Const from './config.js';
 
 describe('Tinode - Static Methods', () => {
   describe('credential', () => {
     test('should create credential from individual parameters', () => {
-      const cred = Tinode.credential('email', 'user@example.com', { key: 'value' }, 'response');
+      const cred = Tinode.credential('email', 'user@example.com', {
+        key: 'value'
+      }, 'response');
       expect(cred).toHaveLength(1);
       expect(cred[0].meth).toBe('email');
       expect(cred[0].val).toBe('user@example.com');
-      expect(cred[0].params).toEqual({ key: 'value' });
+      expect(cred[0].params).toEqual({
+        key: 'value'
+      });
       expect(cred[0].resp).toBe('response');
     });
 
@@ -16,7 +22,9 @@ describe('Tinode - Static Methods', () => {
       const cred = Tinode.credential({
         meth: 'phone',
         val: '+1234567890',
-        params: { code: '123' },
+        params: {
+          code: '123'
+        },
         resp: 'verified'
       });
       expect(cred).toHaveLength(1);
