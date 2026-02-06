@@ -89,10 +89,10 @@ export default class LargeFileHelper {
     xhr.upload.onprogress = e => {
       if (e.lengthComputable) {
         if (onProgress) {
-          onProgress(e.loaded / e.total);
+          onProgress(e.loaded / e.total, data.type || 'application/octet-stream');
         }
         if (this.onProgress) {
-          this.onProgress(e.loaded / e.total);
+          this.onProgress(e.loaded / e.total, data.type || 'application/octet-stream');
         }
       }
     };

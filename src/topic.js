@@ -1107,6 +1107,19 @@ export default class Topic {
       this._tinode.logger("INFO: Cannot send notification in inactive topic");
     }
   }
+  /**
+   * Send a notification that a file is being uploaded. Wrapper for {@link Tinode#noteKeyPress}.
+   * @memberof Tinode.Topic#
+   * @param {boolean} type - true if file being uploaded.
+   */
+  noteUpload(type) {
+    const types = {'image': 'kpui', 'video': 'kpuv', 'file': 'kpu'};
+    if (this._attached) {
+      this._tinode.noteKeyPress(this.name, types[type] || 'kpu');
+    } else {
+      this._tinode.logger("INFO: Cannot send notification in inactive topic");
+    }
+  }
 
   /**
    * Send a {note what='call'}. Wrapper for {@link Tinode#videoCall}.
