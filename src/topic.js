@@ -810,9 +810,12 @@ export default class Topic {
   /**
    * Send or remove a reaction for a message in this topic.
    * If the same reaction from the current user is already present, remove it.
+   * @memberof Tinode.Topic#
    *
    * @param {int} seq - ID of the message to react to.
    * @param {string} emo - Emoji string to add as reaction, or Tinode.DEL_CHAR to remove reaction.
+   *
+   * @returns {Promise} Promise to be resolved/rejected when the server responds to request.
    */
   react(seq, emo) {
     if (!seq || !emo) {
@@ -823,7 +826,7 @@ export default class Topic {
       // Treat the same value as toggle.
       emo = Const.DEL_CHAR;
     }
-    this.setMeta({
+    return this.setMeta({
       react: {
         seq: seq,
         val: emo
@@ -843,20 +846,6 @@ export default class Topic {
       return react.vals;
     }
     return this._tinode.getServerParam(Const.REACTION_LIST);
-  }
-
-  /**
-   * Get maximum number of allowed reaction types per message for this topic.
-   * @memberof Tinode.Topic#
-   *
-   * @returns {number} maxumum number of allowed reaction types per message.
-   */
-  maxReactions() {
-    const react = this.aux('react');
-    if (react) {
-      return react.max;
-    }
-    return this._tinode.getServerParam(Const.MAX_REACTIONS, 0);
   }
 
   /**

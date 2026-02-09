@@ -2403,8 +2403,8 @@ Tinode.MAX_TAG_COUNT = Const.MAX_TAG_COUNT;
 Tinode.MAX_FILE_UPLOAD_SIZE = Const.MAX_FILE_UPLOAD_SIZE;
 Tinode.REQ_CRED_VALIDATORS = Const.REQ_CRED_VALIDATORS;
 Tinode.MSG_DELETE_AGE = Const.MSG_DELETE_AGE;
+Tinode.ICE_SERVERS = Const.ICE_SERVERS;
 Tinode.REACTION_LIST = Const.REACTION_LIST;
-Tinode.MAX_REACTIONS = Const.MAX_REACTIONS;
 
 // Tinode URI topic ID prefix, 'scheme://[host]/path/'.
 Tinode.URI_TOPIC_ID_PREFIX = 'tinode:///id/';

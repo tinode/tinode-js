@@ -1,7 +1,7 @@
 /**
  * @file Global constants and configuration parameters.
  *
- * @copyright 2015-2025 Tinode LLC
+ * @copyright 2015-2026 Tinode LLC
  */
 'use strict';
 
@@ -79,5 +79,5 @@ export const MAX_TAG_COUNT = 'maxTagCount';
 export const MAX_FILE_UPLOAD_SIZE = 'maxFileUploadSize';
 export const REQ_CRED_VALIDATORS = 'reqCred';
 export const MSG_DELETE_AGE = 'msgDelAge';
+export const ICE_SERVERS = 'iceServers';
 export const REACTION_LIST = 'reactions';
-export const MAX_REACTIONS = 'maxReactions';
