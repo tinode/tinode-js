@@ -1102,7 +1102,11 @@ export default class Topic {
    * @param {boolean} type - true if file being uploaded.
    */
   noteUpload(type) {
-    const types = {'image': 'kpui', 'video': 'kpuv', 'file': 'kpu'};
+    const types = {
+      'image': 'kpui',
+      'video': 'kpuv',
+      'file': 'kpu'
+    };
     if (this._attached) {
       this._tinode.noteKeyPress(this.name, types[type] || 'kpu');
     } else {
