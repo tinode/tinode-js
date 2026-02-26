@@ -2249,50 +2249,51 @@ export default class Topic {
     return reacts;
   }
 
-  // Called by Tinode when meta.aux is recived.
+  // Called by Tinode when meta.react is recived.
   _processMetaReact(reacts, oneReaction) {
+    const saveUpdate = (msg, upd, maxReact) => {
+        msg.react = upd;
+        if (this.mrrid < maxReact) {
+          this.mrrid = maxReact;
+        }
+        this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
+    }
+
+    const seqIds = [];
     if (!Array.isArray(reacts)) {
       if (!oneReaction.seq || !oneReaction.val) {
         this._tinode.logger("WARNING: invalid reaction");
         return;
       }
-      reacts = [{
-        _diff: true, // Indicate that this is a delta update.
-        seq: oneReaction.seq,
-        data: [{
+      seqIds.push(oneReaction.seq);
+      const msg = this.findMessage(oneReaction.seq);
+      if (msg) {
+        const upd = this._handleReactionDiff(msg, {
           mrrid: oneReaction.mrrid,
           val: oneReaction.val,
           count: 1,
           users: [oneReaction.user || this._tinode.getCurrentUserID()]
-        }]
-      }];
-    }
-    // Process reactions metadata. meta.react is an array of {seq, data: [{val, count, users}]}
-    const seqIds = [];
-    reacts.forEach(mr => {
-      const msg = this.findMessage(mr.seq);
-      seqIds.push(mr.seq);
-      if (msg) {
-        let upd;
-        if (mr._diff) {
-          // Single incremental update.
-          upd = this._handleReactionDiff(msg, mr.data[0]);
-        } else {
-          upd = (mr.data || []).map(r => ({
+        });
+        saveUpdate(msg, upd, oneReaction.mrrid);
+      }
+    } else {
+      // Process reactions metadata. meta.react is an array of {seq, data: [{val, count, users}]}
+      reacts.forEach(mr => {
+        const msg = this.findMessage(mr.seq);
+        seqIds.push(mr.seq);
+        if (msg) {
+          const upd = (mr.data || []).map(r => ({
             mrrid: r.mrrid,
             val: r.val,
             count: r.count | 0,
             users: Array.isArray(r.users) ? r.users.slice() : []
           }));
+          const maxReact = upd.reduce((max, r) => Math.max(max, r.mrrid), 0);
+          saveUpdate(msg, upd, maxReact);
         }
-        msg.react = upd;
-        const maxReact = upd.reduce((max, r) => Math.max(max, r.mrrid), 0);
-        if (this.mrrid < maxReact) {
-          this.mrrid = maxReact;
-        }
-        this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
-      }
-    });
+      });
+    }
+
     // Notify UI listeners of changes.
     if (this.onReact) {
       this.onReact(seqIds);
