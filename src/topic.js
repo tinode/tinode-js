@@ -2252,11 +2252,11 @@ export default class Topic {
   // Called by Tinode when meta.react is recived.
   _processMetaReact(reacts, oneReaction) {
     const saveUpdate = (msg, upd, maxReact) => {
-        msg.react = upd;
-        if (this.mrrid < maxReact) {
-          this.mrrid = maxReact;
-        }
-        this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
+      msg.react = upd;
+      if (this.mrrid < maxReact) {
+        this.mrrid = maxReact;
+      }
+      this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
     }
 
     const seqIds = [];
