@@ -13,8 +13,9 @@ import {
 } from './utils.js';
 
 /**
- * @class TopicMe - special case of {@link Tinode.Topic} for
- * managing data of the current user, including contact list.
+ * Special case of {@link Tinode.Topic} for managing data of the current user,
+ * including contact list.
+ * @class TopicMe
  * @extends Tinode.Topic
  * @memberof Tinode
  *

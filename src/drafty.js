@@ -1437,7 +1437,7 @@ Drafty.appendTheCard = function(content, theCardData) {
  * This is potentially unsafe because <code>content.txt</code> may contain malicious HTML
  * markup. DO NOT use in production code.
  *
- * @memberof Tinode.Drafty
+ * @memberof Drafty
  * @static
  *
  * @param {Drafty} doc - document to convert.

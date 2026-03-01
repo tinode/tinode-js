@@ -8,7 +8,7 @@
     "clean": "rm umd/*",
     "build:dev": "webpack --mode development",
     "build:prod": "webpack --mode production",
-    "build:docs": "jsdoc ./src -t ./node_modules/minami -d ../tinode.github.io/js-api",
+    "build:docs": "jsdoc -c jsdoc.json",
     "vers": "echo \"export const PACKAGE_VERSION = \\\"`node -p -e \"require('./package.json').version\"`\\\";\" > version.js",
     "test": "jest"
   },

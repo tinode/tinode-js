@@ -13,9 +13,10 @@ import {
 
 
 /**
- * Special case of {@link Tinode.Topic} for searching for contacts and group topics
+ * Special case of {@link Tinode.Topic} for searching for contacts and group topics.
+ * @class TopicFnd
  * @extends Tinode.Topic
- *
+ * @memberof Tinode
  */
 export default class TopicFnd extends Topic {
   // List of users and topics uid or topic_name -> Contact object)

@@ -1,0 +1,20 @@
+{
+  "source": {
+    "include": ["src"],
+    "includePattern": "\\.js$",
+    "excludePattern": "\\.(test|spec)\\.js$"
+  },
+  "opts": {
+    "recurse": true,
+    "destination": "../tinode.github.io/js-api"
+  },
+  "plugins": ["plugins/markdown"],
+  "tags": {
+    "allowUnknownTags": true,
+    "dictionaries": ["jsdoc", "closure"]
+  },
+  "templates": {
+    "cleverLinks": false,
+    "monospaceLinks": false
+  }
+}

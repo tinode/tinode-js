@@ -294,7 +294,14 @@ function getBrowserInfo(ua, product) {
 }
 
 /**
+ * @namespace Tinode
+ * @description Tinode messaging SDK. Contains the main {@link Tinode} class
+ * and all supporting classes exported by this library.
+ */
+
+/**
  * The main class for interacting with Tinode server.
+ * @class Tinode
  */
 export class Tinode {
   _host;

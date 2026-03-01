@@ -21,6 +21,8 @@ import {
 
 /**
  * Topic is a class representing a logical communication channel.
+ * @class Topic
+ * @memberof Tinode
  */
 export default class Topic {
   /**

@@ -5,6 +5,15 @@
  */
 'use strict';
 
+/**
+ * Throwable error with a numeric error code, as returned by the server.
+ * @class CommError
+ * @extends Error
+ * @memberof Tinode
+ *
+ * @param {string} message - Human-readable error description.
+ * @param {number} code - Numeric error code (mirrors HTTP status codes).
+ */
 export default class CommError extends Error {
   constructor(message, code) {
     super(`${message} (${code})`);
