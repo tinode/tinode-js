@@ -15,6 +15,12 @@ import {
 
 const THE_CARD_MIME_TYPE = 'text/x-the-card';
 
+/**
+ * Contact card, similar to vCard. Holds a user's full name, avatar,
+ * organization, communication methods, and birthday.
+ * @class TheCard
+ * @memberof Tinode
+ */
 export default class TheCard {
   /**
    * Create a new contact card.
