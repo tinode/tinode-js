@@ -358,7 +358,6 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "default": function() { return /* binding */ CommError; }
 /* harmony export */ });
 
-
 class CommError extends Error {
   constructor(message, code) {
     super(`${message} (${code})`);
@@ -5864,12 +5863,12 @@ class Topic {
     return reacts;
   }
   _processMetaReact(reacts, oneReaction) {
-    const saveUpdate = (msg, upd, maxReact) => {
+    const saveUpdate = (msg, seq, upd, maxReact) => {
       msg.react = upd;
       if (this.mrrid < maxReact) {
         this.mrrid = maxReact;
       }
-      this._tinode._db.updMessageReact(this.name, mr.seq, msg.react);
+      this._tinode._db.updMessageReact(this.name, seq, msg.react);
     };
     const seqIds = [];
     if (!Array.isArray(reacts)) {
@@ -5886,7 +5885,7 @@ class Topic {
           count: 1,
           users: [oneReaction.user || this._tinode.getCurrentUserID()]
         });
-        saveUpdate(msg, upd, oneReaction.mrrid);
+        saveUpdate(msg, oneReaction.seq, upd, oneReaction.mrrid);
       }
     } else {
       reacts.forEach(mr => {
@@ -5900,7 +5899,7 @@ class Topic {
             users: Array.isArray(r.users) ? r.users.slice() : []
           }));
           const maxReact = upd.reduce((max, r) => Math.max(max, r.mrrid), 0);
-          saveUpdate(msg, upd, maxReact);
+          saveUpdate(msg, mr.seq, upd, maxReact);
         }
       });
     }
