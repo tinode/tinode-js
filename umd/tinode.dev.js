@@ -5614,7 +5614,7 @@ class Topic {
       this._processMetaDesc(meta.desc);
     }
     if (meta.sub && meta.sub.length > 0) {
-      this._processMetaSubs(meta.sub);
+      this._processMetaSubs(meta.sub, true);
     }
     if (meta.del) {
       this._processDelMessages(meta.del.clear, meta.del.delseq);
@@ -5757,7 +5757,7 @@ class Topic {
       this.onMetaDesc(this);
     }
   }
-  _processMetaSubs(subs) {
+  _processMetaSubs(subs, skipSubcnt) {
     for (let idx in subs) {
       const sub = subs[idx];
       sub.online = !!sub.online;
@@ -5771,14 +5771,16 @@ class Topic {
             acs: sub.acs
           });
         }
-        if (!this._users[sub.user]) {
+        if (!this._users[sub.user] && !skipSubcnt) {
           this.subcnt++;
         }
         user = this._updateCachedUser(sub.user, sub);
       } else {
         delete this._users[sub.user];
+        if (!skipSubcnt) {
+          this.subcnt--;
+        }
         user = sub;
-        this.subcnt--;
       }
       if (this.onMetaSub) {
         this.onMetaSub(user);

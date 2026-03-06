@@ -1933,7 +1933,9 @@ export default class Topic {
       this._processMetaDesc(meta.desc);
     }
     if (meta.sub && meta.sub.length > 0) {
-      this._processMetaSubs(meta.sub);
+      // subcnt is authoritatively managed by the server via desc; never let
+      // _processMetaSubs adjust it when loading subscribers from a meta packet.
+      this._processMetaSubs(meta.sub, /* skipSubcnt= */ true);
     }
     if (meta.del) {
       this._processDelMessages(meta.del.clear, meta.del.delseq);
@@ -2113,7 +2115,7 @@ export default class Topic {
   }
   // Called by Tinode when meta.sub is received, in response to received
   // {ctrl} after setMeta-sub, or as a handler for {pres what=sub}.
-  _processMetaSubs(subs) {
+  _processMetaSubs(subs, skipSubcnt) {
     for (let idx in subs) {
       const sub = subs[idx];
 
@@ -2133,16 +2135,19 @@ export default class Topic {
             acs: sub.acs
           });
         }
-        if (!this._users[sub.user]) {
-          // New subscription.
+        if (!this._users[sub.user] && !skipSubcnt) {
+          // New subscription. Only increment when subcnt isn't already
+          // authoritative from a server-provided desc in the same packet.
           this.subcnt++;
         }
         user = this._updateCachedUser(sub.user, sub);
       } else {
         // Subscription is deleted, remove it from topic (but leave in Users cache)
         delete this._users[sub.user];
+        if (!skipSubcnt) {
+          this.subcnt--;
+        }
         user = sub;
-        this.subcnt--;
       }
 
       if (this.onMetaSub) {
