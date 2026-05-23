@@ -12,7 +12,9 @@
     "vers": "echo \"export const PACKAGE_VERSION = \\\"`node -p -e \"require('./package.json').version\"`\\\";\" > version.js",
     "test": "jest"
   },
-  "browserslist": ["defaults"],
+  "browserslist": [
+    "defaults"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tinode/tinode-js.git"
@@ -43,12 +45,12 @@
     "@babel/preset-env": "^7.22.7",
     "babel-loader": "^10.0.0",
     "browserslist": "^4.21.9",
-    "copy-webpack-plugin": "^13.0.0",
+    "copy-webpack-plugin": "^14.0.0",
     "jest": "^30.0.0",
     "js-beautify": "^1.14.8",
     "jsdoc": "^4.0.2",
     "minami": "^1.2.3",
     "webpack": "^5.88.1",
-    "webpack-cli": "^6.0.0"
+    "webpack-cli": "^7.0.2"
   }
 }
