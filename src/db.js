@@ -539,6 +539,12 @@ export default class DB {
         from = 0;
         to = Number.MAX_SAFE_INTEGER;
       }
+      // Empty range [from, to): nothing to delete. Also avoids IDBKeyRange.bound
+      // throwing a DataError when from == to with an open upper bound.
+      if (to > 0 && to <= from) {
+        resolve();
+        return;
+      }
       const range = to > 0 ? IDBKeyRange.bound([topicName, from], [topicName, to], false, true) :
         IDBKeyRange.only([topicName, from]);
       const trx = this.db.transaction(['message'], 'readwrite');
@@ -583,8 +589,17 @@ export default class DB {
           reject(event.target.error);
         };
 
+        // Skip empty ranges [low, hi) where hi <= low: IDBKeyRange.bound would throw
+        // a DataError ("the lower key and upper key are equal and one of the bounds is
+        // open") when low == hi.
+        const ranges = query.ranges.filter(r => !r.hi || r.hi > r.low);
+        if (ranges.length == 0) {
+          resolve(result);
+          return;
+        }
+
         let count = 0;
-        query.ranges.forEach(range => {
+        ranges.forEach(range => {
           const key = range.hi ? IDBKeyRange.bound([topicName, range.low], [topicName, range.hi], false, true) :
             IDBKeyRange.only([topicName, range.low]);
           trx.objectStore('message').getAll(key).onsuccess = event => {
@@ -600,7 +615,7 @@ export default class DB {
               }
             }
             count++;
-            if (count == query.ranges.length) {
+            if (count == ranges.length) {
               resolve(result);
             }
           };
@@ -618,6 +633,13 @@ export default class DB {
         this.#logger('PCache', 'readMessages', event.target.error);
         reject(event.target.error);
       };
+
+      // Empty range: nothing to read. Avoids IDBKeyRange.bound throwing a DataError
+      // when since == before with an open upper bound.
+      if (since >= before) {
+        resolve(result);
+        return;
+      }
 
       const range = IDBKeyRange.bound([topicName, since], [topicName, before], false, true);
       // Iterate in descending order.
