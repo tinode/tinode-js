@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "description": "Tinode SDK",
-  "version": "0.25.2",
+  "version": "0.25.3",
   "scripts": {
     "format": "js-beautify -r src/*.js",
     "build": "npm run format && npm run vers && npm run build:prod && npm run build:dev",
@@ -11,6 +11,9 @@
     "build:docs": "jsdoc -c jsdoc.json",
     "vers": "echo \"export const PACKAGE_VERSION = \\\"`node -p -e \"require('./package.json').version\"`\\\";\" > version.js",
     "test": "jest"
+  },
+  "overrides": {
+    "@babel/core": "^8.0.1"
   },
   "browserslist": [
     "defaults"
@@ -40,17 +43,21 @@
   "homepage": "https://github.com/tinode/chat",
   "main": "./umd/tinode.prod.js",
   "devDependencies": {
-    "@babel/core": "^7.22.8",
-    "@babel/plugin-proposal-numeric-separator": "^7.18.6",
-    "@babel/preset-env": "^7.22.7",
+    "@babel/core": "^8.0.1",
+    "@babel/preset-env": "^8.0.1",
     "babel-loader": "^10.0.0",
     "browserslist": "^4.21.9",
     "copy-webpack-plugin": "^14.0.0",
     "jest": "^30.0.0",
-    "js-beautify": "^1.14.8",
+    "js-beautify": "^2.0.0",
     "jsdoc": "^4.0.2",
     "minami": "^1.2.3",
+    "terser-webpack-plugin": "^5.6.1",
     "webpack": "^5.88.1",
     "webpack-cli": "^7.0.2"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true,
+    "unrs-resolver@1.12.2": true
   }
 }
