@@ -1612,6 +1612,8 @@ test('Drafty.attrValue LN sanitizeUrl', () => {
   expect(Drafty.attrValue('LN', {url: "javascript:alert('XSS')"})).toEqual({href: null, target: '_blank'});
   expect(Drafty.attrValue('LN', {url: 'data:text/html,<script>alert(1)</script>'})).toEqual({href: null, target: '_blank'});
   expect(Drafty.attrValue('LN', {url: 'vbscript:msgbox(1)'})).toEqual({href: null, target: '_blank'});
+  // Protocol-relative URLs are also blocked (scheme is inherited from page context).
+  expect(Drafty.attrValue('LN', {url: '//evil.com/path'})).toEqual({href: null, target: '_blank'});
 });
 
 test('Drafty.attrValue BN sanitizeUrl', () => {

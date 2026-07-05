@@ -117,7 +117,7 @@ test('mergeObj', () => {
   // Prototype pollution: constructor key must not overwrite constructor.
   const withCtor = mergeObj({}, JSON.parse('{"constructor":{"prototype":{"injected2":true}}}'));
   expect(({}).injected2).toBeUndefined();
-  expect(typeof withCtor.constructor).not.toBe('object');
+  expect(typeof withCtor.constructor).toBe('function');
 });
 
 // Strips all values from an object of they evaluate to false or if their name starts with '_'.
