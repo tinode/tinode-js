@@ -110,6 +110,14 @@ test('mergeObj', () => {
     a: 1,
     b: 2
   }, 1)).toEqual(1);
+  // Prototype pollution: __proto__ key must not pollute Object.prototype.
+  const polluted = mergeObj({}, JSON.parse('{"__proto__":{"injected":true}}'));
+  expect(({}).injected).toBeUndefined();
+  expect(polluted.injected).toBeUndefined();
+  // Prototype pollution: constructor key must not overwrite constructor.
+  const withCtor = mergeObj({}, JSON.parse('{"constructor":{"prototype":{"injected2":true}}}'));
+  expect(({}).injected2).toBeUndefined();
+  expect(typeof withCtor.constructor).not.toBe('object');
 });
 
 // Strips all values from an object of they evaluate to false or if their name starts with '_'.
