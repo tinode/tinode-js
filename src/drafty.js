@@ -286,6 +286,23 @@ function base64toDataUrl(b64, contentType) {
   return 'data:' + contentType + ';base64,' + b64;
 }
 
+// Allow only URLs with safe schemes to prevent javascript: and data: injection.
+// Returns null for URLs with disallowed schemes, the original value otherwise.
+function sanitizeUrl(url) {
+  if (!url || typeof url != 'string') {
+    return url;
+  }
+  // Relative URLs have no scheme and are safe.
+  if (!/^\s*([a-z][a-z0-9+.-]*:|\/\/)/im.test(url)) {
+    return url;
+  }
+  // Among absolute URLs allow only http, https, and ftp.
+  if (/^(https?|ftp):\/\//i.test(url)) {
+    return url;
+  }
+  return null;
+}
+
 // Helpers for converting Drafty to HTML.
 const DECORATORS = {
   // Visial styles
@@ -328,7 +345,7 @@ const DECORATORS = {
     close: _ => '</a>',
     props: (data) => {
       return data ? {
-        href: data.url,
+        href: sanitizeUrl(data.url),
         target: '_blank'
       } : null;
     },
@@ -366,7 +383,7 @@ const DECORATORS = {
         'data-act': data.act,
         'data-val': data.val,
         'data-name': data.name,
-        'data-ref': data.ref
+        'data-ref': sanitizeUrl(data.ref)
       } : null;
     },
   },
@@ -379,10 +396,11 @@ const DECORATORS = {
     close: _ => '</audio>',
     props: (data) => {
       if (!data) return null;
+      const safeRef = sanitizeUrl(data.ref);
       return {
         // Embedded data or external link.
-        src: data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
-        'data-preload': data.ref ? 'metadata' : 'auto',
+        src: safeRef || base64toObjectUrl(data.val, data.mime, Drafty.logger),
+        'data-preload': safeRef ? 'metadata' : 'auto',
         'data-duration': data.duration,
         'data-name': data.name,
         'data-size': data.val ? ((data.val.length * 0.75) | 0) : (data.size | 0),
@@ -410,7 +428,7 @@ const DECORATORS = {
       return {
         // Temporary preview, or permanent preview, or external link.
         src: base64toDataUrl(data._tempPreview, data.mime) ||
-          data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
+          sanitizeUrl(data.ref) || base64toObjectUrl(data.val, data.mime, Drafty.logger),
         title: data.name,
         alt: data.name,
         'data-width': data.width,
@@ -474,14 +492,16 @@ const DECORATORS = {
     close: _ => '',
     props: data => {
       if (!data) return null;
-      const poster = data.preref || base64toObjectUrl(data.preview, data.premime || 'image/jpeg', Drafty.logger);
+      const safePreref = sanitizeUrl(data.preref);
+      const safeRef = sanitizeUrl(data.ref);
+      const poster = safePreref || base64toObjectUrl(data.preview, data.premime || 'image/jpeg', Drafty.logger);
       return {
         // Embedded data or external link.
         src: poster,
-        'data-src': data.ref || base64toObjectUrl(data.val, data.mime, Drafty.logger),
+        'data-src': safeRef || base64toObjectUrl(data.val, data.mime, Drafty.logger),
         'data-width': data.width,
         'data-height': data.height,
-        'data-preload': data.ref ? 'metadata' : 'auto',
+        'data-preload': safeRef ? 'metadata' : 'auto',
         'data-preview': poster,
         'data-duration': data.duration | 0,
         'data-name': data.name,
@@ -1913,7 +1933,7 @@ Drafty.getDownloadUrl = function(entData) {
   if (!Drafty.isFormResponseType(entData.mime) && entData.val) {
     url = base64toObjectUrl(entData.val, entData.mime, Drafty.logger);
   } else if (typeof entData.ref == 'string') {
-    url = entData.ref;
+    url = sanitizeUrl(entData.ref);
   }
   return url;
 }
