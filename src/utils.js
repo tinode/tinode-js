@@ -90,16 +90,18 @@ export function mergeObj(dst, src) {
   }
 
   if (!dst || dst === DEL_CHAR) {
-    dst = src.constructor();
+    dst = {};
   }
 
-  for (let prop in src) {
-    if (src.hasOwnProperty(prop) && (prop != '_noForwarding')) {
-      try {
-        dst[prop] = mergeObj(dst[prop], src[prop]);
-      } catch (err) {
-        console.warn("Error merging property:", prop, err);
-      }
+  for (const prop of Object.keys(src)) {
+    // Skip prototype-polluting keys and internal forwarding flag.
+    if (prop === '__proto__' || prop === 'constructor' || prop === '_noForwarding') {
+      continue;
+    }
+    try {
+      dst[prop] = mergeObj(dst[prop], src[prop]);
+    } catch (err) {
+      console.warn("Error merging property:", prop, err);
     }
   }
   return dst;
