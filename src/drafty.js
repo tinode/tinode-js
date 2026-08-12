@@ -329,7 +329,8 @@ const DECORATORS = {
     props: (data) => {
       return data ? {
         href: data.url,
-        target: '_blank'
+        target: '_blank',
+        rel: 'noopener noreferrer'
       } : null;
     },
   },
