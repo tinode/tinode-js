@@ -1602,29 +1602,112 @@ test.each(quote_this)('Drafty.quote %j', (src, exp) => {
 // Tests for URL scheme validation via Drafty.attrValue (item 3: no URL scheme validation).
 test('Drafty.attrValue LN sanitizeUrl', () => {
   // Safe schemes are passed through.
-  expect(Drafty.attrValue('LN', {url: 'https://example.com/path'})).toEqual({href: 'https://example.com/path', target: '_blank', rel: 'noopener noreferrer'});
-  expect(Drafty.attrValue('LN', {url: 'http://example.com'})).toEqual({href: 'http://example.com', target: '_blank', rel: 'noopener noreferrer'});
-  expect(Drafty.attrValue('LN', {url: 'ftp://files.example.com'})).toEqual({href: 'ftp://files.example.com', target: '_blank', rel: 'noopener noreferrer'});
+  expect(Drafty.attrValue('LN', {
+    url: 'https://example.com/path'
+  })).toEqual({
+    href: 'https://example.com/path',
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  });
+  expect(Drafty.attrValue('LN', {
+    url: 'http://example.com'
+  })).toEqual({
+    href: 'http://example.com',
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  });
+  expect(Drafty.attrValue('LN', {
+    url: 'ftp://files.example.com'
+  })).toEqual({
+    href: 'ftp://files.example.com',
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  });
   // Relative URLs are safe.
-  expect(Drafty.attrValue('LN', {url: '/v0/file/s/abc.jpg'})).toEqual({href: '/v0/file/s/abc.jpg', target: '_blank', rel: 'noopener noreferrer'});
-  expect(Drafty.attrValue('LN', {url: 'relative/path.html'})).toEqual({href: 'relative/path.html', target: '_blank', rel: 'noopener noreferrer'});
+  expect(Drafty.attrValue('LN', {
+    url: '/v0/file/s/abc.jpg'
+  })).toEqual({
+    href: '/v0/file/s/abc.jpg',
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  });
+  expect(Drafty.attrValue('LN', {
+    url: 'relative/path.html'
+  })).toEqual({
+    href: 'relative/path.html',
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  });
   // Unsafe schemes are blocked.
-  expect(Drafty.attrValue('LN', {url: "javascript:alert('XSS')"})).toEqual({href: null, target: '_blank', rel: 'noopener noreferrer'});
-  expect(Drafty.attrValue('LN', {url: 'data:text/html,<script>alert(1)</script>'})).toEqual({href: null, target: '_blank', rel: 'noopener noreferrer'});
-  expect(Drafty.attrValue('LN', {url: 'vbscript:msgbox(1)'})).toEqual({href: null, target: '_blank', rel: 'noopener noreferrer'});
+  expect(Drafty.attrValue('LN', {
+    url: "javascript:alert('XSS')"
+  })).toEqual({
+    href: null,
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  });
+  expect(Drafty.attrValue('LN', {
+    url: 'data:text/html,<script>alert(1)</script>'
+  })).toEqual({
+    href: null,
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  });
+  expect(Drafty.attrValue('LN', {
+    url: 'vbscript:msgbox(1)'
+  })).toEqual({
+    href: null,
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  });
   // Protocol-relative URLs are also blocked (scheme is inherited from page context).
-  expect(Drafty.attrValue('LN', {url: '//evil.com/path'})).toEqual({href: null, target: '_blank', rel: 'noopener noreferrer'});
+  expect(Drafty.attrValue('LN', {
+    url: '//evil.com/path'
+  })).toEqual({
+    href: null,
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  });
 });
 
 test('Drafty.attrValue BN sanitizeUrl', () => {
-  expect(Drafty.attrValue('BN', {act: 'url', ref: 'https://example.com', name: 'btn', val: 'v'}))
-    .toEqual({'data-act': 'url', 'data-val': 'v', 'data-name': 'btn', 'data-ref': 'https://example.com'});
-  expect(Drafty.attrValue('BN', {act: 'url', ref: "javascript:alert(1)", name: 'btn', val: 'v'}))
-    .toEqual({'data-act': 'url', 'data-val': 'v', 'data-name': 'btn', 'data-ref': null});
+  expect(Drafty.attrValue('BN', {
+      act: 'url',
+      ref: 'https://example.com',
+      name: 'btn',
+      val: 'v'
+    }))
+    .toEqual({
+      'data-act': 'url',
+      'data-val': 'v',
+      'data-name': 'btn',
+      'data-ref': 'https://example.com'
+    });
+  expect(Drafty.attrValue('BN', {
+      act: 'url',
+      ref: "javascript:alert(1)",
+      name: 'btn',
+      val: 'v'
+    }))
+    .toEqual({
+      'data-act': 'url',
+      'data-val': 'v',
+      'data-name': 'btn',
+      'data-ref': null
+    });
 });
 
 test('Drafty.getDownloadUrl sanitizeUrl', () => {
-  expect(Drafty.getDownloadUrl({mime: 'image/jpeg', ref: 'https://example.com/img.jpg'})).toBe('https://example.com/img.jpg');
-  expect(Drafty.getDownloadUrl({mime: 'image/jpeg', ref: "javascript:alert(1)"})).toBeNull();
-  expect(Drafty.getDownloadUrl({mime: 'image/jpeg', ref: '/v0/file/s/abc.jpg'})).toBe('/v0/file/s/abc.jpg');
+  expect(Drafty.getDownloadUrl({
+    mime: 'image/jpeg',
+    ref: 'https://example.com/img.jpg'
+  })).toBe('https://example.com/img.jpg');
+  expect(Drafty.getDownloadUrl({
+    mime: 'image/jpeg',
+    ref: "javascript:alert(1)"
+  })).toBeNull();
+  expect(Drafty.getDownloadUrl({
+    mime: 'image/jpeg',
+    ref: '/v0/file/s/abc.jpg'
+  })).toBe('/v0/file/s/abc.jpg');
 });
