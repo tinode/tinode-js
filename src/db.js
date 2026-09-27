@@ -422,6 +422,33 @@ export default class DB {
   }
 
   /**
+   * Remove subscription from persistent cache.
+   * @memberOf DB
+   * @param {string} topicName - name of the topic which owns the subscription.
+   * @param {string} uid - ID of the unsubscribed user.
+   * @return {Promise} promise resolved/rejected on operation completion.
+   */
+  remSubscription(topicName, uid) {
+    if (!this.isReady()) {
+      return this.disabled ?
+        Promise.resolve() :
+        Promise.reject(new Error("not initialized"));
+    }
+    return new Promise((resolve, reject) => {
+      const trx = this.db.transaction(['subscription'], 'readwrite');
+      trx.oncomplete = event => {
+        resolve(event.target.result);
+      };
+      trx.onerror = event => {
+        this.#logger('PCache', 'remSubscription', event.target.error);
+        reject(event.target.error);
+      };
+      trx.objectStore('subscription').delete([topicName, uid]);
+      trx.commit();
+    });
+  }
+
+  /**
    * Execute a callback for each cached subscription in a given topic.
    * @memberOf DB
    * @param {string} topicName - name of the topic which owns the subscriptions.

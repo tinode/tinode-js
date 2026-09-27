@@ -1071,6 +1071,23 @@ class DB {
       };
     });
   }
+  remSubscription(topicName, uid) {
+    if (!this.isReady()) {
+      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
+    }
+    return new Promise((resolve, reject) => {
+      const trx = this.db.transaction(['subscription'], 'readwrite');
+      trx.oncomplete = event => {
+        resolve(event.target.result);
+      };
+      trx.onerror = event => {
+        this.#logger('PCache', 'remSubscription', event.target.error);
+        reject(event.target.error);
+      };
+      trx.objectStore('subscription').delete([topicName, uid]);
+      trx.commit();
+    });
+  }
   mapSubscriptions(topicName, callback, context) {
     if (!this.isReady()) {
       return this.disabled ? Promise.resolve([]) : Promise.reject(new Error("not initialized"));
@@ -5667,8 +5684,10 @@ class Topic {
           this.subcnt++;
         }
         user = this._updateCachedUser(sub.user, sub);
+        this._tinode._db.updSubscription(this.name, sub.user, sub);
       } else {
         delete this._users[sub.user];
+        this._tinode._db.remSubscription(this.name, sub.user);
         if (!skipSubcnt) {
           this.subcnt--;
         }
@@ -6469,6 +6488,9 @@ class Tinode {
           });
           delete topic._new;
           prom.push(topic._loadMessages(this._db));
+          prom.push(this._db.mapSubscriptions(topic.name, sub => {
+            topic._processMetaSubs([sub], true);
+          }));
         });
       }).then(_ => {
         return this._db.mapUsers(data => {

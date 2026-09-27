@@ -445,6 +445,9 @@ export class Tinode {
           delete topic._new;
           // Request to load messages and save the promise.
           prom.push(topic._loadMessages(this._db));
+          prom.push(this._db.mapSubscriptions(topic.name, sub => {
+            topic._processMetaSubs([sub], /* skipSubcnt= */ true);
+          }));
         });
       }).then(_ => {
         // Then load users.

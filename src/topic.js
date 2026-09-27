@@ -1984,9 +1984,11 @@ export default class Topic {
           this.subcnt++;
         }
         user = this._updateCachedUser(sub.user, sub);
+        this._tinode._db.updSubscription(this.name, sub.user, sub);
       } else {
         // Subscription is deleted, remove it from topic (but leave in Users cache)
         delete this._users[sub.user];
+        this._tinode._db.remSubscription(this.name, sub.user);
         if (!skipSubcnt) {
           this.subcnt--;
         }
