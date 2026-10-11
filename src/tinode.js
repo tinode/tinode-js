@@ -54,7 +54,12 @@ import CommError from './comm-error.js';
 import Connection from './connection.js';
 import DBCache from './db.js';
 import Drafty from './drafty.js';
+import IndexedDBAdapter from './indexeddb-adapter.js';
+import KeyValueAdapter, {
+  fromMMKV
+} from './key-value-adapter.js';
 import LargeFileHelper from './large-file.js';
+import MemoryAdapter from './memory-adapter.js';
 import MetaGetBuilder from './meta-builder.js';
 import Topic from './topic.js';
 import TopicFnd from './fnd-topic.js';
@@ -77,6 +82,13 @@ export {
 // Re-export TheCard
 export {
   TheCard
+};
+
+export {
+  IndexedDBAdapter,
+  KeyValueAdapter,
+  fromMMKV,
+  MemoryAdapter
 };
 
 let WebSocketProvider;
@@ -353,6 +365,8 @@ export class Tinode {
   // IndexedDB wrapper object.
   _db = null;
 
+  _netInfoUnsubscribe = null;
+
   // Tinode's cache of objects
   _cache = {};
 
@@ -367,6 +381,8 @@ export class Tinode {
    * @param {boolean} config.secure - Use Secure WebSocket if <code>true</code>.
    * @param {string} config.platform - Optional platform identifier, one of <code>"ios"</code>, <code>"web"</code>, <code>"android"</code>.
    * @param {boolean} config.persist - Use IndexedDB persistent storage.
+   * @param {Tinode.StorageAdapter=} config.storage - Storage adapter for the local cache. When omitted and persist is true, IndexedDB is used.
+   * @param {Object=} config.netInfo - Network status source: an object with addEventListener(listener) that returns an unsubscribe function and calls the listener with {isConnected}. When the network comes back, the client reconnects at once. The listener stays for the lifetime of the Tinode object.
    * @param {function} onComplete - callback to call when initialization is completed.
    */
   constructor(config, onComplete) {
@@ -413,9 +429,19 @@ export class Tinode {
       }
     }
 
-    this._persist = config.persist;
+    if (config.netInfo && typeof config.netInfo.addEventListener == 'function') {
+      let wasConnected = null;
+      this._netInfoUnsubscribe = config.netInfo.addEventListener(state => {
+        if (state.isConnected && wasConnected === false) {
+          this._connection.retryNow();
+        }
+        wasConnected = state.isConnected;
+      });
+    }
+
+    this._persist = !!(config.persist || config.storage);
     // Initialize object regardless. It simplifies the code.
-    this._db = new DBCache(this.logger, this.logger);
+    this._db = new DBCache(this.logger, this.logger, config.storage);
 
     if (this._persist) {
       // Create the persistent cache.
@@ -1054,6 +1080,7 @@ export class Tinode {
   }
   /**
    * To use Tinode in a non browser context, supply <code>indexedDB</code> provider.
+   * Alternatively pass <code>storage: new IndexedDBAdapter(provider)</code> to the constructor.
    * @static
    *
    * @param {Object} idbProvider - <code>indexedDB</code> provider, e.g. for nodeJS, <code>require('fake-indexeddb')</code>.

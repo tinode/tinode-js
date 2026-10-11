@@ -1,4 +1,5 @@
 import {
+  MemoryAdapter,
   Tinode
 } from './tinode.js';
 import * as Const from './config.js';
@@ -486,5 +487,109 @@ describe('Tinode - Static Methods', () => {
       const result = Tinode.tagByPrefix(tags, 'email');
       expect(result).toBe('email:test@example.com');
     });
+  });
+});
+
+describe('Tinode storage and network options', () => {
+  class FakeWebSocket {
+    OPEN = 1;
+    readyState = 0;
+    send(_) {}
+    close() {}
+  }
+
+  class FakeNetInfo {
+    listener = null;
+
+    addEventListener(listener) {
+      this.listener = listener;
+      return _ => {
+        this.listener = null;
+      };
+    }
+  }
+
+  const config = {
+    host: 'localhost:6060',
+    apiKey: 'test-key',
+    transport: 'ws'
+  };
+
+  function createTinode(extra) {
+    return new Promise((resolve, reject) => {
+      const tinode = new Tinode({
+        ...config,
+        ...extra
+      }, err => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(tinode);
+        }
+      });
+    });
+  }
+
+  beforeEach(() => {
+    Tinode.setNetworkProviders(FakeWebSocket, null);
+  });
+
+  afterEach(() => {
+    Tinode.setDatabaseProvider(null);
+  });
+
+  test('uses the provider from setDatabaseProvider when persist is on', async () => {
+    Tinode.setDatabaseProvider(require('fake-indexeddb'));
+    const tinode = await createTinode({
+      persist: true
+    });
+    expect(tinode._db.isReady()).toBe(true);
+    await tinode.clearStorage();
+    expect(tinode._db.isReady()).toBe(false);
+  });
+
+  test('uses the storage adapter without persist', async () => {
+    const tinode = await createTinode({
+      storage: new MemoryAdapter()
+    });
+    expect(tinode._persist).toBe(true);
+    expect(tinode._db.isReady()).toBe(true);
+  });
+
+  test('completes without storage when IndexedDB is missing', async () => {
+    const tinode = await createTinode({
+      persist: true
+    });
+    expect(tinode._db.isReady()).toBe(false);
+  });
+
+  test('completes without persist when IndexedDB is missing', async () => {
+    const tinode = await createTinode({});
+    expect(tinode._db.isReady()).toBe(false);
+  });
+
+  test('retries the connection when the network comes back', () => {
+    const netInfo = new FakeNetInfo();
+    const tinode = new Tinode({
+      ...config,
+      netInfo
+    });
+    const retryNow = jest.spyOn(tinode._connection, 'retryNow').mockImplementation(_ => {});
+
+    netInfo.listener({
+      isConnected: true
+    });
+    expect(retryNow).not.toHaveBeenCalled();
+
+    netInfo.listener({
+      isConnected: false
+    });
+    netInfo.listener({
+      isConnected: true
+    });
+    expect(retryNow).toHaveBeenCalledTimes(1);
+
+    tinode._netInfoUnsubscribe();
+    expect(netInfo.listener).toBeNull();
   });
 });
