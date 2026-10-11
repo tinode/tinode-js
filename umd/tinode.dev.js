@@ -561,18 +561,30 @@ class Connection {
       this.onAutoreconnectIteration(timeout);
     }
     this.#boffTimer = setTimeout(_ => {
+      this.#boffTimer = null;
       Connection.#log(`Reconnecting, iter=${this.#boffIteration}, timeout=${timeout}`);
       if (!this.#boffClosed) {
-        const prom = this.connect();
-        if (this.onAutoreconnectIteration) {
-          this.onAutoreconnectIteration(0, prom);
-        } else {
-          prom.catch(_ => {});
-        }
+        this.#boffAttempt();
       } else if (this.onAutoreconnectIteration) {
         this.onAutoreconnectIteration(-1);
       }
     }, timeout);
+  }
+  #boffAttempt() {
+    const prom = this.connect();
+    if (this.onAutoreconnectIteration) {
+      this.onAutoreconnectIteration(0, prom);
+    } else {
+      prom.catch(_ => {});
+    }
+  }
+  retryNow() {
+    if (this.#boffTimer === null || this.#boffClosed) {
+      return;
+    }
+    this.#boffStop();
+    this.#boffReset();
+    this.#boffAttempt();
   }
   #boffStop() {
     clearTimeout(this.#boffTimer);
@@ -800,569 +812,152 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   "default": function() { return /* binding */ DB; }
 /* harmony export */ });
+/* harmony import */ var _indexeddb_adapter_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./indexeddb-adapter.js */ "./src/indexeddb-adapter.js");
+/* harmony import */ var _storage_adapter_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./storage-adapter.js */ "./src/storage-adapter.js");
 
-const DB_VERSION = 3;
-const DB_NAME = 'tinode-web';
+
+
 let IDBProvider;
 class DB {
   #onError = _ => {};
   #logger = _ => {};
-  db = null;
-  disabled = true;
-  constructor(onError, logger) {
+  #adapter = null;
+  constructor(onError, logger, adapter) {
     this.#onError = onError || this.#onError;
     this.#logger = logger || this.#logger;
-  }
-  #mapObjects(source, callback, context) {
-    if (!this.db) {
-      return disabled ? Promise.resolve([]) : Promise.reject(new Error("not initialized"));
+    if (typeof adapter == 'undefined') {
+      adapter = _indexeddb_adapter_js__WEBPACK_IMPORTED_MODULE_0__["default"].isSupported(IDBProvider) ? new _indexeddb_adapter_js__WEBPACK_IMPORTED_MODULE_0__["default"](IDBProvider) : null;
     }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction([source]);
-      trx.onerror = event => {
-        this.#logger('PCache', 'mapObjects', source, event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore(source).getAll().onsuccess = event => {
-        if (callback) {
-          event.target.result.forEach(topic => {
-            callback.call(context, topic);
-          });
-        }
-        resolve(event.target.result);
-      };
+    this.#adapter = adapter;
+  }
+  #run(op, fallback, work) {
+    const adapter = this.#adapter;
+    if (!adapter || !adapter.isOpen()) {
+      return Promise.resolve(fallback);
+    }
+    return work(adapter).catch(err => {
+      this.#logger('PCache', op, err);
+      throw err;
     });
   }
   initDatabase() {
-    return new Promise((resolve, reject) => {
-      const req = IDBProvider.open(DB_NAME, DB_VERSION);
-      req.onsuccess = event => {
-        this.db = event.target.result;
-        this.disabled = false;
-        this.db.onversionchange = _ => {
-          this.#logger('PCache', "another tab tries to upgrade DB, shutting down");
-          this.db.close();
-          this.db = null;
-          this.disabled = true;
-        };
-        resolve(this.db);
-      };
-      req.onerror = event => {
-        this.#logger('PCache', "failed to initialize", event);
-        reject(event.target.error);
-        this.#onError(event.target.error);
-      };
-      req.onupgradeneeded = event => {
-        this.db = event.target.result;
-        this.db.onerror = event => {
-          this.#logger('PCache', "failed to create storage", event);
-          this.#onError(event.target.error);
-        };
-        if (!this.db.objectStoreNames.contains('topic')) {
-          this.db.createObjectStore('topic', {
-            keyPath: 'name'
-          });
-        }
-        if (!this.db.objectStoreNames.contains('user')) {
-          this.db.createObjectStore('user', {
-            keyPath: 'uid'
-          });
-        }
-        if (!this.db.objectStoreNames.contains('subscription')) {
-          this.db.createObjectStore('subscription', {
-            keyPath: ['topic', 'uid']
-          });
-        }
-        if (!this.db.objectStoreNames.contains('message')) {
-          this.db.createObjectStore('message', {
-            keyPath: ['topic', 'seq']
-          });
-        }
-        if (!this.db.objectStoreNames.contains('dellog')) {
-          const dellog = this.db.createObjectStore('dellog', {
-            keyPath: ['topic', 'low', 'hi']
-          });
-          if (!dellog.indexNames.contains('topic_clear')) {
-            dellog.createIndex('topic_clear', ['topic', 'clear'], {
-              unique: false
-            });
-          }
-        }
-      };
+    if (!this.#adapter) {
+      return Promise.resolve();
+    }
+    return this.#adapter.open().catch(err => {
+      this.#logger('PCache', "failed to initialize", err);
+      this.#onError(err);
+      throw err;
     });
   }
   deleteDatabase() {
-    if (this.db) {
-      this.db.close();
-      this.db = null;
+    if (!this.#adapter) {
+      return Promise.resolve(true);
     }
-    return new Promise((resolve, reject) => {
-      const req = IDBProvider.deleteDatabase(DB_NAME);
-      req.onblocked = _ => {
-        if (this.db) {
-          this.db.close();
-        }
-        const err = new Error("blocked");
-        this.#logger('PCache', 'deleteDatabase', err);
-        reject(err);
-      };
-      req.onsuccess = _ => {
-        this.db = null;
-        this.disabled = true;
-        resolve(true);
-      };
-      req.onerror = event => {
-        this.#logger('PCache', 'deleteDatabase', event.target.error);
-        reject(event.target.error);
-      };
+    return this.#adapter.destroy().then(_ => true, err => {
+      this.#logger('PCache', 'deleteDatabase', err);
+      throw err;
     });
   }
   isReady() {
-    return !!this.db;
+    return !!this.#adapter && this.#adapter.isOpen();
   }
   updTopic(topic) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['topic'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'updTopic', event.target.error);
-        reject(event.target.error);
-      };
-      const req = trx.objectStore('topic').get(topic.name);
-      req.onsuccess = _ => {
-        trx.objectStore('topic').put(DB.#serializeTopic(req.result, topic));
-        trx.commit();
-      };
-    });
+    return this.#run('updTopic', undefined, adapter => adapter.getTopic(topic.name).then(src => adapter.putTopic(DB.#serializeTopic(src, topic))));
   }
   markTopicAsDeleted(name, deleted) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['topic'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'markTopicAsDeleted', event.target.error);
-        reject(event.target.error);
-      };
-      const req = trx.objectStore('topic').get(name);
-      req.onsuccess = event => {
-        const topic = event.target.result;
-        if (topic && topic._deleted != deleted) {
-          topic._deleted = deleted;
-          trx.objectStore('topic').put(topic);
-        }
-        trx.commit();
-      };
-    });
+    return this.#run('markTopicAsDeleted', undefined, adapter => adapter.getTopic(name).then(topic => {
+      if (topic && topic._deleted != deleted) {
+        topic._deleted = deleted;
+        return adapter.putTopic(topic);
+      }
+    }));
   }
   remTopic(name) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['topic', 'subscription', 'message'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'remTopic', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('topic').delete(IDBKeyRange.only(name));
-      trx.objectStore('subscription').delete(IDBKeyRange.bound([name, '-'], [name, '~']));
-      trx.objectStore('message').delete(IDBKeyRange.bound([name, 0], [name, Number.MAX_SAFE_INTEGER]));
-      trx.commit();
-    });
+    return this.#run('remTopic', undefined, adapter => adapter.removeTopic(name));
   }
   mapTopics(callback, context) {
-    return this.#mapObjects('topic', callback, context);
+    return this.#run('mapTopics', [], adapter => adapter.getTopics().then(topics => DB.#visit(topics, callback, context)));
   }
   deserializeTopic(topic, src) {
     DB.#deserializeTopic(topic, src);
   }
   updUser(uid, pub) {
-    if (arguments.length < 2 || pub === undefined) {
-      return;
+    if (typeof pub == 'undefined') {
+      return Promise.resolve();
     }
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['user'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'updUser', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('user').put({
-        uid: uid,
-        public: pub
-      });
-      trx.commit();
-    });
+    return this.#run('updUser', undefined, adapter => adapter.putUser({
+      uid: uid,
+      public: pub
+    }));
   }
   remUser(uid) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['user'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'remUser', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('user').delete(IDBKeyRange.only(uid));
-      trx.commit();
-    });
+    return this.#run('remUser', undefined, adapter => adapter.removeUser(uid));
   }
   mapUsers(callback, context) {
-    return this.#mapObjects('user', callback, context);
+    return this.#run('mapUsers', [], adapter => adapter.getUsers().then(users => DB.#visit(users, callback, context)));
   }
   getUser(uid) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['user']);
-      trx.oncomplete = event => {
-        const user = event.target.result;
-        resolve({
-          user: user.uid,
-          public: user.public
-        });
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'getUser', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('user').get(uid);
-    });
+    return this.#run('getUser', undefined, adapter => adapter.getUser(uid).then(user => user && {
+      user: user.uid,
+      public: user.public
+    }));
   }
   updSubscription(topicName, uid, sub) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['subscription'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'updSubscription', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('subscription').get([topicName, uid]).onsuccess = event => {
-        trx.objectStore('subscription').put(DB.#serializeSubscription(event.target.result, topicName, uid, sub));
-        trx.commit();
-      };
-    });
+    return this.#run('updSubscription', undefined, adapter => adapter.getSubscription(topicName, uid).then(src => adapter.putSubscription(DB.#serializeSubscription(src, topicName, uid, sub))));
   }
   remSubscription(topicName, uid) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['subscription'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'remSubscription', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('subscription').delete([topicName, uid]);
-      trx.commit();
-    });
+    return this.#run('remSubscription', undefined, adapter => adapter.removeSubscription(topicName, uid));
   }
   mapSubscriptions(topicName, callback, context) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve([]) : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['subscription']);
-      trx.onerror = event => {
-        this.#logger('PCache', 'mapSubscriptions', event.target.error);
-        reject(event.target.error);
+    return this.#run('mapSubscriptions', [], adapter => adapter.getSubscriptions(topicName).then(subs => DB.#visit(subs.map(sub => {
+      return {
+        ...sub,
+        user: sub.uid
       };
-      trx.objectStore('subscription').getAll(IDBKeyRange.bound([topicName, '-'], [topicName, '~'])).onsuccess = event => {
-        if (callback) {
-          event.target.result.forEach(topic => {
-            callback.call(context, topic);
-          });
-        }
-        resolve(event.target.result);
-      };
-    });
+    }), callback, context)));
   }
   addMessage(msg) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['message'], 'readwrite');
-      trx.onsuccess = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'addMessage', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('message').add(DB.#serializeMessage(null, msg));
-      trx.commit();
-    });
+    return this.#run('addMessage', undefined, adapter => adapter.putMessage(DB.#serializeMessage(null, msg)));
   }
   updMessageStatus(topicName, seq, status) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['message'], 'readwrite');
-      trx.onsuccess = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'updMessageStatus', event.target.error);
-        reject(event.target.error);
-      };
-      const req = trx.objectStore('message').get(IDBKeyRange.only([topicName, seq]));
-      req.onsuccess = event => {
-        const src = req.result || event.target.result;
-        if (!src || src._status == status) {
-          trx.commit();
-          return;
-        }
-        trx.objectStore('message').put(DB.#serializeMessage(src, {
-          topic: topicName,
-          seq: seq,
-          _status: status
-        }));
-        trx.commit();
-      };
-    });
+    return this.#run('updMessageStatus', undefined, adapter => adapter.updateMessageStatus(topicName, seq, status));
   }
   remMessages(topicName, from, to) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
+    return this.#run('remMessages', undefined, adapter => {
       if (!from && !to) {
-        from = 0;
-        to = Number.MAX_SAFE_INTEGER;
+        return adapter.removeMessages(topicName, 0, _storage_adapter_js__WEBPACK_IMPORTED_MODULE_1__.MAX_SEQ);
       }
-      if (to > 0 && to <= from) {
-        resolve();
-        return;
+      from = from || 0;
+      if (to > 0) {
+        return to > from ? adapter.removeMessages(topicName, from, to) : Promise.resolve();
       }
-      const range = to > 0 ? IDBKeyRange.bound([topicName, from], [topicName, to], false, true) : IDBKeyRange.only([topicName, from]);
-      const trx = this.db.transaction(['message'], 'readwrite');
-      trx.onsuccess = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'remMessages', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('message').delete(range);
-      trx.commit();
+      return adapter.removeMessages(topicName, from, from + 1);
     });
   }
   readMessages(topicName, query, callback, context) {
     query = query || {};
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve([]) : Promise.reject(new Error("not initialized"));
-    }
-    const trx = this.db.transaction(['message']);
-    let result = [];
-    if (Array.isArray(query.ranges)) {
-      return new Promise((resolve, reject) => {
-        trx.onerror = event => {
-          this.#logger('PCache', 'readMessages', event.target.error);
-          reject(event.target.error);
-        };
-        const ranges = query.ranges.filter(r => !r.hi || r.hi > r.low);
-        if (ranges.length == 0) {
-          resolve(result);
-          return;
-        }
-        let count = 0;
-        ranges.forEach(range => {
-          const key = range.hi ? IDBKeyRange.bound([topicName, range.low], [topicName, range.hi], false, true) : IDBKeyRange.only([topicName, range.low]);
-          trx.objectStore('message').getAll(key).onsuccess = event => {
-            const msgs = event.target.result;
-            if (msgs) {
-              if (callback) {
-                callback.call(context, msgs);
-              }
-              if (Array.isArray(msgs)) {
-                result = result.concat(msgs);
-              } else {
-                result.push(msgs);
-              }
-            }
-            count++;
-            if (count == ranges.length) {
-              resolve(result);
-            }
-          };
-        });
-      });
-    }
-    return new Promise((resolve, reject) => {
-      const since = query.since > 0 ? query.since : 0;
-      const before = query.before > 0 ? query.before : Number.MAX_SAFE_INTEGER;
-      const limit = query.limit | 0;
-      trx.onerror = event => {
-        this.#logger('PCache', 'readMessages', event.target.error);
-        reject(event.target.error);
-      };
-      if (since >= before) {
-        resolve(result);
-        return;
-      }
-      const range = IDBKeyRange.bound([topicName, since], [topicName, before], false, true);
-      trx.objectStore('message').openCursor(range, 'prev').onsuccess = event => {
-        const cursor = event.target.result;
-        if (cursor) {
-          if (callback) {
-            callback.call(context, cursor.value);
-          }
-          result.push(cursor.value);
-          if (limit <= 0 || result.length < limit) {
-            cursor.continue();
-          } else {
-            resolve(result);
-          }
-        } else {
-          resolve(result);
-        }
-      };
+    return this.#run('readMessages', [], adapter => {
+      const read = Array.isArray(query.ranges) ? adapter.readMessageRanges(topicName, query.ranges) : adapter.readMessages(topicName, DB.#window(query));
+      return read.then(msgs => DB.#visit(msgs, callback, context));
     });
   }
   addDelLog(topicName, delId, ranges) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve() : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['dellog'], 'readwrite');
-      trx.onsuccess = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'addDelLog', event.target.error);
-        reject(event.target.error);
-      };
-      ranges.forEach(r => trx.objectStore('dellog').add({
+    return this.#run('addDelLog', undefined, adapter => adapter.addDelLog(ranges.map(r => {
+      return {
         topic: topicName,
         clear: delId,
         low: r.low,
         hi: r.hi || r.low + 1
-      }));
-      trx.commit();
-    });
+      };
+    })));
   }
   readDelLog(topicName, query) {
     query = query || {};
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve([]) : Promise.reject(new Error("not initialized"));
-    }
-    const trx = this.db.transaction(['dellog']);
-    let result = [];
-    if (Array.isArray(query.ranges)) {
-      return new Promise((resolve, reject) => {
-        trx.onerror = event => {
-          this.#logger('PCache', 'readDelLog', event.target.error);
-          reject(event.target.error);
-        };
-        let count = 0;
-        query.ranges.forEach(range => {
-          const hi = range.hi || range.low + 1;
-          const key = IDBKeyRange.bound([topicName, 0, range.low], [topicName, hi, Number.MAX_SAFE_INTEGER], false, true);
-          trx.objectStore('dellog').getAll(key).onsuccess = event => {
-            const entries = event.target.result;
-            if (entries) {
-              if (Array.isArray(entries)) {
-                result = result.concat(entries.map(entry => {
-                  return {
-                    low: entry.low,
-                    hi: entry.hi
-                  };
-                }));
-              } else {
-                result.push({
-                  low: entries.low,
-                  hi: entries.hi
-                });
-              }
-            }
-            count++;
-            if (count == query.ranges.length) {
-              resolve(result);
-            }
-          };
-        });
-      });
-    }
-    return new Promise((resolve, reject) => {
-      const since = query.since > 0 ? query.since : 0;
-      const before = query.before > 0 ? query.before : Number.MAX_SAFE_INTEGER;
-      const limit = query.limit | 0;
-      trx.onerror = event => {
-        this.#logger('PCache', 'readDelLog', event.target.error);
-        reject(event.target.error);
-      };
-      let count = 0;
-      const result = [];
-      const range = IDBKeyRange.bound([topicName, 0, since], [topicName, before, Number.MAX_SAFE_INTEGER], false, true);
-      trx.objectStore('dellog').openCursor(range, 'prev').onsuccess = event => {
-        const cursor = event.target.result;
-        if (cursor) {
-          result.push({
-            low: cursor.value.low,
-            hi: cursor.value.hi
-          });
-          count += cursor.value.hi - cursor.value.low;
-          if (limit <= 0 || count < limit) {
-            cursor.continue();
-          } else {
-            resolve(result);
-          }
-        } else {
-          resolve(result);
-        }
-      };
-    });
+    return this.#run('readDelLog', [], adapter => Array.isArray(query.ranges) ? adapter.readDelLogRanges(topicName, query.ranges) : adapter.readDelLog(topicName, DB.#window(query)));
   }
   maxDelId(topicName) {
-    if (!this.isReady()) {
-      return this.disabled ? Promise.resolve(0) : Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['dellog']);
-      trx.onerror = event => {
-        this.#logger('PCache', 'maxDelId', event.target.error);
-        reject(event.target.error);
-      };
-      const index = trx.objectStore('dellog').index('topic_clear');
-      index.openCursor(IDBKeyRange.bound([topicName, 0], [topicName, Number.MAX_SAFE_INTEGER]), 'prev').onsuccess = event => {
-        if (event.target.result) {
-          resolve(event.target.result.value);
-        }
-      };
-    });
+    return this.#run('maxDelId', 0, adapter => adapter.maxDelId(topicName));
   }
   static #topic_fields = ['created', 'updated', 'deleted', 'touched', 'read', 'recv', 'seq', 'clear', 'defacs', 'creds', 'public', 'trusted', 'private', '_aux', '_deleted'];
   static #deserializeTopic(topic, src) {
@@ -1420,6 +1015,19 @@ class DB {
       }
     });
     return res;
+  }
+  static #window(query) {
+    return {
+      since: query.since > 0 ? query.since : 0,
+      before: query.before > 0 ? query.before : _storage_adapter_js__WEBPACK_IMPORTED_MODULE_1__.MAX_SEQ,
+      limit: query.limit | 0
+    };
+  }
+  static #visit(items, callback, context) {
+    if (callback) {
+      items.forEach(item => callback.call(context, item));
+    }
+    return items;
   }
   static setDatabaseProvider(idbProvider) {
     IDBProvider = idbProvider;
@@ -3324,6 +2932,557 @@ class TopicFnd extends _topic_js__WEBPACK_IMPORTED_MODULE_1__["default"] {
 
 /***/ }),
 
+/***/ "./src/indexeddb-adapter.js":
+/*!**********************************!*\
+  !*** ./src/indexeddb-adapter.js ***!
+  \**********************************/
+/***/ (function(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": function() { return /* binding */ IndexedDBAdapter; }
+/* harmony export */ });
+/* harmony import */ var _storage_adapter_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./storage-adapter.js */ "./src/storage-adapter.js");
+
+
+
+const DB_VERSION = 3;
+const DB_NAME = 'tinode-web';
+function resolveProvider(provider) {
+  if (!provider) {
+    return {
+      factory: globalThis.indexedDB,
+      keyRange: globalThis.IDBKeyRange
+    };
+  }
+  if (provider.factory) {
+    return {
+      factory: provider.factory,
+      keyRange: provider.keyRange
+    };
+  }
+  if (provider.indexedDB) {
+    return {
+      factory: provider.indexedDB,
+      keyRange: provider.IDBKeyRange || globalThis.IDBKeyRange
+    };
+  }
+  return {
+    factory: provider,
+    keyRange: globalThis.IDBKeyRange
+  };
+}
+function isNonEmptyRange(range) {
+  return !range.hi || range.hi > range.low;
+}
+function delLogRange(record) {
+  return {
+    low: record.low,
+    hi: record.hi
+  };
+}
+function createStores(db) {
+  if (!db.objectStoreNames.contains('topic')) {
+    db.createObjectStore('topic', {
+      keyPath: 'name'
+    });
+  }
+  if (!db.objectStoreNames.contains('user')) {
+    db.createObjectStore('user', {
+      keyPath: 'uid'
+    });
+  }
+  if (!db.objectStoreNames.contains('subscription')) {
+    db.createObjectStore('subscription', {
+      keyPath: ['topic', 'uid']
+    });
+  }
+  if (!db.objectStoreNames.contains('message')) {
+    db.createObjectStore('message', {
+      keyPath: ['topic', 'seq']
+    });
+  }
+  if (!db.objectStoreNames.contains('dellog')) {
+    const dellog = db.createObjectStore('dellog', {
+      keyPath: ['topic', 'low', 'hi']
+    });
+    if (!dellog.indexNames.contains('topic_clear')) {
+      dellog.createIndex('topic_clear', ['topic', 'clear'], {
+        unique: false
+      });
+    }
+  }
+}
+class IndexedDBAdapter {
+  #factory = null;
+  #keyRange = null;
+  #db = null;
+  constructor(provider) {
+    const {
+      factory,
+      keyRange
+    } = resolveProvider(provider);
+    this.#factory = factory || null;
+    this.#keyRange = keyRange || null;
+  }
+  static isSupported(provider) {
+    const {
+      factory,
+      keyRange
+    } = resolveProvider(provider);
+    return !!factory && typeof factory.open == 'function' && !!keyRange && typeof keyRange.bound == 'function';
+  }
+  open() {
+    if (this.#db) {
+      return Promise.resolve();
+    }
+    if (!this.#factory) {
+      return Promise.reject(new Error("IndexedDB is not available"));
+    }
+    return new Promise((resolve, reject) => {
+      const req = this.#factory.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = event => {
+        createStores(event.target.result);
+      };
+      req.onerror = event => {
+        reject(event.target.error);
+      };
+      req.onsuccess = event => {
+        const db = event.target.result;
+        db.onversionchange = _ => {
+          db.close();
+          if (this.#db == db) {
+            this.#db = null;
+          }
+        };
+        this.#db = db;
+        resolve();
+      };
+    });
+  }
+  close() {
+    if (this.#db) {
+      this.#db.close();
+      this.#db = null;
+    }
+    return Promise.resolve();
+  }
+  destroy() {
+    this.close();
+    if (!this.#factory) {
+      return Promise.reject(new Error("IndexedDB is not available"));
+    }
+    return new Promise((resolve, reject) => {
+      const req = this.#factory.deleteDatabase(DB_NAME);
+      req.onblocked = _ => {
+        reject(new Error("blocked"));
+      };
+      req.onsuccess = _ => {
+        resolve();
+      };
+      req.onerror = event => {
+        reject(event.target.error);
+      };
+    });
+  }
+  isOpen() {
+    return !!this.#db;
+  }
+  getTopics() {
+    return this.#getAll('topic');
+  }
+  getTopic(name) {
+    return this.#get('topic', name);
+  }
+  putTopic(record) {
+    return this.#put('topic', record);
+  }
+  removeTopic(name) {
+    return this.#exec(['topic', 'subscription', 'message', 'dellog'], 'readwrite', trx => {
+      trx.objectStore('topic').delete(this.#keyRange.only(name));
+      trx.objectStore('subscription').delete(this.#keyRange.bound([name, '-'], [name, '~']));
+      trx.objectStore('message').delete(this.#keyRange.bound([name, 0], [name, _storage_adapter_js__WEBPACK_IMPORTED_MODULE_0__.MAX_SEQ]));
+      trx.objectStore('dellog').delete(this.#keyRange.bound([name, 0, 0], [name, _storage_adapter_js__WEBPACK_IMPORTED_MODULE_0__.MAX_SEQ, _storage_adapter_js__WEBPACK_IMPORTED_MODULE_0__.MAX_SEQ]));
+    });
+  }
+  getUsers() {
+    return this.#getAll('user');
+  }
+  getUser(uid) {
+    return this.#get('user', uid);
+  }
+  putUser(record) {
+    return this.#put('user', record);
+  }
+  removeUser(uid) {
+    return this.#delete('user', uid);
+  }
+  getSubscriptions(topic) {
+    return this.#getAll('subscription', this.#keyRange.bound([topic, '-'], [topic, '~']));
+  }
+  getSubscription(topic, uid) {
+    return this.#get('subscription', [topic, uid]);
+  }
+  putSubscription(record) {
+    return this.#put('subscription', record);
+  }
+  removeSubscription(topic, uid) {
+    return this.#delete('subscription', [topic, uid]);
+  }
+  putMessage(record) {
+    return this.#put('message', record);
+  }
+  updateMessageStatus(topic, seq, status) {
+    return this.#exec(['message'], 'readwrite', trx => {
+      const store = trx.objectStore('message');
+      store.get([topic, seq]).onsuccess = event => {
+        const record = event.target.result;
+        if (record && record._status != status) {
+          record._status = status;
+          store.put(record);
+        }
+      };
+    });
+  }
+  removeMessages(topic, low, hi) {
+    if (hi <= low) {
+      return Promise.resolve();
+    }
+    return this.#exec(['message'], 'readwrite', trx => {
+      trx.objectStore('message').delete(this.#keyRange.bound([topic, low], [topic, hi], false, true));
+    });
+  }
+  readMessages(topic, window) {
+    if (window.since >= window.before) {
+      return Promise.resolve([]);
+    }
+    const result = [];
+    return this.#exec(['message'], 'readonly', trx => {
+      const range = this.#keyRange.bound([topic, window.since], [topic, window.before], false, true);
+      trx.objectStore('message').openCursor(range, 'prev').onsuccess = event => {
+        const cursor = event.target.result;
+        if (!cursor) {
+          return;
+        }
+        result.push(cursor.value);
+        if (window.limit <= 0 || result.length < window.limit) {
+          cursor.continue();
+        }
+      };
+    }).then(_ => result);
+  }
+  readMessageRanges(topic, ranges) {
+    const found = [];
+    return this.#exec(['message'], 'readonly', trx => {
+      ranges.filter(isNonEmptyRange).forEach((range, index) => {
+        const key = range.hi ? this.#keyRange.bound([topic, range.low], [topic, range.hi], false, true) : this.#keyRange.only([topic, range.low]);
+        trx.objectStore('message').getAll(key).onsuccess = event => {
+          found[index] = event.target.result;
+        };
+      });
+    }).then(_ => found.flat());
+  }
+  addDelLog(records) {
+    if (records.length == 0) {
+      return Promise.resolve();
+    }
+    return this.#exec(['dellog'], 'readwrite', trx => {
+      const store = trx.objectStore('dellog');
+      records.forEach(record => {
+        store.put(record);
+      });
+    });
+  }
+  readDelLog(topic, window) {
+    if (window.since >= window.before) {
+      return Promise.resolve([]);
+    }
+    const result = [];
+    let count = 0;
+    return this.#exec(['dellog'], 'readonly', trx => {
+      const range = this.#keyRange.bound([topic, 0, 0], [topic, window.before, 0], false, true);
+      trx.objectStore('dellog').openCursor(range, 'prev').onsuccess = event => {
+        const cursor = event.target.result;
+        if (!cursor) {
+          return;
+        }
+        const record = cursor.value;
+        if (record.hi > window.since) {
+          result.push(delLogRange(record));
+          count += record.hi - record.low;
+        }
+        if (window.limit <= 0 || count < window.limit) {
+          cursor.continue();
+        }
+      };
+    }).then(_ => result);
+  }
+  readDelLogRanges(topic, ranges) {
+    const found = [];
+    return this.#exec(['dellog'], 'readonly', trx => {
+      ranges.forEach((range, index) => {
+        const hi = range.hi || range.low + 1;
+        const key = this.#keyRange.bound([topic, 0, 0], [topic, hi, 0], false, true);
+        trx.objectStore('dellog').getAll(key).onsuccess = event => {
+          found[index] = event.target.result.filter(record => record.hi > range.low).map(delLogRange);
+        };
+      });
+    }).then(_ => found.flat());
+  }
+  maxDelId(topic) {
+    let clear = 0;
+    return this.#exec(['dellog'], 'readonly', trx => {
+      const range = this.#keyRange.bound([topic, 0], [topic, _storage_adapter_js__WEBPACK_IMPORTED_MODULE_0__.MAX_SEQ]);
+      trx.objectStore('dellog').index('topic_clear').openCursor(range, 'prev').onsuccess = event => {
+        const cursor = event.target.result;
+        if (cursor) {
+          clear = cursor.value.clear;
+        }
+      };
+    }).then(_ => clear);
+  }
+  #exec(stores, mode, action) {
+    if (!this.#db) {
+      return Promise.reject(new Error("not initialized"));
+    }
+    return new Promise((resolve, reject) => {
+      const trx = this.#db.transaction(stores, mode);
+      trx.oncomplete = _ => {
+        resolve();
+      };
+      trx.onerror = event => {
+        reject(event.target.error);
+      };
+      trx.onabort = _ => {
+        reject(trx.error || new Error("aborted"));
+      };
+      action(trx);
+    });
+  }
+  #get(source, key) {
+    let record;
+    return this.#exec([source], 'readonly', trx => {
+      trx.objectStore(source).get(key).onsuccess = event => {
+        record = event.target.result;
+      };
+    }).then(_ => record);
+  }
+  #getAll(source, range) {
+    let records = [];
+    return this.#exec([source], 'readonly', trx => {
+      trx.objectStore(source).getAll(range).onsuccess = event => {
+        records = event.target.result;
+      };
+    }).then(_ => records);
+  }
+  #put(source, record) {
+    return this.#exec([source], 'readwrite', trx => {
+      trx.objectStore(source).put(record);
+    });
+  }
+  #delete(source, key) {
+    return this.#exec([source], 'readwrite', trx => {
+      trx.objectStore(source).delete(key);
+    });
+  }
+}
+
+/***/ }),
+
+/***/ "./src/key-value-adapter.js":
+/*!**********************************!*\
+  !*** ./src/key-value-adapter.js ***!
+  \**********************************/
+/***/ (function(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": function() { return /* binding */ KeyValueAdapter; },
+/* harmony export */   fromMMKV: function() { return /* binding */ fromMMKV; }
+/* harmony export */ });
+/* harmony import */ var _memory_adapter_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./memory-adapter.js */ "./src/memory-adapter.js");
+
+
+
+const DEFAULT_PREFIX = 'tinode';
+const DATE_KEYS = ['ts', 'touched', 'updated', 'created', 'when', 'deleted', 'expires'];
+function reviveDate(key, val) {
+  if (typeof val == 'string' && val.length >= 20 && val.length <= 24 && DATE_KEYS.includes(key)) {
+    const date = new Date(val);
+    if (!isNaN(date)) {
+      return date;
+    }
+  }
+  return val;
+}
+function parse(raw) {
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(raw, reviveDate);
+  } catch (err) {
+    return undefined;
+  }
+}
+function isObject(value) {
+  return typeof value == 'object' && value !== null;
+}
+function isTopicRecord(value) {
+  return isObject(value) && typeof value.name == 'string';
+}
+function isUserRecord(value) {
+  return isObject(value) && typeof value.uid == 'string';
+}
+function isSubscriptionRecord(value) {
+  return isObject(value) && typeof value.topic == 'string' && typeof value.uid == 'string';
+}
+function isMessageRecord(value) {
+  return isObject(value) && typeof value.topic == 'string' && typeof value.seq == 'number';
+}
+function isDelLogRecord(value) {
+  return isObject(value) && typeof value.topic == 'string' && typeof value.clear == 'number' && typeof value.low == 'number' && typeof value.hi == 'number';
+}
+function fromMMKV(mmkv) {
+  return {
+    getItem: key => mmkv.getString(key),
+    setItem: (key, value) => mmkv.set(key, value),
+    removeItem: key => 'remove' in mmkv ? mmkv.remove(key) : mmkv.delete(key),
+    getAllKeys: _ => mmkv.getAllKeys()
+  };
+}
+class KeyValueAdapter extends _memory_adapter_js__WEBPACK_IMPORTED_MODULE_0__["default"] {
+  #store;
+  #prefix;
+  constructor(store, options) {
+    super();
+    this.#store = store;
+    this.#prefix = (options && options.prefix || DEFAULT_PREFIX) + '/';
+  }
+  async open() {
+    const keys = (await this.#store.getAllKeys()).filter(key => key.startsWith(this.#prefix));
+    for (const [key, raw] of await this.#readAll(keys)) {
+      await this.#restore(key.slice(this.#prefix.length), parse(raw));
+    }
+    await super.open();
+  }
+  async destroy() {
+    await super.destroy();
+    await this.#removeWhere(_ => true);
+  }
+  async putTopic(record) {
+    await super.putTopic(record);
+    await this.#save(`topic/${record.name}`, record);
+  }
+  async removeTopic(name) {
+    await super.removeTopic(name);
+    await this.#removeWhere(path => path == `topic/${name}` || path.startsWith(`sub/${name}/`) || path.startsWith(`msg/${name}/`) || path.startsWith(`del/${name}/`));
+  }
+  async putUser(record) {
+    await super.putUser(record);
+    await this.#save(`user/${record.uid}`, record);
+  }
+  async removeUser(uid) {
+    await super.removeUser(uid);
+    await this.#store.removeItem(this.#prefix + `user/${uid}`);
+  }
+  async putSubscription(record) {
+    await super.putSubscription(record);
+    await this.#save(`sub/${record.topic}/${record.uid}`, record);
+  }
+  async removeSubscription(topic, uid) {
+    await super.removeSubscription(topic, uid);
+    await this.#store.removeItem(this.#prefix + `sub/${topic}/${uid}`);
+  }
+  async putMessage(record) {
+    await super.putMessage(record);
+    await this.#save(`msg/${record.topic}/${record.seq}`, record);
+  }
+  async updateMessageStatus(topic, seq, status) {
+    await super.updateMessageStatus(topic, seq, status);
+    const [record] = await super.readMessageRanges(topic, [{
+      low: seq
+    }]);
+    if (record) {
+      await this.#save(`msg/${topic}/${seq}`, record);
+    }
+  }
+  async removeMessages(topic, low, hi) {
+    await super.removeMessages(topic, low, hi);
+    const messages = `msg/${topic}/`;
+    await this.#removeWhere(path => {
+      if (!path.startsWith(messages)) {
+        return false;
+      }
+      const seq = Number(path.slice(messages.length));
+      return seq >= low && seq < hi;
+    });
+  }
+  async addDelLog(records) {
+    await super.addDelLog(records);
+    for (const record of records) {
+      await this.#save(`del/${record.topic}/${record.low}/${record.hi}`, record);
+    }
+  }
+  async #readAll(keys) {
+    if (typeof this.#store.getMany == 'function') {
+      const values = await this.#store.getMany(keys);
+      return keys.map(key => [key, values[key]]);
+    }
+    if (typeof this.#store.multiGet == 'function') {
+      return this.#store.multiGet(keys);
+    }
+    const pairs = [];
+    for (const key of keys) {
+      pairs.push([key, await this.#store.getItem(key)]);
+    }
+    return pairs;
+  }
+  async #restore(path, value) {
+    switch (path.slice(0, path.indexOf('/'))) {
+      case 'topic':
+        if (isTopicRecord(value)) {
+          await super.putTopic(value);
+        }
+        break;
+      case 'user':
+        if (isUserRecord(value)) {
+          await super.putUser(value);
+        }
+        break;
+      case 'sub':
+        if (isSubscriptionRecord(value)) {
+          await super.putSubscription(value);
+        }
+        break;
+      case 'msg':
+        if (isMessageRecord(value)) {
+          await super.putMessage(value);
+        }
+        break;
+      case 'del':
+        if (isDelLogRecord(value)) {
+          await super.addDelLog([value]);
+        }
+        break;
+    }
+  }
+  async #save(path, record) {
+    await this.#store.setItem(this.#prefix + path, JSON.stringify(record));
+  }
+  async #removeWhere(matches) {
+    for (const key of await this.#store.getAllKeys()) {
+      if (key.startsWith(this.#prefix) && matches(key.slice(this.#prefix.length))) {
+        await this.#store.removeItem(key);
+      }
+    }
+  }
+}
+
+/***/ }),
+
 /***/ "./src/large-file.js":
 /*!***************************!*\
   !*** ./src/large-file.js ***!
@@ -3884,6 +4043,216 @@ class TopicMe extends _topic_js__WEBPACK_IMPORTED_MODULE_2__["default"] {
 
 /***/ }),
 
+/***/ "./src/memory-adapter.js":
+/*!*******************************!*\
+  !*** ./src/memory-adapter.js ***!
+  \*******************************/
+/***/ (function(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": function() { return /* binding */ MemoryAdapter; }
+/* harmony export */ });
+
+
+function rangeContains(range, seq) {
+  return range.hi ? seq >= range.low && seq < range.hi : seq == range.low;
+}
+function isNonEmptyRange(range) {
+  return !range.hi || range.hi > range.low;
+}
+function delLogOverlaps(record, since, before) {
+  return record.low < before && record.hi > since;
+}
+function delLogRange(record) {
+  return {
+    low: record.low,
+    hi: record.hi
+  };
+}
+function descendingDelLog(a, b) {
+  return b.low - a.low || b.hi - a.hi;
+}
+function topicMap(map, topic) {
+  let records = map.get(topic);
+  if (!records) {
+    records = new Map();
+    map.set(topic, records);
+  }
+  return records;
+}
+class MemoryAdapter {
+  #open = false;
+  #topics = new Map();
+  #users = new Map();
+  #subscriptions = new Map();
+  #messages = new Map();
+  #delLog = new Map();
+  async open() {
+    this.#open = true;
+  }
+  async close() {
+    this.#open = false;
+  }
+  async destroy() {
+    this.#open = false;
+    this.#topics.clear();
+    this.#users.clear();
+    this.#subscriptions.clear();
+    this.#messages.clear();
+    this.#delLog.clear();
+  }
+  isOpen() {
+    return this.#open;
+  }
+  async getTopics() {
+    return [...this.#topics.values()].map(record => ({
+      ...record
+    }));
+  }
+  async getTopic(name) {
+    const record = this.#topics.get(name);
+    return record && {
+      ...record
+    };
+  }
+  async putTopic(record) {
+    this.#topics.set(record.name, {
+      ...record
+    });
+  }
+  async removeTopic(name) {
+    this.#topics.delete(name);
+    this.#subscriptions.delete(name);
+    this.#messages.delete(name);
+    this.#delLog.delete(name);
+  }
+  async getUsers() {
+    return [...this.#users.values()].map(record => ({
+      ...record
+    }));
+  }
+  async getUser(uid) {
+    const record = this.#users.get(uid);
+    return record && {
+      ...record
+    };
+  }
+  async putUser(record) {
+    this.#users.set(record.uid, {
+      ...record
+    });
+  }
+  async removeUser(uid) {
+    this.#users.delete(uid);
+  }
+  async getSubscriptions(topic) {
+    const records = this.#subscriptions.get(topic);
+    if (!records) {
+      return [];
+    }
+    return [...records.values()].map(record => ({
+      ...record
+    }));
+  }
+  async getSubscription(topic, uid) {
+    const record = this.#subscriptions.get(topic)?.get(uid);
+    return record && {
+      ...record
+    };
+  }
+  async putSubscription(record) {
+    topicMap(this.#subscriptions, record.topic).set(record.uid, {
+      ...record
+    });
+  }
+  async removeSubscription(topic, uid) {
+    this.#subscriptions.get(topic)?.delete(uid);
+  }
+  async putMessage(record) {
+    topicMap(this.#messages, record.topic).set(record.seq, {
+      ...record
+    });
+  }
+  async updateMessageStatus(topic, seq, status) {
+    const record = this.#messages.get(topic)?.get(seq);
+    if (record) {
+      record._status = status;
+    }
+  }
+  async removeMessages(topic, low, hi) {
+    const records = this.#messages.get(topic);
+    if (!records) {
+      return;
+    }
+    for (const seq of [...records.keys()]) {
+      if (seq >= low && seq < hi) {
+        records.delete(seq);
+      }
+    }
+  }
+  async readMessages(topic, window) {
+    if (window.since >= window.before) {
+      return [];
+    }
+    const found = this.#messageRecords(topic).filter(record => record.seq >= window.since && record.seq < window.before).sort((a, b) => b.seq - a.seq);
+    const limited = window.limit > 0 ? found.slice(0, window.limit) : found;
+    return limited.map(record => ({
+      ...record
+    }));
+  }
+  async readMessageRanges(topic, ranges) {
+    const sorted = this.#messageRecords(topic).sort((a, b) => a.seq - b.seq);
+    return ranges.filter(isNonEmptyRange).flatMap(range => sorted.filter(record => rangeContains(range, record.seq))).map(record => ({
+      ...record
+    }));
+  }
+  async addDelLog(records) {
+    records.forEach(record => {
+      topicMap(this.#delLog, record.topic).set(`${record.low}:${record.hi}`, {
+        ...record
+      });
+    });
+  }
+  async readDelLog(topic, window) {
+    if (window.since >= window.before) {
+      return [];
+    }
+    const found = this.#delLogRecords(topic).filter(record => delLogOverlaps(record, window.since, window.before)).sort(descendingDelLog);
+    const result = [];
+    let count = 0;
+    for (const record of found) {
+      result.push(delLogRange(record));
+      count += record.hi - record.low;
+      if (window.limit > 0 && count >= window.limit) {
+        break;
+      }
+    }
+    return result;
+  }
+  async readDelLogRanges(topic, ranges) {
+    const records = this.#delLogRecords(topic).sort((a, b) => descendingDelLog(b, a));
+    return ranges.flatMap(range => {
+      const hi = range.hi || range.low + 1;
+      return records.filter(record => delLogOverlaps(record, range.low, hi)).map(delLogRange);
+    });
+  }
+  async maxDelId(topic) {
+    return this.#delLogRecords(topic).reduce((max, record) => Math.max(max, record.clear), 0);
+  }
+  #messageRecords(topic) {
+    const records = this.#messages.get(topic);
+    return records ? [...records.values()] : [];
+  }
+  #delLogRecords(topic) {
+    const records = this.#delLog.get(topic);
+    return records ? [...records.values()] : [];
+  }
+}
+
+/***/ }),
+
 /***/ "./src/meta-builder.js":
 /*!*****************************!*\
   !*** ./src/meta-builder.js ***!
@@ -4018,6 +4387,22 @@ class MetaGetBuilder {
     return params;
   }
 }
+
+/***/ }),
+
+/***/ "./src/storage-adapter.js":
+/*!********************************!*\
+  !*** ./src/storage-adapter.js ***!
+  \********************************/
+/***/ (function(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   MAX_SEQ: function() { return /* binding */ MAX_SEQ; }
+/* harmony export */ });
+
+const MAX_SEQ = Number.MAX_SAFE_INTEGER;
 
 /***/ }),
 
@@ -6178,8 +6563,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   AccessMode: function() { return /* reexport safe */ _access_mode_js__WEBPACK_IMPORTED_MODULE_0__["default"]; },
 /* harmony export */   Drafty: function() { return /* reexport default from dynamic */ _drafty_js__WEBPACK_IMPORTED_MODULE_5___default.a; },
-/* harmony export */   TheCard: function() { return /* reexport safe */ _the_card_js__WEBPACK_IMPORTED_MODULE_11__["default"]; },
-/* harmony export */   Tinode: function() { return /* binding */ Tinode; }
+/* harmony export */   IndexedDBAdapter: function() { return /* reexport safe */ _indexeddb_adapter_js__WEBPACK_IMPORTED_MODULE_6__["default"]; },
+/* harmony export */   KeyValueAdapter: function() { return /* reexport safe */ _key_value_adapter_js__WEBPACK_IMPORTED_MODULE_7__["default"]; },
+/* harmony export */   MemoryAdapter: function() { return /* reexport safe */ _memory_adapter_js__WEBPACK_IMPORTED_MODULE_9__["default"]; },
+/* harmony export */   TheCard: function() { return /* reexport safe */ _the_card_js__WEBPACK_IMPORTED_MODULE_14__["default"]; },
+/* harmony export */   Tinode: function() { return /* binding */ Tinode; },
+/* harmony export */   fromMMKV: function() { return /* reexport safe */ _key_value_adapter_js__WEBPACK_IMPORTED_MODULE_7__.fromMMKV; }
 /* harmony export */ });
 /* harmony import */ var _access_mode_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./access-mode.js */ "./src/access-mode.js");
 /* harmony import */ var _config_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./config.js */ "./src/config.js");
@@ -6188,13 +6577,16 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _db_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./db.js */ "./src/db.js");
 /* harmony import */ var _drafty_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./drafty.js */ "./src/drafty.js");
 /* harmony import */ var _drafty_js__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(_drafty_js__WEBPACK_IMPORTED_MODULE_5__);
-/* harmony import */ var _large_file_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./large-file.js */ "./src/large-file.js");
-/* harmony import */ var _meta_builder_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./meta-builder.js */ "./src/meta-builder.js");
-/* harmony import */ var _topic_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./topic.js */ "./src/topic.js");
-/* harmony import */ var _fnd_topic_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./fnd-topic.js */ "./src/fnd-topic.js");
-/* harmony import */ var _me_topic_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./me-topic.js */ "./src/me-topic.js");
-/* harmony import */ var _the_card_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./the-card.js */ "./src/the-card.js");
-/* harmony import */ var _utils_js__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./utils.js */ "./src/utils.js");
+/* harmony import */ var _indexeddb_adapter_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./indexeddb-adapter.js */ "./src/indexeddb-adapter.js");
+/* harmony import */ var _key_value_adapter_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./key-value-adapter.js */ "./src/key-value-adapter.js");
+/* harmony import */ var _large_file_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./large-file.js */ "./src/large-file.js");
+/* harmony import */ var _memory_adapter_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./memory-adapter.js */ "./src/memory-adapter.js");
+/* harmony import */ var _meta_builder_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./meta-builder.js */ "./src/meta-builder.js");
+/* harmony import */ var _topic_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./topic.js */ "./src/topic.js");
+/* harmony import */ var _fnd_topic_js__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./fnd-topic.js */ "./src/fnd-topic.js");
+/* harmony import */ var _me_topic_js__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./me-topic.js */ "./src/me-topic.js");
+/* harmony import */ var _the_card_js__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./the-card.js */ "./src/the-card.js");
+/* harmony import */ var _utils_js__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./utils.js */ "./src/utils.js");
 /**
  * @module tinode-sdk
  *
@@ -6239,6 +6631,10 @@ __webpack_require__.r(__webpack_exports__);
  * </script>
  * </body>
  */
+
+
+
+
 
 
 
@@ -6311,7 +6707,7 @@ function initForNonBrowserApp() {
     };
   }
   _connection_js__WEBPACK_IMPORTED_MODULE_3__["default"].setNetworkProviders(WebSocketProvider, XHRProvider);
-  _large_file_js__WEBPACK_IMPORTED_MODULE_6__["default"].setNetworkProvider(XHRProvider);
+  _large_file_js__WEBPACK_IMPORTED_MODULE_8__["default"].setNetworkProvider(XHRProvider);
   _db_js__WEBPACK_IMPORTED_MODULE_4__["default"].setDatabaseProvider(IndexedDBProvider);
 }
 function detectTransport() {
@@ -6331,7 +6727,7 @@ function b64EncodeUnicode(str) {
 }
 function jsonBuildHelper(key, val) {
   if (val instanceof Date) {
-    val = (0,_utils_js__WEBPACK_IMPORTED_MODULE_12__.rfc3339DateString)(val);
+    val = (0,_utils_js__WEBPACK_IMPORTED_MODULE_15__.rfc3339DateString)(val);
   } else if (val instanceof _access_mode_js__WEBPACK_IMPORTED_MODULE_0__["default"]) {
     val = val.jsonHelper();
   } else if (val === undefined || val === null || val === false || Array.isArray(val) && val.length == 0 || typeof val == 'object' && Object.keys(val).length == 0) {
@@ -6435,6 +6831,7 @@ class Tinode {
   _connection = null;
   _persist = false;
   _db = null;
+  _netInfoUnsubscribe = null;
   _cache = {};
   constructor(config, onComplete) {
     this._host = config.host;
@@ -6463,8 +6860,17 @@ class Tinode {
         this.onAutoreconnectIteration(timeout, promise);
       }
     };
-    this._persist = config.persist;
-    this._db = new _db_js__WEBPACK_IMPORTED_MODULE_4__["default"](this.logger, this.logger);
+    if (config.netInfo && typeof config.netInfo.addEventListener == 'function') {
+      let wasConnected = null;
+      this._netInfoUnsubscribe = config.netInfo.addEventListener(state => {
+        if (state.isConnected && wasConnected === false) {
+          this._connection.retryNow();
+        }
+        wasConnected = state.isConnected;
+      });
+    }
+    this._persist = !!(config.persist || config.storage);
+    this._db = new _db_js__WEBPACK_IMPORTED_MODULE_4__["default"](this.logger, this.logger, config.storage);
     if (this._persist) {
       const prom = [];
       this._db.initDatabase().then(_ => {
@@ -6474,11 +6880,11 @@ class Tinode {
             return;
           }
           if (data.name == _config_js__WEBPACK_IMPORTED_MODULE_1__.TOPIC_ME) {
-            topic = new _me_topic_js__WEBPACK_IMPORTED_MODULE_10__["default"]();
+            topic = new _me_topic_js__WEBPACK_IMPORTED_MODULE_13__["default"]();
           } else if (data.name == _config_js__WEBPACK_IMPORTED_MODULE_1__.TOPIC_FND) {
-            topic = new _fnd_topic_js__WEBPACK_IMPORTED_MODULE_9__["default"]();
+            topic = new _fnd_topic_js__WEBPACK_IMPORTED_MODULE_12__["default"]();
           } else {
-            topic = new _topic_js__WEBPACK_IMPORTED_MODULE_8__["default"](data.name);
+            topic = new _topic_js__WEBPACK_IMPORTED_MODULE_11__["default"](data.name);
           }
           this._db.deserializeTopic(topic, data);
           this.#attachCacheToTopic(topic);
@@ -6494,7 +6900,7 @@ class Tinode {
         });
       }).then(_ => {
         return this._db.mapUsers(data => {
-          this.#cachePut('user', data.uid, (0,_utils_js__WEBPACK_IMPORTED_MODULE_12__.mergeObj)({}, data.public));
+          this.#cachePut('user', data.uid, (0,_utils_js__WEBPACK_IMPORTED_MODULE_15__.mergeObj)({}, data.public));
         });
       }).then(_ => {
         return Promise.all(prom);
@@ -6555,7 +6961,7 @@ class Tinode {
     if (id) {
       promise = this.#makePromise(id);
     }
-    pkt = (0,_utils_js__WEBPACK_IMPORTED_MODULE_12__.simplify)(pkt);
+    pkt = (0,_utils_js__WEBPACK_IMPORTED_MODULE_15__.simplify)(pkt);
     let msg = JSON.stringify(pkt);
     this.logger("out: " + (this._trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
     try {
@@ -6581,7 +6987,7 @@ class Tinode {
       }
       return;
     }
-    let pkt = JSON.parse(data, _utils_js__WEBPACK_IMPORTED_MODULE_12__.jsonParseHelper);
+    let pkt = JSON.parse(data, _utils_js__WEBPACK_IMPORTED_MODULE_15__.jsonParseHelper);
     if (!pkt) {
       this.logger("in: " + data);
       this.logger("ERROR: failed to parse data");
@@ -6842,13 +7248,13 @@ class Tinode {
       if (pub) {
         return {
           user: uid,
-          public: (0,_utils_js__WEBPACK_IMPORTED_MODULE_12__.mergeObj)({}, pub)
+          public: (0,_utils_js__WEBPACK_IMPORTED_MODULE_15__.mergeObj)({}, pub)
         };
       }
       return undefined;
     };
     topic._cachePutUser = (uid, user) => {
-      this.#cachePut('user', uid, (0,_utils_js__WEBPACK_IMPORTED_MODULE_12__.mergeObj)({}, user.public));
+      this.#cachePut('user', uid, (0,_utils_js__WEBPACK_IMPORTED_MODULE_15__.mergeObj)({}, user.public));
     };
     topic._cacheDelUser = uid => {
       this.#cacheDel('user', uid);
@@ -6899,28 +7305,28 @@ class Tinode {
     return null;
   }
   static topicType(name) {
-    return _topic_js__WEBPACK_IMPORTED_MODULE_8__["default"].topicType(name);
+    return _topic_js__WEBPACK_IMPORTED_MODULE_11__["default"].topicType(name);
   }
   static isMeTopicName(name) {
-    return _topic_js__WEBPACK_IMPORTED_MODULE_8__["default"].isMeTopicName(name);
+    return _topic_js__WEBPACK_IMPORTED_MODULE_11__["default"].isMeTopicName(name);
   }
   static isSelfTopicName(name) {
-    return _topic_js__WEBPACK_IMPORTED_MODULE_8__["default"].isSelfTopicName(name);
+    return _topic_js__WEBPACK_IMPORTED_MODULE_11__["default"].isSelfTopicName(name);
   }
   static isGroupTopicName(name) {
-    return _topic_js__WEBPACK_IMPORTED_MODULE_8__["default"].isGroupTopicName(name);
+    return _topic_js__WEBPACK_IMPORTED_MODULE_11__["default"].isGroupTopicName(name);
   }
   static isP2PTopicName(name) {
-    return _topic_js__WEBPACK_IMPORTED_MODULE_8__["default"].isP2PTopicName(name);
+    return _topic_js__WEBPACK_IMPORTED_MODULE_11__["default"].isP2PTopicName(name);
   }
   static isCommTopicName(name) {
-    return _topic_js__WEBPACK_IMPORTED_MODULE_8__["default"].isCommTopicName(name);
+    return _topic_js__WEBPACK_IMPORTED_MODULE_11__["default"].isCommTopicName(name);
   }
   static isNewGroupTopicName(name) {
-    return _topic_js__WEBPACK_IMPORTED_MODULE_8__["default"].isNewGroupTopicName(name);
+    return _topic_js__WEBPACK_IMPORTED_MODULE_11__["default"].isNewGroupTopicName(name);
   }
   static isChannelTopicName(name) {
-    return _topic_js__WEBPACK_IMPORTED_MODULE_8__["default"].isChannelTopicName(name);
+    return _topic_js__WEBPACK_IMPORTED_MODULE_11__["default"].isChannelTopicName(name);
   }
   static getVersion() {
     return _config_js__WEBPACK_IMPORTED_MODULE_1__.VERSION;
@@ -6929,7 +7335,7 @@ class Tinode {
     WebSocketProvider = wsProvider;
     XHRProvider = xhrProvider;
     _connection_js__WEBPACK_IMPORTED_MODULE_3__["default"].setNetworkProviders(WebSocketProvider, XHRProvider);
-    _large_file_js__WEBPACK_IMPORTED_MODULE_6__["default"].setNetworkProvider(XHRProvider);
+    _large_file_js__WEBPACK_IMPORTED_MODULE_8__["default"].setNetworkProvider(XHRProvider);
   }
   static setDatabaseProvider(idbProvider) {
     IndexedDBProvider = idbProvider;
@@ -7040,7 +7446,7 @@ class Tinode {
     if (typeof url != 'string') {
       return url;
     }
-    if ((0,_utils_js__WEBPACK_IMPORTED_MODULE_12__.isUrlRelative)(url)) {
+    if ((0,_utils_js__WEBPACK_IMPORTED_MODULE_15__.isUrlRelative)(url)) {
       const base = 'scheme://host/';
       const parsed = new URL(url, base);
       if (this._apiKey) {
@@ -7071,7 +7477,7 @@ class Tinode {
       pkt.acc.tmpsecret = params.secret;
       if (Array.isArray(params.attachments) && params.attachments.length > 0) {
         pkt.extra = {
-          attachments: params.attachments.filter(ref => (0,_utils_js__WEBPACK_IMPORTED_MODULE_12__.isUrlRelative)(ref))
+          attachments: params.attachments.filter(ref => (0,_utils_js__WEBPACK_IMPORTED_MODULE_15__.isUrlRelative)(ref))
         };
       }
     }
@@ -7180,7 +7586,7 @@ class Tinode {
       }
       if (Array.isArray(setParams.attachments) && setParams.attachments.length > 0) {
         pkt.extra = {
-          attachments: setParams.attachments.filter(ref => (0,_utils_js__WEBPACK_IMPORTED_MODULE_12__.isUrlRelative)(ref))
+          attachments: setParams.attachments.filter(ref => (0,_utils_js__WEBPACK_IMPORTED_MODULE_15__.isUrlRelative)(ref))
         };
       }
       if (setParams.tags) {
@@ -7223,7 +7629,7 @@ class Tinode {
     };
     if (attachments) {
       msg.extra = {
-        attachments: attachments.filter(ref => (0,_utils_js__WEBPACK_IMPORTED_MODULE_12__.isUrlRelative)(ref))
+        attachments: attachments.filter(ref => (0,_utils_js__WEBPACK_IMPORTED_MODULE_15__.isUrlRelative)(ref))
       };
     }
     return this.#send(msg, pub.id);
@@ -7250,12 +7656,12 @@ class Tinode {
             topic._updateReceived(data.seq, 'fake-uid');
           }
           if (data.xfrom && !this.#cacheGet('user', data.xfrom)) {
-            this.getMeta(data.xfrom, new _meta_builder_js__WEBPACK_IMPORTED_MODULE_7__["default"]().withDesc().build()).catch(err => {
+            this.getMeta(data.xfrom, new _meta_builder_js__WEBPACK_IMPORTED_MODULE_10__["default"]().withDesc().build()).catch(err => {
               this.logger("Failed to get the name of a new sender", err);
             });
           }
           topic.subscribe(null).then(_ => {
-            return topic.getMeta(new _meta_builder_js__WEBPACK_IMPORTED_MODULE_7__["default"](topic).withLaterData(24).withLaterDel(24).build());
+            return topic.getMeta(new _meta_builder_js__WEBPACK_IMPORTED_MODULE_10__["default"](topic).withLaterData(24).withLaterDel(24).build());
           }).then(_ => {
             topic.leaveDelayed(false, 1000);
           }).catch(err => {
@@ -7296,7 +7702,7 @@ class Tinode {
   }
   getMeta(topic, params) {
     const pkt = this.#initPacket('get', topic);
-    pkt.get = (0,_utils_js__WEBPACK_IMPORTED_MODULE_12__.mergeObj)(pkt.get, params);
+    pkt.get = (0,_utils_js__WEBPACK_IMPORTED_MODULE_15__.mergeObj)(pkt.get, params);
     return this.#send(pkt, pkt.get.id);
   }
   setMeta(topic, params) {
@@ -7311,7 +7717,7 @@ class Tinode {
       });
       if (Array.isArray(params.attachments) && params.attachments.length > 0) {
         pkt.extra = {
-          attachments: params.attachments.filter(ref => (0,_utils_js__WEBPACK_IMPORTED_MODULE_12__.isUrlRelative)(ref))
+          attachments: params.attachments.filter(ref => (0,_utils_js__WEBPACK_IMPORTED_MODULE_15__.isUrlRelative)(ref))
         };
       }
     }
@@ -7382,11 +7788,11 @@ class Tinode {
     let topic = this.#cacheGet('topic', topicName);
     if (!topic && topicName) {
       if (topicName == _config_js__WEBPACK_IMPORTED_MODULE_1__.TOPIC_ME) {
-        topic = new _me_topic_js__WEBPACK_IMPORTED_MODULE_10__["default"]();
+        topic = new _me_topic_js__WEBPACK_IMPORTED_MODULE_13__["default"]();
       } else if (topicName == _config_js__WEBPACK_IMPORTED_MODULE_1__.TOPIC_FND) {
-        topic = new _fnd_topic_js__WEBPACK_IMPORTED_MODULE_9__["default"]();
+        topic = new _fnd_topic_js__WEBPACK_IMPORTED_MODULE_12__["default"]();
       } else {
-        topic = new _topic_js__WEBPACK_IMPORTED_MODULE_8__["default"](topicName);
+        topic = new _topic_js__WEBPACK_IMPORTED_MODULE_11__["default"](topicName);
       }
       this.#attachCacheToTopic(topic);
       topic._cachePutSelf();
@@ -7415,7 +7821,7 @@ class Tinode {
     return this.getTopic(_config_js__WEBPACK_IMPORTED_MODULE_1__.TOPIC_FND);
   }
   getLargeFileHelper() {
-    return new _large_file_js__WEBPACK_IMPORTED_MODULE_6__["default"](this, _config_js__WEBPACK_IMPORTED_MODULE_1__.PROTOCOL_VERSION);
+    return new _large_file_js__WEBPACK_IMPORTED_MODULE_8__["default"](this, _config_js__WEBPACK_IMPORTED_MODULE_1__.PROTOCOL_VERSION);
   }
   getCurrentUserID() {
     return this._myUID;
