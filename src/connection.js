@@ -213,22 +213,40 @@ export default class Connection {
     }
 
     this.#boffTimer = setTimeout(_ => {
+      this.#boffTimer = null;
       Connection.#log(`Reconnecting, iter=${this.#boffIteration}, timeout=${timeout}`);
       // Maybe the socket was closed while we waited for the timer?
       if (!this.#boffClosed) {
-        const prom = this.connect();
-        if (this.onAutoreconnectIteration) {
-          this.onAutoreconnectIteration(0, prom);
-        } else {
-          // Suppress error if it's not used.
-          prom.catch(_ => {
-            /* do nothing */
-          });
-        }
+        this.#boffAttempt();
       } else if (this.onAutoreconnectIteration) {
         this.onAutoreconnectIteration(-1);
       }
     }, timeout);
+  }
+
+  #boffAttempt() {
+    const prom = this.connect();
+    if (this.onAutoreconnectIteration) {
+      this.onAutoreconnectIteration(0, prom);
+    } else {
+      // Suppress error if it's not used.
+      prom.catch(_ => {
+        /* do nothing */
+      });
+    }
+  }
+
+  /**
+   * If the connection is waiting to reconnect, try at once and reset the backoff.
+   * @memberof Tinode.Connection#
+   */
+  retryNow() {
+    if (this.#boffTimer === null || this.#boffClosed) {
+      return;
+    }
+    this.#boffStop();
+    this.#boffReset();
+    this.#boffAttempt();
   }
 
   // Terminate auto-reconnect process.
