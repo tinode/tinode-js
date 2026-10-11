@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import * as fakeIndexedDB from 'fake-indexeddb';
 import IndexedDBAdapter from './indexeddb-adapter.js';
+import KeyValueAdapter from './key-value-adapter.js';
 import MemoryAdapter from './memory-adapter.js';
 import {
   MAX_SEQ
@@ -20,9 +21,42 @@ function message(topic, seq) {
   };
 }
 
+class SyncStore {
+  data = new Map();
+  getItem(key) {
+    return this.data.has(key) ? this.data.get(key) : null;
+  }
+  setItem(key, value) {
+    this.data.set(key, value);
+  }
+  removeItem(key) {
+    this.data.delete(key);
+  }
+  getAllKeys() {
+    return [...this.data.keys()];
+  }
+}
+
+class AsyncStore extends SyncStore {
+  async getItem(key) {
+    return super.getItem(key);
+  }
+  async setItem(key, value) {
+    super.setItem(key, value);
+  }
+  async removeItem(key) {
+    super.removeItem(key);
+  }
+  async getAllKeys() {
+    return super.getAllKeys();
+  }
+}
+
 describe.each([
   ['MemoryAdapter', () => new MemoryAdapter()],
   ['IndexedDBAdapter', () => new IndexedDBAdapter()],
+  ['KeyValueAdapter over a sync store', () => new KeyValueAdapter(new SyncStore())],
+  ['KeyValueAdapter over an async store', () => new KeyValueAdapter(new AsyncStore())],
 ])('%s', (_name, create) => {
   let adapter;
 
