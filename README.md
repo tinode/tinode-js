@@ -40,8 +40,60 @@ This SDK is intended to be used in a browser. To use `tinode-sdk` in Node JS env
 
 ```js
   Tinode.setNetworkProviders(require('ws'), require('xmlhttprequest'));
-  Tinode.setDatabaseProvider(require('fake-indexeddb'));
-  this.tinode = new Tinode(...);
+  this.tinode = new Tinode({
+    ...
+    storage: new IndexedDBAdapter(require('fake-indexeddb'))
+  });
 ```
 
+`Tinode.setDatabaseProvider(require('fake-indexeddb'))` followed by `persist: true` works too.
+
 `URL.createObjectURL()` and related methods were added in Node v16.7.0. The SDK is unlikely to work correctly with earlier versions of Node.
+
+## React Native
+
+React Native has no IndexedDB, so the app passes a storage adapter. `KeyValueAdapter` works with any store that has `getItem`, `setItem`, `removeItem` and `getAllKeys`, sync or async, such as [expo-sqlite/kv-store](https://docs.expo.dev/versions/latest/sdk/sqlite/#key-value-storage) or [AsyncStorage](https://www.npmjs.com/package/@react-native-async-storage/async-storage). For [MMKV](https://www.npmjs.com/package/react-native-mmkv) wrap it with `fromMMKV`. The app also passes its network status, so the client reconnects as soon as the device is back online instead of waiting for the next backoff step:
+
+```js
+  import { Platform } from 'react-native';
+  import NetInfo from '@react-native-community/netinfo';
+  import Storage from 'expo-sqlite/kv-store';
+  import { Tinode, KeyValueAdapter } from 'tinode-sdk';
+
+  const tinode = new Tinode({
+    appName: 'MyApp/1.0',
+    host: 'api.example.com',
+    apiKey: '...',
+    secure: true,
+    platform: Platform.OS,
+    persist: true,
+    storage: new KeyValueAdapter(Storage),
+    netInfo: NetInfo
+  });
+```
+
+With MMKV: `storage: new KeyValueAdapter(fromMMKV(new MMKV()))`.
+
+| Option | Description |
+| --- | --- |
+| `persist` | Keep topics, users and messages in a local cache. Without `storage` the cache is IndexedDB. When off, the IndexedDB cache is deleted. |
+| `storage` | Storage adapter for the cache: `IndexedDBAdapter`, `KeyValueAdapter`, `MemoryAdapter` or your own `Tinode.StorageAdapter`. Turns `persist` on. |
+| `netInfo` | Network status source: anything with `addEventListener(listener)` that returns an unsubscribe function and calls the listener with `{ isConnected }`, such as `NetInfo` from `@react-native-community/netinfo`. |
+| `platform` | `'ios'`, `'android'` or `'web'` (the default). |
+
+In a browser the `online` and `offline` events do the same job as `NetInfo`:
+
+```js
+  const netInfo = {
+    addEventListener(listener) {
+      const update = _ => listener({ isConnected: navigator.onLine });
+      window.addEventListener('online', update);
+      window.addEventListener('offline', update);
+      update();
+      return _ => {
+        window.removeEventListener('online', update);
+        window.removeEventListener('offline', update);
+      };
+    }
+  };
+```
