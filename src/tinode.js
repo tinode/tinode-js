@@ -91,14 +91,14 @@ export {
   MemoryAdapter
 };
 
-let WebSocketProvider;
+let DefaultWebSocket;
 if (typeof WebSocket != 'undefined') {
-  WebSocketProvider = WebSocket;
+  DefaultWebSocket = WebSocket;
 }
 
-let XHRProvider;
+let DefaultXHR;
 if (typeof XMLHttpRequest != 'undefined') {
-  XHRProvider = XMLHttpRequest;
+  DefaultXHR = XMLHttpRequest;
 }
 
 let IndexedDBProvider;
@@ -161,8 +161,8 @@ function initForNonBrowserApp() {
 
   if (typeof window == 'undefined') {
     global.window = {
-      WebSocket: WebSocketProvider,
-      XMLHttpRequest: XHRProvider,
+      WebSocket: DefaultWebSocket,
+      XMLHttpRequest: DefaultXHR,
       indexedDB: IndexedDBProvider,
       URL: {
         createObjectURL: function() {
@@ -172,20 +172,18 @@ function initForNonBrowserApp() {
     }
   }
 
-  Connection.setNetworkProviders(WebSocketProvider, XHRProvider);
-  LargeFileHelper.setNetworkProvider(XHRProvider);
+  Connection.setNetworkProviders(DefaultWebSocket, DefaultXHR);
+  LargeFileHelper.setNetworkProvider(DefaultXHR);
   DBCache.setDatabaseProvider(IndexedDBProvider);
 }
 
 // Detect find most useful network transport.
-function detectTransport() {
-  if (typeof window == 'object') {
-    if (window['WebSocket']) {
-      return 'ws';
-    } else if (window['XMLHttpRequest']) {
-      // The browser or node has no websockets, using long polling.
-      return 'lp';
-    }
+function detectTransport(network) {
+  if (network.WebSocket) {
+    return 'ws';
+  } else if (network.XMLHttpRequest) {
+    // The browser or node has no websockets, using long polling.
+    return 'lp';
   }
   return null;
 }
@@ -357,6 +355,7 @@ export class Tinode {
   // The Timeout object returned by the reject expired promises setInterval.
   _expirePromises = null;
 
+  _network = null;
   // Websocket or long polling connection.
   _connection = null;
 
@@ -382,6 +381,7 @@ export class Tinode {
    * @param {string} config.platform - Optional platform identifier, one of <code>"ios"</code>, <code>"web"</code>, <code>"android"</code>.
    * @param {boolean} config.persist - Use IndexedDB persistent storage.
    * @param {Tinode.StorageAdapter=} config.storage - Storage adapter for the local cache. When omitted and persist is true, IndexedDB is used.
+   * @param {Object=} config.network - Network providers: <code>{WebSocket, XMLHttpRequest}</code> constructors. Each missing one defaults to the value set with the deprecated {@link Tinode.setNetworkProviders}, then to the browser global.
    * @param {Object=} config.netInfo - Network status source: an object with addEventListener(listener) that returns an unsubscribe function and calls the listener with {isConnected}. When the network comes back, the client reconnects at once. The listener stays for the lifetime of the Tinode object.
    * @param {function} onComplete - callback to call when initialization is completed.
    */
@@ -408,11 +408,24 @@ export class Tinode {
     Connection.logger = this.logger;
     Drafty.logger = this.logger;
 
+    const network = config.network || {};
+    this._network = {
+      WebSocket: network.WebSocket || DefaultWebSocket,
+      XMLHttpRequest: network.XMLHttpRequest || DefaultXHR
+    };
+
     // WebSocket or long polling network connection.
-    if (config.transport != 'lp' && config.transport != 'ws') {
-      config.transport = detectTransport();
+    let transport = config.transport;
+    if (transport != 'lp' && transport != 'ws') {
+      transport = detectTransport(this._network);
     }
-    this._connection = new Connection(config, Const.PROTOCOL_VERSION, /* autoreconnect */ true);
+    this._connection = new Connection({
+      host: config.host,
+      apiKey: config.apiKey,
+      transport: transport,
+      secure: config.secure,
+      network: this._network
+    }, Const.PROTOCOL_VERSION, /* autoreconnect */ true);
     this._connection.onMessage = (data) => {
       // Call the main message dispatcher.
       this.#dispatchMessage(data);
@@ -1065,18 +1078,19 @@ export class Tinode {
     return Const.VERSION;
   }
   /**
-   * To use Tinode in a non browser context, supply WebSocket and XMLHttpRequest providers.
+   * Set the default WebSocket and XMLHttpRequest providers for Tinode instances created after the call.
    * @static
    *
    * @param {Object} wsProvider - <code>WebSocket</code> provider, e.g. for nodeJS, <code>require('ws')</code>.
-   * @param {Object} xhrProvider - <code>XMLHttpRequest</code> provider, e.g. for node <code>require('xhr')</code>.
+   * @param {Object} xhrProvider - <code>XMLHttpRequest</code> provider, e.g. for node <code>require('xmlhttprequest').XMLHttpRequest</code>.
+   * @deprecated Pass <code>network: {WebSocket, XMLHttpRequest}</code> to the constructor instead.
    */
   static setNetworkProviders(wsProvider, xhrProvider) {
-    WebSocketProvider = wsProvider;
-    XHRProvider = xhrProvider;
+    DefaultWebSocket = wsProvider;
+    DefaultXHR = xhrProvider;
 
-    Connection.setNetworkProviders(WebSocketProvider, XHRProvider);
-    LargeFileHelper.setNetworkProvider(XHRProvider);
+    Connection.setNetworkProviders(DefaultWebSocket, DefaultXHR);
+    LargeFileHelper.setNetworkProvider(DefaultXHR);
   }
   /**
    * To use Tinode in a non browser context, supply <code>indexedDB</code> provider.

@@ -43,11 +43,13 @@ describe('Connection.retryNow', () => {
     jest.useFakeTimers();
     jest.spyOn(Math, 'random').mockReturnValue(0);
     FakeWebSocket.instances = [];
-    Connection.setNetworkProviders(FakeWebSocket, null);
     conn = new Connection({
       host: 'localhost:6060',
       apiKey: 'key',
-      transport: 'ws'
+      transport: 'ws',
+      network: {
+        WebSocket: FakeWebSocket
+      }
     }, '0', true);
     iterations = [];
     conn.onAutoreconnectIteration = (timeout, prom) => {
@@ -92,5 +94,76 @@ describe('Connection.retryNow', () => {
     conn.disconnect();
     conn.retryNow();
     expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+});
+
+class FakeXHR {
+  static instances = [];
+
+  constructor() {
+    this.opened = null;
+    FakeXHR.instances.push(this);
+  }
+
+  open(method, url) {
+    this.opened = [method, url];
+  }
+
+  setRequestHeader(_, __) {}
+
+  send(_) {}
+
+  abort() {}
+}
+
+describe('Connection network providers', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    FakeXHR.instances = [];
+  });
+
+  afterEach(() => {
+    Connection.setNetworkProviders(undefined, undefined);
+  });
+
+  test('uses Connection.setNetworkProviders when config.network is missing', () => {
+    Connection.setNetworkProviders(FakeWebSocket, null);
+    const conn = new Connection({
+      host: 'localhost:6060',
+      apiKey: 'key',
+      transport: 'ws'
+    }, '0', true);
+    conn.connect().catch(_ => {});
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  test('prefers config.network over Connection.setNetworkProviders', () => {
+    class OtherWebSocket extends FakeWebSocket {}
+    Connection.setNetworkProviders(OtherWebSocket, null);
+    const conn = new Connection({
+      host: 'localhost:6060',
+      apiKey: 'key',
+      transport: 'ws',
+      network: {
+        WebSocket: FakeWebSocket
+      }
+    }, '0', true);
+    conn.connect().catch(_ => {});
+    expect(FakeWebSocket.latest()).not.toBeInstanceOf(OtherWebSocket);
+  });
+
+  test('long polling creates XMLHttpRequest from config.network', () => {
+    const conn = new Connection({
+      host: 'localhost:6060',
+      apiKey: 'key',
+      transport: 'lp',
+      network: {
+        XMLHttpRequest: FakeXHR
+      }
+    }, '0', false);
+    conn.connect().catch(_ => {});
+    expect(FakeXHR.instances).toHaveLength(1);
+    expect(FakeXHR.instances[0].opened[0]).toBe('POST');
+    expect(FakeXHR.instances[0].opened[1]).toContain('/lp');
   });
 });

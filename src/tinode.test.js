@@ -191,7 +191,7 @@ describe('Tinode - Static Methods', () => {
     });
   });
 
-  describe('setNetworkProviders', () => {
+  describe('setNetworkProviders (deprecated)', () => {
     test('should accept WebSocket and XMLHttpRequest providers', () => {
       const mockWs = {};
       const mockXhr = {};
@@ -509,10 +509,14 @@ describe('Tinode storage and network options', () => {
     }
   }
 
+  class FakeXHR {}
+
   const config = {
     host: 'localhost:6060',
     apiKey: 'test-key',
-    transport: 'ws'
+    network: {
+      WebSocket: FakeWebSocket
+    }
   };
 
   function createTinode(extra) {
@@ -530,12 +534,60 @@ describe('Tinode storage and network options', () => {
     });
   }
 
-  beforeEach(() => {
-    Tinode.setNetworkProviders(FakeWebSocket, null);
+  afterEach(() => {
+    Tinode.setNetworkProviders(globalThis.WebSocket, undefined);
+    Tinode.setDatabaseProvider(null);
   });
 
-  afterEach(() => {
-    Tinode.setDatabaseProvider(null);
+  test('detects WebSocket transport from the network option', () => {
+    const tinode = new Tinode(config);
+    expect(tinode._connection.initialized).toBe('ws');
+    expect(tinode._connection.network.WebSocket).toBe(FakeWebSocket);
+  });
+
+  test('detects long polling from network.XMLHttpRequest', () => {
+    Tinode.setNetworkProviders(null, null);
+    const tinode = new Tinode({
+      ...config,
+      network: {
+        XMLHttpRequest: FakeXHR
+      }
+    });
+    expect(tinode._connection.initialized).toBe('lp');
+    expect(tinode._network.XMLHttpRequest).toBe(FakeXHR);
+  });
+
+  test('uses network.WebSocket over the static default', () => {
+    class OtherWebSocket {}
+    Tinode.setNetworkProviders(OtherWebSocket, null);
+    const tinode = new Tinode(config);
+    expect(tinode._network.WebSocket).toBe(FakeWebSocket);
+  });
+
+  test('falls back to setNetworkProviders when network is missing', () => {
+    Tinode.setNetworkProviders(FakeWebSocket, FakeXHR);
+    const tinode = new Tinode({
+      ...config,
+      network: undefined
+    });
+    expect(tinode._network.WebSocket).toBe(FakeWebSocket);
+    expect(tinode._network.XMLHttpRequest).toBe(FakeXHR);
+  });
+
+  test('setNetworkProviders after construction does not change the instance', () => {
+    const tinode = new Tinode(config);
+    class OtherWebSocket {}
+    Tinode.setNetworkProviders(OtherWebSocket, null);
+    expect(tinode._network.WebSocket).toBe(FakeWebSocket);
+    expect(tinode._connection.network.WebSocket).toBe(FakeWebSocket);
+  });
+
+  test('does not change the config object', () => {
+    const own = {
+      ...config
+    };
+    new Tinode(own);
+    expect(own.transport).toBeUndefined();
   });
 
   test('uses the provider from setDatabaseProvider when persist is on', async () => {
