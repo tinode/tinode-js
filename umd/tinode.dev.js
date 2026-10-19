@@ -507,6 +507,7 @@ class Connection {
   host;
   secure;
   apiKey;
+  network;
   version;
   autoreconnect;
   initialized;
@@ -514,6 +515,7 @@ class Connection {
     this.host = config.host;
     this.secure = config.secure;
     this.apiKey = config.apiKey;
+    this.network = config.network || {};
     this.version = version_;
     this.autoreconnect = autoreconnect_;
     if (config.transport === 'lp') {
@@ -524,8 +526,8 @@ class Connection {
       this.initialized = 'ws';
     }
     if (!this.initialized) {
-      Connection.#log("Unknown or invalid network transport. Running under Node? Call 'Tinode.setNetworkProviders()'.");
-      throw new Error("Unknown or invalid network transport. Running under Node? Call 'Tinode.setNetworkProviders()'.");
+      Connection.#log("Unknown or invalid network transport. Running under Node? Pass 'network: {WebSocket, XMLHttpRequest}' to the constructor.");
+      throw new Error("Unknown or invalid network transport. Running under Node? Pass 'network: {WebSocket, XMLHttpRequest}' to the constructor.");
     }
   }
   static setNetworkProviders(wsProvider, xhrProvider) {
@@ -593,6 +595,12 @@ class Connection {
   #boffReset() {
     this.#boffIteration = 0;
   }
+  #ws() {
+    return this.network.WebSocket || WebSocketProvider;
+  }
+  #xhr() {
+    return this.network.XMLHttpRequest || XHRProvider;
+  }
   #init_lp() {
     const XDR_UNSENT = 0;
     const XDR_OPENED = 1;
@@ -603,7 +611,8 @@ class Connection {
     let _poller = null;
     let _sender = null;
     let lp_sender = url_ => {
-      const sender = new XHRProvider();
+      const XHR = this.#xhr();
+      const sender = new XHR();
       sender.onreadystatechange = evt => {
         if (sender.readyState == XDR_DONE && sender.status >= 400) {
           throw new _comm_error_js__WEBPACK_IMPORTED_MODULE_0__["default"]("LP sender failed", sender.status);
@@ -613,7 +622,8 @@ class Connection {
       return sender;
     };
     let lp_poller = (url_, resolve, reject) => {
-      let poller = new XHRProvider();
+      const XHR = this.#xhr();
+      let poller = new XHR();
       let promiseCompleted = false;
       poller.onreadystatechange = evt => {
         if (poller.readyState == XDR_DONE) {
@@ -734,7 +744,8 @@ class Connection {
       return new Promise((resolve, reject) => {
         const url = makeBaseUrl(this.host, this.secure ? 'wss' : 'ws', this.version, this.apiKey);
         Connection.#log("WS connecting to: ", url);
-        const conn = new WebSocketProvider(url);
+        const WS = this.#ws();
+        const conn = new WS(url);
         conn.onerror = err => {
           reject(err);
         };
@@ -812,12 +823,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   "default": function() { return /* binding */ DB; }
 /* harmony export */ });
-/* harmony import */ var _indexeddb_adapter_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./indexeddb-adapter.js */ "./src/indexeddb-adapter.js");
-/* harmony import */ var _storage_adapter_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./storage-adapter.js */ "./src/storage-adapter.js");
+/* harmony import */ var _storage_adapter_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./storage-adapter.js */ "./src/storage-adapter.js");
 
 
-
-let IDBProvider;
 class DB {
   #onError = _ => {};
   #logger = _ => {};
@@ -825,10 +833,7 @@ class DB {
   constructor(onError, logger, adapter) {
     this.#onError = onError || this.#onError;
     this.#logger = logger || this.#logger;
-    if (typeof adapter == 'undefined') {
-      adapter = _indexeddb_adapter_js__WEBPACK_IMPORTED_MODULE_0__["default"].isSupported(IDBProvider) ? new _indexeddb_adapter_js__WEBPACK_IMPORTED_MODULE_0__["default"](IDBProvider) : null;
-    }
-    this.#adapter = adapter;
+    this.#adapter = adapter || null;
   }
   #run(op, fallback, work) {
     const adapter = this.#adapter;
@@ -926,7 +931,7 @@ class DB {
   remMessages(topicName, from, to) {
     return this.#run('remMessages', undefined, adapter => {
       if (!from && !to) {
-        return adapter.removeMessages(topicName, 0, _storage_adapter_js__WEBPACK_IMPORTED_MODULE_1__.MAX_SEQ);
+        return adapter.removeMessages(topicName, 0, _storage_adapter_js__WEBPACK_IMPORTED_MODULE_0__.MAX_SEQ);
       }
       from = from || 0;
       if (to > 0) {
@@ -1019,7 +1024,7 @@ class DB {
   static #window(query) {
     return {
       since: query.since > 0 ? query.since : 0,
-      before: query.before > 0 ? query.before : _storage_adapter_js__WEBPACK_IMPORTED_MODULE_1__.MAX_SEQ,
+      before: query.before > 0 ? query.before : _storage_adapter_js__WEBPACK_IMPORTED_MODULE_0__.MAX_SEQ,
       limit: query.limit | 0
     };
   }
@@ -1028,9 +1033,6 @@ class DB {
       items.forEach(item => callback.call(context, item));
     }
     return items;
-  }
-  static setDatabaseProvider(idbProvider) {
-    IDBProvider = idbProvider;
   }
 }
 
@@ -3514,6 +3516,10 @@ class LargeFileHelper {
     this._authToken = tinode.getAuthToken();
     this.xhr = [];
   }
+  #xhr() {
+    const network = this._tinode._network;
+    return network && network.XMLHttpRequest || XHRProvider;
+  }
   uploadWithBaseUrl(baseUrl, data, avatarFor, onProgress, onSuccess, onFailure) {
     let url = `/v${this._version}/file/u/`;
     if (baseUrl) {
@@ -3528,7 +3534,8 @@ class LargeFileHelper {
       }
     }
     const instance = this;
-    const xhr = new XHRProvider();
+    const XHR = this.#xhr();
+    const xhr = new XHR();
     this.xhr.push(xhr);
     xhr.open('POST', url, true);
     xhr.setRequestHeader('X-Tinode-APIKey', this._apiKey);
@@ -3634,7 +3641,8 @@ class LargeFileHelper {
       return;
     }
     const instance = this;
-    const xhr = new XHRProvider();
+    const XHR = this.#xhr();
+    const xhr = new XHR();
     this.xhr.push(xhr);
     relativeUrl = addURLParam(relativeUrl, 'asatt', '1');
     xhr.open('GET', relativeUrl, true);
@@ -6651,17 +6659,17 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-let WebSocketProvider;
+let DefaultWebSocket;
 if (typeof WebSocket != 'undefined') {
-  WebSocketProvider = WebSocket;
+  DefaultWebSocket = WebSocket;
 }
-let XHRProvider;
+let DefaultXHR;
 if (typeof XMLHttpRequest != 'undefined') {
-  XHRProvider = XMLHttpRequest;
+  DefaultXHR = XMLHttpRequest;
 }
-let IndexedDBProvider;
+let DefaultIndexedDB;
 if (typeof indexedDB != 'undefined') {
-  IndexedDBProvider = indexedDB;
+  DefaultIndexedDB = indexedDB;
 }
 
 initForNonBrowserApp();
@@ -6696,9 +6704,9 @@ function initForNonBrowserApp() {
   }
   if (typeof window == 'undefined') {
     __webpack_require__.g.window = {
-      WebSocket: WebSocketProvider,
-      XMLHttpRequest: XHRProvider,
-      indexedDB: IndexedDBProvider,
+      WebSocket: DefaultWebSocket,
+      XMLHttpRequest: DefaultXHR,
+      indexedDB: DefaultIndexedDB,
       URL: {
         createObjectURL: function () {
           throw new Error("Unable to use URL.createObjectURL in a non-browser application");
@@ -6706,17 +6714,14 @@ function initForNonBrowserApp() {
       }
     };
   }
-  _connection_js__WEBPACK_IMPORTED_MODULE_3__["default"].setNetworkProviders(WebSocketProvider, XHRProvider);
-  _large_file_js__WEBPACK_IMPORTED_MODULE_8__["default"].setNetworkProvider(XHRProvider);
-  _db_js__WEBPACK_IMPORTED_MODULE_4__["default"].setDatabaseProvider(IndexedDBProvider);
+  _connection_js__WEBPACK_IMPORTED_MODULE_3__["default"].setNetworkProviders(DefaultWebSocket, DefaultXHR);
+  _large_file_js__WEBPACK_IMPORTED_MODULE_8__["default"].setNetworkProvider(DefaultXHR);
 }
-function detectTransport() {
-  if (typeof window == 'object') {
-    if (window['WebSocket']) {
-      return 'ws';
-    } else if (window['XMLHttpRequest']) {
-      return 'lp';
-    }
+function detectTransport(network) {
+  if (network.WebSocket) {
+    return 'ws';
+  } else if (network.XMLHttpRequest) {
+    return 'lp';
   }
   return null;
 }
@@ -6828,6 +6833,7 @@ class Tinode {
   _deviceToken = null;
   _pendingPromises = {};
   _expirePromises = null;
+  _network = null;
   _connection = null;
   _persist = false;
   _db = null;
@@ -6846,10 +6852,22 @@ class Tinode {
     }
     _connection_js__WEBPACK_IMPORTED_MODULE_3__["default"].logger = this.logger;
     (_drafty_js__WEBPACK_IMPORTED_MODULE_5___default().logger) = this.logger;
-    if (config.transport != 'lp' && config.transport != 'ws') {
-      config.transport = detectTransport();
+    const network = config.network || {};
+    this._network = {
+      WebSocket: network.WebSocket || DefaultWebSocket,
+      XMLHttpRequest: network.XMLHttpRequest || DefaultXHR
+    };
+    let transport = config.transport;
+    if (transport != 'lp' && transport != 'ws') {
+      transport = detectTransport(this._network);
     }
-    this._connection = new _connection_js__WEBPACK_IMPORTED_MODULE_3__["default"](config, _config_js__WEBPACK_IMPORTED_MODULE_1__.PROTOCOL_VERSION, true);
+    this._connection = new _connection_js__WEBPACK_IMPORTED_MODULE_3__["default"]({
+      host: config.host,
+      apiKey: config.apiKey,
+      transport: transport,
+      secure: config.secure,
+      network: this._network
+    }, _config_js__WEBPACK_IMPORTED_MODULE_1__.PROTOCOL_VERSION, true);
     this._connection.onMessage = data => {
       this.#dispatchMessage(data);
     };
@@ -6870,7 +6888,11 @@ class Tinode {
       });
     }
     this._persist = !!(config.persist || config.storage);
-    this._db = new _db_js__WEBPACK_IMPORTED_MODULE_4__["default"](this.logger, this.logger, config.storage);
+    let storage = config.storage;
+    if (typeof storage == 'undefined') {
+      storage = _indexeddb_adapter_js__WEBPACK_IMPORTED_MODULE_6__["default"].isSupported(DefaultIndexedDB) ? new _indexeddb_adapter_js__WEBPACK_IMPORTED_MODULE_6__["default"](DefaultIndexedDB) : null;
+    }
+    this._db = new _db_js__WEBPACK_IMPORTED_MODULE_4__["default"](this.logger, this.logger, storage);
     if (this._persist) {
       const prom = [];
       this._db.initDatabase().then(_ => {
@@ -7332,14 +7354,13 @@ class Tinode {
     return _config_js__WEBPACK_IMPORTED_MODULE_1__.VERSION;
   }
   static setNetworkProviders(wsProvider, xhrProvider) {
-    WebSocketProvider = wsProvider;
-    XHRProvider = xhrProvider;
-    _connection_js__WEBPACK_IMPORTED_MODULE_3__["default"].setNetworkProviders(WebSocketProvider, XHRProvider);
-    _large_file_js__WEBPACK_IMPORTED_MODULE_8__["default"].setNetworkProvider(XHRProvider);
+    DefaultWebSocket = wsProvider;
+    DefaultXHR = xhrProvider;
+    _connection_js__WEBPACK_IMPORTED_MODULE_3__["default"].setNetworkProviders(DefaultWebSocket, DefaultXHR);
+    _large_file_js__WEBPACK_IMPORTED_MODULE_8__["default"].setNetworkProvider(DefaultXHR);
   }
   static setDatabaseProvider(idbProvider) {
-    IndexedDBProvider = idbProvider;
-    _db_js__WEBPACK_IMPORTED_MODULE_4__["default"].setDatabaseProvider(IndexedDBProvider);
+    DefaultIndexedDB = idbProvider;
   }
   static getLibrary() {
     return _config_js__WEBPACK_IMPORTED_MODULE_1__.LIBRARY;
