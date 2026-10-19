@@ -101,9 +101,9 @@ if (typeof XMLHttpRequest != 'undefined') {
   DefaultXHR = XMLHttpRequest;
 }
 
-let IndexedDBProvider;
+let DefaultIndexedDB;
 if (typeof indexedDB != 'undefined') {
-  IndexedDBProvider = indexedDB;
+  DefaultIndexedDB = indexedDB;
 }
 
 // Re-export Drafty.
@@ -163,7 +163,7 @@ function initForNonBrowserApp() {
     global.window = {
       WebSocket: DefaultWebSocket,
       XMLHttpRequest: DefaultXHR,
-      indexedDB: IndexedDBProvider,
+      indexedDB: DefaultIndexedDB,
       URL: {
         createObjectURL: function() {
           throw new Error("Unable to use URL.createObjectURL in a non-browser application");
@@ -174,7 +174,6 @@ function initForNonBrowserApp() {
 
   Connection.setNetworkProviders(DefaultWebSocket, DefaultXHR);
   LargeFileHelper.setNetworkProvider(DefaultXHR);
-  DBCache.setDatabaseProvider(IndexedDBProvider);
 }
 
 // Detect find most useful network transport.
@@ -453,8 +452,12 @@ export class Tinode {
     }
 
     this._persist = !!(config.persist || config.storage);
+    let storage = config.storage;
+    if (typeof storage == 'undefined') {
+      storage = IndexedDBAdapter.isSupported(DefaultIndexedDB) ? new IndexedDBAdapter(DefaultIndexedDB) : null;
+    }
     // Initialize object regardless. It simplifies the code.
-    this._db = new DBCache(this.logger, this.logger, config.storage);
+    this._db = new DBCache(this.logger, this.logger, storage);
 
     if (this._persist) {
       // Create the persistent cache.
@@ -1093,16 +1096,14 @@ export class Tinode {
     LargeFileHelper.setNetworkProvider(DefaultXHR);
   }
   /**
-   * To use Tinode in a non browser context, supply <code>indexedDB</code> provider.
-   * Alternatively pass <code>storage: new IndexedDBAdapter(provider)</code> to the constructor.
+   * Set the default IndexedDB implementation for Tinode instances created after the call.
    * @static
    *
    * @param {Object} idbProvider - <code>indexedDB</code> provider, e.g. for nodeJS, <code>require('fake-indexeddb')</code>.
+   * @deprecated Pass <code>storage: new IndexedDBAdapter(provider)</code> to the constructor instead.
    */
   static setDatabaseProvider(idbProvider) {
-    IndexedDBProvider = idbProvider;
-
-    DBCache.setDatabaseProvider(IndexedDBProvider);
+    DefaultIndexedDB = idbProvider;
   }
   /**
    * Return information about the current name and version of this Tinode library.

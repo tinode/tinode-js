@@ -207,7 +207,7 @@ describe('Tinode - Static Methods', () => {
     });
   });
 
-  describe('setDatabaseProvider', () => {
+  describe('setDatabaseProvider (deprecated)', () => {
     test('should accept indexedDB provider', () => {
       const mockDb = {};
       expect(() => {
@@ -590,7 +590,7 @@ describe('Tinode storage and network options', () => {
     expect(own.transport).toBeUndefined();
   });
 
-  test('uses the provider from setDatabaseProvider when persist is on', async () => {
+  test('uses the provider from the deprecated setDatabaseProvider when persist is on', async () => {
     Tinode.setDatabaseProvider(require('fake-indexeddb'));
     const tinode = await createTinode({
       persist: true
@@ -606,6 +606,26 @@ describe('Tinode storage and network options', () => {
     });
     expect(tinode._persist).toBe(true);
     expect(tinode._db.isReady()).toBe(true);
+  });
+
+  test('prefers the storage option over setDatabaseProvider', async () => {
+    Tinode.setDatabaseProvider(require('fake-indexeddb'));
+    const storage = new MemoryAdapter();
+    const tinode = await createTinode({
+      persist: true,
+      storage
+    });
+    expect(tinode._db.isReady()).toBe(true);
+    expect(storage.isOpen()).toBe(true);
+  });
+
+  test('storage: null disables the cache even with persist and a database provider', async () => {
+    Tinode.setDatabaseProvider(require('fake-indexeddb'));
+    const tinode = await createTinode({
+      persist: true,
+      storage: null
+    });
+    expect(tinode._db.isReady()).toBe(false);
   });
 
   test('completes without storage when IndexedDB is missing', async () => {

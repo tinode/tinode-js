@@ -62,8 +62,8 @@ describe('DB without storage', () => {
   });
 });
 
-describe('DB with default storage outside the browser', () => {
-  test('is not ready when IndexedDB is unavailable', async () => {
+describe('DB with undefined adapter', () => {
+  test('treats an undefined adapter as no storage', async () => {
     const db = new DB(jest.fn(), jest.fn());
     expect(db.isReady()).toBe(false);
     await expect(db.initDatabase()).resolves.toBeUndefined();

@@ -9,12 +9,9 @@
 // Localizable strings should be double quoted "строка на другом языке",
 // non-localizable strings should be single quoted 'non-localized'.
 
-import IndexedDBAdapter from './indexeddb-adapter.js';
 import {
   MAX_SEQ
 } from './storage-adapter.js';
-
-let IDBProvider;
 
 export default class DB {
   #onError = _ => {};
@@ -25,16 +22,13 @@ export default class DB {
    * Create persistent cache.
    * @param {function} onError - callback to call when the storage fails to initialize.
    * @param {function} logger - logging function.
-   * @param {StorageAdapter=} adapter - storage backend. When <code>undefined</code>, IndexedDB is used
-   *   if available; <code>null</code> disables persistent cache.
+   * @param {Tinode.StorageAdapter=} adapter - storage for the cache; <code>null</code> or <code>undefined</code>
+   *   disables the cache.
    */
   constructor(onError, logger, adapter) {
     this.#onError = onError || this.#onError;
     this.#logger = logger || this.#logger;
-    if (typeof adapter == 'undefined') {
-      adapter = IndexedDBAdapter.isSupported(IDBProvider) ? new IndexedDBAdapter(IDBProvider) : null;
-    }
-    this.#adapter = adapter;
+    this.#adapter = adapter || null;
   }
 
   #run(op, fallback, work) {
@@ -441,15 +435,5 @@ export default class DB {
       items.forEach(item => callback.call(context, item));
     }
     return items;
-  }
-
-  /**
-   * To use DB in a non browser context, supply indexedDB provider.
-   * @static
-   * @memberof DB
-   * @param idbProvider indexedDB provider, e.g. for node <code>require('fake-indexeddb')</code>.
-   */
-  static setDatabaseProvider(idbProvider) {
-    IDBProvider = idbProvider;
   }
 }
