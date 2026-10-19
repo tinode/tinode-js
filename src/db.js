@@ -44,7 +44,7 @@ export default class DB {
 
   /**
    * Initialize persistent cache: open or create/upgrade if needed.
-   * @returns {Promise} promise to be resolved/rejected when the DB is initialized.
+   * @returns {Promise} promise to be resolved/rejected when the storage is open.
    */
   initDatabase() {
     if (!this.#adapter) {
@@ -113,7 +113,7 @@ export default class DB {
   /**
    * Remove topic from persistent cache.
    * @memberOf DB
-   * @param {string} name - name of the topic to remove from database.
+   * @param {string} name - name of the topic to remove from storage.
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   remTopic(name) {

@@ -86,7 +86,8 @@ function createStores(db) {
 }
 
 /**
- * Storage adapter which keeps data in IndexedDB. Uses the same database as {@link Tinode.DB}.
+ * Storage adapter which keeps the local cache in the browser's IndexedDB. Uses the same database name and schema as
+ * earlier SDK versions, so existing caches stay valid.
  *
  * @class IndexedDBAdapter
  * @memberof Tinode

@@ -358,9 +358,9 @@ export class Tinode {
   // Websocket or long polling connection.
   _connection = null;
 
-  // Use indexDB for caching topics and messages.
+  // Keep a local cache of topics, users and messages.
   _persist = false;
-  // IndexedDB wrapper object.
+  // Local cache over the storage adapter.
   _db = null;
 
   _netInfoUnsubscribe = null;
@@ -378,8 +378,8 @@ export class Tinode {
    * @param {string} config.transport - See {@link Tinode.Connection#transport}.
    * @param {boolean} config.secure - Use Secure WebSocket if <code>true</code>.
    * @param {string} config.platform - Optional platform identifier, one of <code>"ios"</code>, <code>"web"</code>, <code>"android"</code>.
-   * @param {boolean} config.persist - Use IndexedDB persistent storage.
-   * @param {Tinode.StorageAdapter=} config.storage - Storage adapter for the local cache. When omitted and persist is true, IndexedDB is used.
+   * @param {boolean} config.persist - Keep a local cache of topics, users and messages in <code>storage</code>.
+   * @param {Tinode.StorageAdapter=} config.storage - Storage adapter for the local cache: {@link Tinode.IndexedDBAdapter} (the default when IndexedDB is available), {@link Tinode.KeyValueAdapter}, {@link Tinode.MemoryAdapter} or your own. Turns <code>persist</code> on; <code>null</code> turns the cache off.
    * @param {Object=} config.network - Network providers: <code>{WebSocket, XMLHttpRequest}</code> constructors. Each missing one defaults to the value set with the deprecated {@link Tinode.setNetworkProviders}, then to the browser global.
    * @param {Object=} config.netInfo - Network status source: an object with addEventListener(listener) that returns an unsubscribe function and calls the listener with {isConnected}. When the network comes back, the client reconnects at once. The listener stays for the lifetime of the Tinode object.
    * @param {function} onComplete - callback to call when initialization is completed.
@@ -1277,7 +1277,7 @@ export class Tinode {
   }
 
   /**
-   * Clear persistent cache: remove IndexedDB.
+   * Clear the local cache: delete everything from storage.
    *
    * @return {Promise} Promise resolved/rejected when the operation is completed.
    */
@@ -1289,7 +1289,7 @@ export class Tinode {
   }
 
   /**
-   * Initialize persistent cache: create IndexedDB cache.
+   * Initialize the local cache in storage.
    *
    * @return {Promise} Promise resolved/rejected when the operation is completed.
    */

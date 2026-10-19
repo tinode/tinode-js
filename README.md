@@ -36,17 +36,22 @@ or while developing as
 
 ## Node JS compatibility
 
-This SDK is intended to be used in a browser. To use `tinode-sdk` in Node JS environment (such as on a server), you have to polyfill network providers, for example with [ws](https://www.npmjs.com/package/ws) and [xmlhttprequest](https://www.npmjs.com/package/xmlhttprequest) or [xhr](https://www.npmjs.com/package/xhr), as well as `indexedDB` with something like [fake-indexeddb](https://www.npmjs.com/package/fake-indexeddb):
+This SDK is intended to be used in a browser. To use `tinode-sdk` in Node JS environment (such as on a server), pass the network providers, for example from [ws](https://www.npmjs.com/package/ws) and [xmlhttprequest](https://www.npmjs.com/package/xmlhttprequest), and, for the local cache, a storage adapter, for example IndexedDB from [fake-indexeddb](https://www.npmjs.com/package/fake-indexeddb):
 
 ```js
-  Tinode.setNetworkProviders(require('ws'), require('xmlhttprequest'));
+  const { Tinode, IndexedDBAdapter } = require('tinode-sdk');
+
   this.tinode = new Tinode({
     ...
+    network: {
+      WebSocket: require('ws'),
+      XMLHttpRequest: require('xmlhttprequest').XMLHttpRequest
+    },
     storage: new IndexedDBAdapter(require('fake-indexeddb'))
   });
 ```
 
-`Tinode.setDatabaseProvider(require('fake-indexeddb'))` followed by `persist: true` works too.
+`Tinode.setNetworkProviders()` and `Tinode.setDatabaseProvider()` still work but are deprecated. They only set defaults for instances created after the call.
 
 `URL.createObjectURL()` and related methods were added in Node v16.7.0. The SDK is unlikely to work correctly with earlier versions of Node.
 
@@ -76,10 +81,13 @@ With MMKV: `storage: new KeyValueAdapter(fromMMKV(new MMKV()))`.
 
 | Option | Description |
 | --- | --- |
-| `persist` | Keep topics, users and messages in a local cache. Without `storage` the cache is IndexedDB. When off, the IndexedDB cache is deleted. |
-| `storage` | Storage adapter for the cache: `IndexedDBAdapter`, `KeyValueAdapter`, `MemoryAdapter` or your own `Tinode.StorageAdapter`. Turns `persist` on. |
+| `persist` | Keep topics, users and messages in a local cache. Without `storage` the cache uses `IndexedDBAdapter`. When off, a stale IndexedDB cache is deleted. |
+| `storage` | Storage adapter for the cache: `IndexedDBAdapter`, `KeyValueAdapter`, `MemoryAdapter` or your own `Tinode.StorageAdapter`. Turns `persist` on. `null` turns the cache off. |
+| `network` | `{ WebSocket, XMLHttpRequest }` constructors. Default: the browser globals. |
 | `netInfo` | Network status source: anything with `addEventListener(listener)` that returns an unsubscribe function and calls the listener with `{ isConnected }`, such as `NetInfo` from `@react-native-community/netinfo`. |
 | `platform` | `'ios'`, `'android'` or `'web'` (the default). |
+
+Every provider follows the same rule: the constructor option first, then the default set with the deprecated static setter, then the browser global. The providers are picked in the constructor, so an instance keeps the providers it was created with.
 
 In a browser the `online` and `offline` events do the same job as `NetInfo`:
 
