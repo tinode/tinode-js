@@ -1,4 +1,5 @@
 import {
+  MemoryAdapter,
   Tinode
 } from './tinode.js';
 import * as Const from './config.js';
@@ -190,7 +191,7 @@ describe('Tinode - Static Methods', () => {
     });
   });
 
-  describe('setNetworkProviders', () => {
+  describe('setNetworkProviders (deprecated)', () => {
     test('should accept WebSocket and XMLHttpRequest providers', () => {
       const mockWs = {};
       const mockXhr = {};
@@ -206,7 +207,7 @@ describe('Tinode - Static Methods', () => {
     });
   });
 
-  describe('setDatabaseProvider', () => {
+  describe('setDatabaseProvider (deprecated)', () => {
     test('should accept indexedDB provider', () => {
       const mockDb = {};
       expect(() => {
@@ -486,5 +487,181 @@ describe('Tinode - Static Methods', () => {
       const result = Tinode.tagByPrefix(tags, 'email');
       expect(result).toBe('email:test@example.com');
     });
+  });
+});
+
+describe('Tinode storage and network options', () => {
+  class FakeWebSocket {
+    OPEN = 1;
+    readyState = 0;
+    send(_) {}
+    close() {}
+  }
+
+  class FakeNetInfo {
+    listener = null;
+
+    addEventListener(listener) {
+      this.listener = listener;
+      return _ => {
+        this.listener = null;
+      };
+    }
+  }
+
+  class FakeXHR {}
+
+  const config = {
+    host: 'localhost:6060',
+    apiKey: 'test-key',
+    network: {
+      WebSocket: FakeWebSocket
+    }
+  };
+
+  function createTinode(extra) {
+    return new Promise((resolve, reject) => {
+      const tinode = new Tinode({
+        ...config,
+        ...extra
+      }, err => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(tinode);
+        }
+      });
+    });
+  }
+
+  afterEach(() => {
+    Tinode.setNetworkProviders(globalThis.WebSocket, undefined);
+    Tinode.setDatabaseProvider(null);
+  });
+
+  test('detects WebSocket transport from the network option', () => {
+    const tinode = new Tinode(config);
+    expect(tinode._connection.initialized).toBe('ws');
+    expect(tinode._connection.network.WebSocket).toBe(FakeWebSocket);
+  });
+
+  test('detects long polling from network.XMLHttpRequest', () => {
+    Tinode.setNetworkProviders(null, null);
+    const tinode = new Tinode({
+      ...config,
+      network: {
+        XMLHttpRequest: FakeXHR
+      }
+    });
+    expect(tinode._connection.initialized).toBe('lp');
+    expect(tinode._network.XMLHttpRequest).toBe(FakeXHR);
+  });
+
+  test('uses network.WebSocket over the static default', () => {
+    class OtherWebSocket {}
+    Tinode.setNetworkProviders(OtherWebSocket, null);
+    const tinode = new Tinode(config);
+    expect(tinode._network.WebSocket).toBe(FakeWebSocket);
+  });
+
+  test('falls back to setNetworkProviders when network is missing', () => {
+    Tinode.setNetworkProviders(FakeWebSocket, FakeXHR);
+    const tinode = new Tinode({
+      ...config,
+      network: undefined
+    });
+    expect(tinode._network.WebSocket).toBe(FakeWebSocket);
+    expect(tinode._network.XMLHttpRequest).toBe(FakeXHR);
+  });
+
+  test('setNetworkProviders after construction does not change the instance', () => {
+    const tinode = new Tinode(config);
+    class OtherWebSocket {}
+    Tinode.setNetworkProviders(OtherWebSocket, null);
+    expect(tinode._network.WebSocket).toBe(FakeWebSocket);
+    expect(tinode._connection.network.WebSocket).toBe(FakeWebSocket);
+  });
+
+  test('does not change the config object', () => {
+    const own = {
+      ...config
+    };
+    new Tinode(own);
+    expect(own.transport).toBeUndefined();
+  });
+
+  test('uses the provider from the deprecated setDatabaseProvider when persist is on', async () => {
+    Tinode.setDatabaseProvider(require('fake-indexeddb'));
+    const tinode = await createTinode({
+      persist: true
+    });
+    expect(tinode._db.isReady()).toBe(true);
+    await tinode.clearStorage();
+    expect(tinode._db.isReady()).toBe(false);
+  });
+
+  test('uses the storage adapter without persist', async () => {
+    const tinode = await createTinode({
+      storage: new MemoryAdapter()
+    });
+    expect(tinode._persist).toBe(true);
+    expect(tinode._db.isReady()).toBe(true);
+  });
+
+  test('prefers the storage option over setDatabaseProvider', async () => {
+    Tinode.setDatabaseProvider(require('fake-indexeddb'));
+    const storage = new MemoryAdapter();
+    const tinode = await createTinode({
+      persist: true,
+      storage
+    });
+    expect(tinode._db.isReady()).toBe(true);
+    expect(storage.isOpen()).toBe(true);
+  });
+
+  test('storage: null disables the cache even with persist and a database provider', async () => {
+    Tinode.setDatabaseProvider(require('fake-indexeddb'));
+    const tinode = await createTinode({
+      persist: true,
+      storage: null
+    });
+    expect(tinode._db.isReady()).toBe(false);
+  });
+
+  test('completes without storage when IndexedDB is missing', async () => {
+    const tinode = await createTinode({
+      persist: true
+    });
+    expect(tinode._db.isReady()).toBe(false);
+  });
+
+  test('completes without persist when IndexedDB is missing', async () => {
+    const tinode = await createTinode({});
+    expect(tinode._db.isReady()).toBe(false);
+  });
+
+  test('retries the connection when the network comes back', () => {
+    const netInfo = new FakeNetInfo();
+    const tinode = new Tinode({
+      ...config,
+      netInfo
+    });
+    const retryNow = jest.spyOn(tinode._connection, 'retryNow').mockImplementation(_ => {});
+
+    netInfo.listener({
+      isConnected: true
+    });
+    expect(retryNow).not.toHaveBeenCalled();
+
+    netInfo.listener({
+      isConnected: false
+    });
+    netInfo.listener({
+      isConnected: true
+    });
+    expect(retryNow).toHaveBeenCalledTimes(1);
+
+    tinode._netInfoUnsubscribe();
+    expect(netInfo.listener).toBeNull();
   });
 });
