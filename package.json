@@ -3,7 +3,7 @@
   "description": "Tinode SDK",
   "version": "0.26.0-alpha4",
   "scripts": {
-    "format": "js-beautify -r src/*.js",
+    "format": "js-beautify -r src/*.js src/storage/*.js",
     "build": "npm run format && npm run vers && npm run build:prod && npm run build:dev",
     "clean": "rm umd/*",
     "build:dev": "webpack --mode development",

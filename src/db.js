@@ -11,7 +11,7 @@
 
 import {
   MAX_SEQ
-} from './storage-adapter.js';
+} from './storage/storage-adapter.js';
 
 export default class DB {
   #onError = _ => {};

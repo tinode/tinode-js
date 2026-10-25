@@ -1,6 +1,6 @@
 import DB from './db.js';
-import IndexedDBAdapter from './indexeddb-adapter.js';
-import MemoryAdapter from './memory-adapter.js';
+import IndexedDBAdapter from './storage/indexeddb-adapter.js';
+import MemoryAdapter from './storage/memory-adapter.js';
 
 class FakeAccessMode {
   constructor(mode) {

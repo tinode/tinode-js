@@ -54,12 +54,12 @@ import CommError from './comm-error.js';
 import Connection from './connection.js';
 import DBCache from './db.js';
 import Drafty from './drafty.js';
-import IndexedDBAdapter from './indexeddb-adapter.js';
+import IndexedDBAdapter from './storage/indexeddb-adapter.js';
 import KeyValueAdapter, {
   fromMMKV
-} from './key-value-adapter.js';
+} from './storage/key-value-adapter.js';
 import LargeFileHelper from './large-file.js';
-import MemoryAdapter from './memory-adapter.js';
+import MemoryAdapter from './storage/memory-adapter.js';
 import MetaGetBuilder from './meta-builder.js';
 import Topic from './topic.js';
 import TopicFnd from './fnd-topic.js';
