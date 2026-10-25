@@ -1,4 +1,5 @@
 import DB from './db.js';
+import IndexedDBAdapter from './indexeddb-adapter.js';
 import MemoryAdapter from './memory-adapter.js';
 
 class FakeAccessMode {
@@ -322,5 +323,50 @@ describe('DB over memory adapter', () => {
     await expect(failing.initDatabase()).rejects.toThrow('denied');
     expect(onError).toHaveBeenCalledTimes(1);
     expect(failing.isReady()).toBe(false);
+  });
+});
+
+describe.each([
+  ['memory adapter', _ => new MemoryAdapter()],
+  ['IndexedDB adapter', _ => new IndexedDBAdapter(require('fake-indexeddb'))]
+])('DB operation order over %s', (_, createAdapter) => {
+  let db;
+
+  beforeEach(async () => {
+    db = new DB(jest.fn(), jest.fn(), createAdapter());
+    await db.initDatabase();
+  });
+
+  afterEach(async () => {
+    await db.deleteDatabase();
+  });
+
+  test('keeps concurrent partial subscription updates', async () => {
+    await Promise.all([
+      db.updSubscription('grpA', 'usr1', {
+        mode: 'JRW'
+      }),
+      db.updSubscription('grpA', 'usr1', {
+        read: 5
+      })
+    ]);
+    const [sub] = await db.mapSubscriptions('grpA');
+    expect(sub.mode).toBe('JRW');
+    expect(sub.read).toBe(5);
+  });
+
+  test('does not bring back a topic removed right after an update', async () => {
+    await Promise.all([
+      db.updTopic(new FakeTopic('grpA')),
+      db.remTopic('grpA')
+    ]);
+    await expect(db.mapTopics()).resolves.toEqual([]);
+  });
+
+  test('applies a delete after pending writes', async () => {
+    db.updTopic(new FakeTopic('grpA'));
+    await db.deleteDatabase();
+    await db.initDatabase();
+    await expect(db.mapTopics()).resolves.toEqual([]);
   });
 });

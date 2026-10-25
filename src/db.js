@@ -17,6 +17,7 @@ export default class DB {
   #onError = _ => {};
   #logger = _ => {};
   #adapter = null;
+  #queue = Promise.resolve();
 
   /**
    * Create persistent cache.
@@ -31,14 +32,22 @@ export default class DB {
     this.#adapter = adapter || null;
   }
 
+  #enqueue(task) {
+    const result = this.#queue.then(task);
+    this.#queue = result.catch(_ => {});
+    return result;
+  }
+
   #run(op, fallback, work) {
-    const adapter = this.#adapter;
-    if (!adapter || !adapter.isOpen()) {
-      return Promise.resolve(fallback);
-    }
-    return work(adapter).catch(err => {
-      this.#logger('PCache', op, err);
-      throw err;
+    return this.#enqueue(_ => {
+      const adapter = this.#adapter;
+      if (!adapter || !adapter.isOpen()) {
+        return fallback;
+      }
+      return work(adapter).catch(err => {
+        this.#logger('PCache', op, err);
+        throw err;
+      });
     });
   }
 
@@ -50,7 +59,7 @@ export default class DB {
     if (!this.#adapter) {
       return Promise.resolve();
     }
-    return this.#adapter.open().catch(err => {
+    return this.#enqueue(_ => this.#adapter.open()).catch(err => {
       this.#logger('PCache', "failed to initialize", err);
       this.#onError(err);
       throw err;
@@ -65,7 +74,7 @@ export default class DB {
     if (!this.#adapter) {
       return Promise.resolve(true);
     }
-    return this.#adapter.destroy().then(_ => true, err => {
+    return this.#enqueue(_ => this.#adapter.destroy()).then(_ => true, err => {
       this.#logger('PCache', 'deleteDatabase', err);
       throw err;
     });
