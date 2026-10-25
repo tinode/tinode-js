@@ -830,26 +830,34 @@ class DB {
   #onError = _ => {};
   #logger = _ => {};
   #adapter = null;
+  #queue = Promise.resolve();
   constructor(onError, logger, adapter) {
     this.#onError = onError || this.#onError;
     this.#logger = logger || this.#logger;
     this.#adapter = adapter || null;
   }
+  #enqueue(task) {
+    const result = this.#queue.then(task);
+    this.#queue = result.catch(_ => {});
+    return result;
+  }
   #run(op, fallback, work) {
-    const adapter = this.#adapter;
-    if (!adapter || !adapter.isOpen()) {
-      return Promise.resolve(fallback);
-    }
-    return work(adapter).catch(err => {
-      this.#logger('PCache', op, err);
-      throw err;
+    return this.#enqueue(_ => {
+      const adapter = this.#adapter;
+      if (!adapter || !adapter.isOpen()) {
+        return fallback;
+      }
+      return work(adapter).catch(err => {
+        this.#logger('PCache', op, err);
+        throw err;
+      });
     });
   }
   initDatabase() {
     if (!this.#adapter) {
       return Promise.resolve();
     }
-    return this.#adapter.open().catch(err => {
+    return this.#enqueue(_ => this.#adapter.open()).catch(err => {
       this.#logger('PCache', "failed to initialize", err);
       this.#onError(err);
       throw err;
@@ -859,7 +867,7 @@ class DB {
     if (!this.#adapter) {
       return Promise.resolve(true);
     }
-    return this.#adapter.destroy().then(_ => true, err => {
+    return this.#enqueue(_ => this.#adapter.destroy()).then(_ => true, err => {
       this.#logger('PCache', 'deleteDatabase', err);
       throw err;
     });
@@ -3358,75 +3366,79 @@ function fromMMKV(mmkv) {
 class KeyValueAdapter extends _memory_adapter_js__WEBPACK_IMPORTED_MODULE_0__["default"] {
   #store;
   #prefix;
+  #queue = Promise.resolve();
   constructor(store, options) {
     super();
     this.#store = store;
     this.#prefix = (options && options.prefix || DEFAULT_PREFIX) + '/';
   }
-  async open() {
-    const keys = (await this.#store.getAllKeys()).filter(key => key.startsWith(this.#prefix));
-    for (const [key, raw] of await this.#readAll(keys)) {
-      await this.#restore(key.slice(this.#prefix.length), parse(raw));
-    }
-    await super.open();
+  open() {
+    return this.#enqueue(async _ => {
+      const keys = (await this.#store.getAllKeys()).filter(key => key.startsWith(this.#prefix));
+      for (const [key, raw] of await this.#readAll(keys)) {
+        await this.#restore(key.slice(this.#prefix.length), parse(raw));
+      }
+      await super.open();
+    });
   }
-  async destroy() {
-    await super.destroy();
-    await this.#removeWhere(_ => true);
+  destroy() {
+    return this.#write(super.destroy(), _ => this.#removeWhere(_ => true));
   }
-  async putTopic(record) {
-    await super.putTopic(record);
-    await this.#save(`topic/${record.name}`, record);
+  putTopic(record) {
+    return this.#write(super.putTopic(record), _ => this.#save(`topic/${record.name}`, record));
   }
-  async removeTopic(name) {
-    await super.removeTopic(name);
-    await this.#removeWhere(path => path == `topic/${name}` || path.startsWith(`sub/${name}/`) || path.startsWith(`msg/${name}/`) || path.startsWith(`del/${name}/`));
+  removeTopic(name) {
+    return this.#write(super.removeTopic(name), _ => this.#removeWhere(path => path == `topic/${name}` || path.startsWith(`sub/${name}/`) || path.startsWith(`msg/${name}/`) || path.startsWith(`del/${name}/`)));
   }
-  async putUser(record) {
-    await super.putUser(record);
-    await this.#save(`user/${record.uid}`, record);
+  putUser(record) {
+    return this.#write(super.putUser(record), _ => this.#save(`user/${record.uid}`, record));
   }
-  async removeUser(uid) {
-    await super.removeUser(uid);
-    await this.#store.removeItem(this.#prefix + `user/${uid}`);
+  removeUser(uid) {
+    return this.#write(super.removeUser(uid), _ => this.#store.removeItem(this.#prefix + `user/${uid}`));
   }
-  async putSubscription(record) {
-    await super.putSubscription(record);
-    await this.#save(`sub/${record.topic}/${record.uid}`, record);
+  putSubscription(record) {
+    return this.#write(super.putSubscription(record), _ => this.#save(`sub/${record.topic}/${record.uid}`, record));
   }
-  async removeSubscription(topic, uid) {
-    await super.removeSubscription(topic, uid);
-    await this.#store.removeItem(this.#prefix + `sub/${topic}/${uid}`);
+  removeSubscription(topic, uid) {
+    return this.#write(super.removeSubscription(topic, uid), _ => this.#store.removeItem(this.#prefix + `sub/${topic}/${uid}`));
   }
-  async putMessage(record) {
-    await super.putMessage(record);
-    await this.#save(`msg/${record.topic}/${record.seq}`, record);
+  putMessage(record) {
+    return this.#write(super.putMessage(record), _ => this.#save(`msg/${record.topic}/${record.seq}`, record));
   }
-  async updateMessageStatus(topic, seq, status) {
-    await super.updateMessageStatus(topic, seq, status);
-    const [record] = await super.readMessageRanges(topic, [{
-      low: seq
-    }]);
-    if (record) {
-      await this.#save(`msg/${topic}/${seq}`, record);
-    }
+  updateMessageStatus(topic, seq, status) {
+    return this.#write(super.updateMessageStatus(topic, seq, status), async _ => {
+      const [record] = await super.readMessageRanges(topic, [{
+        low: seq
+      }]);
+      if (record) {
+        await this.#save(`msg/${topic}/${seq}`, record);
+      }
+    });
   }
-  async removeMessages(topic, low, hi) {
-    await super.removeMessages(topic, low, hi);
+  removeMessages(topic, low, hi) {
     const messages = `msg/${topic}/`;
-    await this.#removeWhere(path => {
+    return this.#write(super.removeMessages(topic, low, hi), _ => this.#removeWhere(path => {
       if (!path.startsWith(messages)) {
         return false;
       }
       const seq = Number(path.slice(messages.length));
       return seq >= low && seq < hi;
+    }));
+  }
+  addDelLog(records) {
+    return this.#write(super.addDelLog(records), async _ => {
+      for (const record of records) {
+        await this.#save(`del/${record.topic}/${record.low}/${record.hi}`, record);
+      }
     });
   }
-  async addDelLog(records) {
-    await super.addDelLog(records);
-    for (const record of records) {
-      await this.#save(`del/${record.topic}/${record.low}/${record.hi}`, record);
-    }
+  #enqueue(task) {
+    const result = this.#queue.then(task);
+    this.#queue = result.catch(_ => {});
+    return result;
+  }
+  #write(changed, persist) {
+    return this.#enqueue(_ => changed.then(persist));
   }
   async #readAll(keys) {
     if (typeof this.#store.getMany == 'function') {
