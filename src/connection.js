@@ -59,6 +59,9 @@ function makeBaseUrl(host, protocol, version, apiKey) {
  * @param {string} config.transport - Network transport to use, either <code>"ws"<code>/<code>"wss"</code> for websocket or
  *      <code>lp</code> for long polling.
  * @param {boolean} config.secure - Use Secure WebSocket if <code>true</code>.
+ * @param {Object=} config.network - <code>WebSocket</code> and <code>XMLHttpRequest</code> constructors to use, e.g.
+ *      <code>{WebSocket, XMLHttpRequest}</code>. Each missing one falls back to the value set with the deprecated
+ *      {@link Tinode.Connection.setNetworkProviders}.
  * @param {string} version_ - Major value of the protocol version, e.g. '0' in '0.17.1'.
  * @param {boolean} autoreconnect_ - If connection is lost, try to reconnect automatically.
  */
@@ -76,6 +79,7 @@ export default class Connection {
   host;
   secure;
   apiKey;
+  network;
 
   version;
   autoreconnect;
@@ -87,6 +91,7 @@ export default class Connection {
     this.host = config.host;
     this.secure = config.secure;
     this.apiKey = config.apiKey;
+    this.network = config.network || {};
 
     this.version = version_;
     this.autoreconnect = autoreconnect_;
@@ -104,8 +109,8 @@ export default class Connection {
 
     if (!this.initialized) {
       // Invalid or undefined network transport.
-      Connection.#log("Unknown or invalid network transport. Running under Node? Call 'Tinode.setNetworkProviders()'.");
-      throw new Error("Unknown or invalid network transport. Running under Node? Call 'Tinode.setNetworkProviders()'.");
+      Connection.#log("Unknown or invalid network transport. Running under Node? Pass 'network: {WebSocket, XMLHttpRequest}' to the constructor.");
+      throw new Error("Unknown or invalid network transport. Running under Node? Pass 'network: {WebSocket, XMLHttpRequest}' to the constructor.");
     }
   }
 
@@ -115,6 +120,7 @@ export default class Connection {
    * @memberof Connection
    * @param {Object} wsProvider - WebSocket provider, e.g. for nodeJS, <code>require('ws')</code>.
    * @param {Object} xhrProvider - XMLHttpRequest provider, e.g. for node <code>require('xhr')</code>.
+   * @deprecated Pass <code>config.network</code> to the constructor instead.
    */
   static setNetworkProviders(wsProvider, xhrProvider) {
     WebSocketProvider = wsProvider;
@@ -213,22 +219,40 @@ export default class Connection {
     }
 
     this.#boffTimer = setTimeout(_ => {
+      this.#boffTimer = null;
       Connection.#log(`Reconnecting, iter=${this.#boffIteration}, timeout=${timeout}`);
       // Maybe the socket was closed while we waited for the timer?
       if (!this.#boffClosed) {
-        const prom = this.connect();
-        if (this.onAutoreconnectIteration) {
-          this.onAutoreconnectIteration(0, prom);
-        } else {
-          // Suppress error if it's not used.
-          prom.catch(_ => {
-            /* do nothing */
-          });
-        }
+        this.#boffAttempt();
       } else if (this.onAutoreconnectIteration) {
         this.onAutoreconnectIteration(-1);
       }
     }, timeout);
+  }
+
+  #boffAttempt() {
+    const prom = this.connect();
+    if (this.onAutoreconnectIteration) {
+      this.onAutoreconnectIteration(0, prom);
+    } else {
+      // Suppress error if it's not used.
+      prom.catch(_ => {
+        /* do nothing */
+      });
+    }
+  }
+
+  /**
+   * If the connection is waiting to reconnect, try at once and reset the backoff.
+   * @memberof Tinode.Connection#
+   */
+  retryNow() {
+    if (this.#boffTimer === null || this.#boffClosed) {
+      return;
+    }
+    this.#boffStop();
+    this.#boffReset();
+    this.#boffAttempt();
   }
 
   // Terminate auto-reconnect process.
@@ -240,6 +264,14 @@ export default class Connection {
   // Reset auto-reconnect iteration counter.
   #boffReset() {
     this.#boffIteration = 0;
+  }
+
+  #ws() {
+    return this.network.WebSocket || WebSocketProvider;
+  }
+
+  #xhr() {
+    return this.network.XMLHttpRequest || XHRProvider;
   }
 
   // Initialization for long polling.
@@ -257,7 +289,8 @@ export default class Connection {
     let _sender = null;
 
     let lp_sender = (url_) => {
-      const sender = new XHRProvider();
+      const XHR = this.#xhr();
+      const sender = new XHR();
       sender.onreadystatechange = (evt) => {
         if (sender.readyState == XDR_DONE && sender.status >= 400) {
           // Some sort of error response
@@ -270,7 +303,8 @@ export default class Connection {
     }
 
     let lp_poller = (url_, resolve, reject) => {
-      let poller = new XHRProvider();
+      const XHR = this.#xhr();
+      let poller = new XHR();
       let promiseCompleted = false;
 
       poller.onreadystatechange = evt => {
@@ -420,7 +454,8 @@ export default class Connection {
 
         // It throws when the server is not accessible but the exception cannot be caught:
         // https://stackoverflow.com/questions/31002592/javascript-doesnt-catch-error-in-websocket-instantiation/31003057
-        const conn = new WebSocketProvider(url);
+        const WS = this.#ws();
+        const conn = new WS(url);
 
         conn.onerror = err => {
           reject(err);

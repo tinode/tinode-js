@@ -39,6 +39,11 @@ export default class LargeFileHelper {
     this.xhr = [];
   }
 
+  #xhr() {
+    const network = this._tinode._network;
+    return (network && network.XMLHttpRequest) || XHRProvider;
+  }
+
   /**
    * Start uploading the file to an endpoint at baseUrl.
    *
@@ -69,7 +74,8 @@ export default class LargeFileHelper {
     }
 
     const instance = this;
-    const xhr = new XHRProvider();
+    const XHR = this.#xhr();
+    const xhr = new XHR();
     this.xhr.push(xhr);
 
     xhr.open('POST', url, true);
@@ -210,7 +216,8 @@ export default class LargeFileHelper {
     }
     const instance = this;
 
-    const xhr = new XHRProvider();
+    const XHR = this.#xhr();
+    const xhr = new XHR();
     this.xhr.push(xhr);
 
     // Add '&asatt=1' to URL to request 'Content-Disposition: attachment' response header.
@@ -318,6 +325,7 @@ export default class LargeFileHelper {
    * @static
    * @memberof LargeFileHelper
    * @param {Object} xhrProvider - XMLHttpRequest provider, e.g. for node <code>require('xhr')</code>.
+   * @deprecated Use the <code>network</code> option of the {@link Tinode} constructor instead.
    */
   static setNetworkProvider(xhrProvider) {
     XHRProvider = xhrProvider;

@@ -1,5 +1,5 @@
 /**
- * @file Helper methods for dealing with IndexedDB cache of messages, users, and topics.
+ * @file Persistent cache of messages, users, and topics backed by a pluggable storage adapter.
  *
  * @copyright 2015-2026 Tinode LLC.
  */
@@ -9,160 +9,74 @@
 // Localizable strings should be double quoted "строка на другом языке",
 // non-localizable strings should be single quoted 'non-localized'.
 
-const DB_VERSION = 3;
-const DB_NAME = 'tinode-web';
-
-let IDBProvider;
+import {
+  MAX_SEQ
+} from './storage-adapter.js';
 
 export default class DB {
   #onError = _ => {};
   #logger = _ => {};
+  #adapter = null;
+  #queue = Promise.resolve();
 
-  // Instance of IndexDB.
-  db = null;
-  // Indicator that the cache is disabled.
-  disabled = true;
-
-  constructor(onError, logger) {
+  /**
+   * Create persistent cache.
+   * @param {function} onError - callback to call when the storage fails to initialize.
+   * @param {function} logger - logging function.
+   * @param {Tinode.StorageAdapter=} adapter - storage for the cache; <code>null</code> or <code>undefined</code>
+   *   disables the cache.
+   */
+  constructor(onError, logger, adapter) {
     this.#onError = onError || this.#onError;
     this.#logger = logger || this.#logger;
+    this.#adapter = adapter || null;
   }
 
-  #mapObjects(source, callback, context) {
-    if (!this.db) {
-      return disabled ?
-        Promise.resolve([]) :
-        Promise.reject(new Error("not initialized"));
-    }
+  #enqueue(task) {
+    const result = this.#queue.then(task);
+    this.#queue = result.catch(_ => {});
+    return result;
+  }
 
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction([source]);
-      trx.onerror = event => {
-        this.#logger('PCache', 'mapObjects', source, event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore(source).getAll().onsuccess = event => {
-        if (callback) {
-          event.target.result.forEach(topic => {
-            callback.call(context, topic);
-          });
-        }
-        resolve(event.target.result);
-      };
+  #run(op, fallback, work) {
+    return this.#enqueue(_ => {
+      const adapter = this.#adapter;
+      if (!adapter || !adapter.isOpen()) {
+        return fallback;
+      }
+      return work(adapter).catch(err => {
+        this.#logger('PCache', op, err);
+        throw err;
+      });
     });
   }
 
   /**
    * Initialize persistent cache: open or create/upgrade if needed.
-   * @returns {Promise} promise to be resolved/rejected when the DB is initialized.
+   * @returns {Promise} promise to be resolved/rejected when the storage is open.
    */
   initDatabase() {
-    return new Promise((resolve, reject) => {
-      // Open the database and initialize callbacks.
-      const req = IDBProvider.open(DB_NAME, DB_VERSION);
-      req.onsuccess = event => {
-        this.db = event.target.result;
-        this.disabled = false;
-
-        // This handler is called when a different tab tries to upgrade the database.
-        this.db.onversionchange = _ => {
-          this.#logger('PCache', "another tab tries to upgrade DB, shutting down");
-          this.db.close();
-          this.db = null;
-          this.disabled = true;
-        };
-
-        resolve(this.db);
-      };
-      req.onerror = event => {
-        this.#logger('PCache', "failed to initialize", event);
-        reject(event.target.error);
-        this.#onError(event.target.error);
-      };
-      req.onupgradeneeded = event => {
-        this.db = event.target.result;
-
-        this.db.onerror = event => {
-          this.#logger('PCache', "failed to create storage", event);
-          this.#onError(event.target.error);
-        };
-
-        // Individual object stores.
-
-        // Alternatively could use event.oldVersion and event.newVersion
-        // to determine which object stores to create or upgrade.
-
-        if (!this.db.objectStoreNames.contains('topic')) {
-          // Object store (table) for topics. The primary key is the topic name.
-          this.db.createObjectStore('topic', {
-            keyPath: 'name'
-          });
-        }
-
-        if (!this.db.objectStoreNames.contains('user')) {
-          // Users object store. UID is the primary key.
-          this.db.createObjectStore('user', {
-            keyPath: 'uid'
-          });
-        }
-
-        if (!this.db.objectStoreNames.contains('subscription')) {
-          // Subscriptions object store topic <-> user. Topic name + UID is the primary key.
-          this.db.createObjectStore('subscription', {
-            keyPath: ['topic', 'uid']
-          });
-        }
-
-        if (!this.db.objectStoreNames.contains('message')) {
-          // Messages object store. The primary key is topic name + seq.
-          this.db.createObjectStore('message', {
-            keyPath: ['topic', 'seq']
-          });
-        }
-
-        if (!this.db.objectStoreNames.contains('dellog')) {
-          // Records of deleted message ranges. The primary key is topic name + low seq.
-          const dellog = this.db.createObjectStore('dellog', {
-            keyPath: ['topic', 'low', 'hi']
-          });
-          if (!dellog.indexNames.contains('topic_clear')) {
-            dellog.createIndex('topic_clear', ['topic', 'clear'], {
-              unique: false
-            });
-          }
-        }
-      }
+    if (!this.#adapter) {
+      return Promise.resolve();
+    }
+    return this.#enqueue(_ => this.#adapter.open()).catch(err => {
+      this.#logger('PCache', "failed to initialize", err);
+      this.#onError(err);
+      throw err;
     });
   }
 
   /**
    * Delete persistent cache.
+   * @returns {Promise} promise resolved with <code>true</code> when the cache is deleted.
    */
   deleteDatabase() {
-    // Close connection, otherwise operations will fail with 'onblocked'.
-    if (this.db) {
-      this.db.close();
-      this.db = null;
+    if (!this.#adapter) {
+      return Promise.resolve(true);
     }
-    return new Promise((resolve, reject) => {
-      const req = IDBProvider.deleteDatabase(DB_NAME);
-      req.onblocked = _ => {
-        if (this.db) {
-          this.db.close();
-        }
-        const err = new Error("blocked");
-        this.#logger('PCache', 'deleteDatabase', err);
-        reject(err);
-      };
-      req.onsuccess = _ => {
-        this.db = null;
-        this.disabled = true;
-        resolve(true);
-      };
-      req.onerror = event => {
-        this.#logger('PCache', 'deleteDatabase', event.target.error);
-        reject(event.target.error);
-      };
+    return this.#enqueue(_ => this.#adapter.destroy()).then(_ => true, err => {
+      this.#logger('PCache', 'deleteDatabase', err);
+      throw err;
     });
   }
 
@@ -172,7 +86,7 @@ export default class DB {
    * @returns {boolean} <code>true</code> if cache is ready, <code>false</code> otherwise.
    */
   isReady() {
-    return !!this.db;
+    return !!this.#adapter && this.#adapter.isOpen();
   }
 
   // Topics.
@@ -184,26 +98,8 @@ export default class DB {
    * @returns {Promise} promise resolved/rejected on operation completion.
    */
   updTopic(topic) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['topic'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'updTopic', event.target.error);
-        reject(event.target.error);
-      };
-      const req = trx.objectStore('topic').get(topic.name);
-      req.onsuccess = _ => {
-        trx.objectStore('topic').put(DB.#serializeTopic(req.result, topic));
-        trx.commit();
-      };
-    });
+    return this.#run('updTopic', undefined, adapter =>
+      adapter.getTopic(topic.name).then(src => adapter.putTopic(DB.#serializeTopic(src, topic))));
   }
 
   /**
@@ -214,58 +110,23 @@ export default class DB {
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   markTopicAsDeleted(name, deleted) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['topic'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'markTopicAsDeleted', event.target.error);
-        reject(event.target.error);
-      };
-      const req = trx.objectStore('topic').get(name);
-      req.onsuccess = event => {
-        const topic = event.target.result;
+    return this.#run('markTopicAsDeleted', undefined, adapter =>
+      adapter.getTopic(name).then(topic => {
         if (topic && topic._deleted != deleted) {
           topic._deleted = deleted;
-          trx.objectStore('topic').put(topic);
+          return adapter.putTopic(topic);
         }
-        trx.commit();
-      };
-    });
+      }));
   }
 
   /**
    * Remove topic from persistent cache.
    * @memberOf DB
-   * @param {string} name - name of the topic to remove from database.
+   * @param {string} name - name of the topic to remove from storage.
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   remTopic(name) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['topic', 'subscription', 'message'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'remTopic', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('topic').delete(IDBKeyRange.only(name));
-      trx.objectStore('subscription').delete(IDBKeyRange.bound([name, '-'], [name, '~']));
-      trx.objectStore('message').delete(IDBKeyRange.bound([name, 0], [name, Number.MAX_SAFE_INTEGER]));
-      trx.commit();
-    });
+    return this.#run('remTopic', undefined, adapter => adapter.removeTopic(name));
   }
 
   /**
@@ -273,10 +134,11 @@ export default class DB {
    * @memberOf DB
    * @param {function} callback - function to call for each topic.
    * @param {Object} context - the value or <code>this</code> inside the callback.
-   * @return {Promise} promise resolved/rejected on operation completion.
+   * @return {Promise} promise resolved with the array of stored topics.
    */
   mapTopics(callback, context) {
-    return this.#mapObjects('topic', callback, context);
+    return this.#run('mapTopics', [], adapter =>
+      adapter.getTopics().then(topics => DB.#visit(topics, callback, context)));
   }
 
   /**
@@ -298,30 +160,13 @@ export default class DB {
    * @returns {Promise} promise resolved/rejected on operation completion.
    */
   updUser(uid, pub) {
-    if (arguments.length < 2 || pub === undefined) {
-      // No point in updating user with invalid data.
-      return;
+    if (typeof pub == 'undefined') {
+      return Promise.resolve();
     }
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['user'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'updUser', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('user').put({
-        uid: uid,
-        public: pub
-      });
-      trx.commit();
-    });
+    return this.#run('updUser', undefined, adapter => adapter.putUser({
+      uid: uid,
+      public: pub
+    }));
   }
 
   /**
@@ -331,63 +176,33 @@ export default class DB {
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   remUser(uid) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['user'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'remUser', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('user').delete(IDBKeyRange.only(uid));
-      trx.commit();
-    });
+    return this.#run('remUser', undefined, adapter => adapter.removeUser(uid));
   }
 
   /**
    * Execute a callback for each stored user.
    * @memberOf DB
-   * @param {function} callback - function to call for each topic.
+   * @param {function} callback - function to call for each user.
    * @param {Object} context - the value or <code>this</code> inside the callback.
-   * @return {Promise} promise resolved/rejected on operation completion.
+   * @return {Promise} promise resolved with the array of stored users.
    */
   mapUsers(callback, context) {
-    return this.#mapObjects('user', callback, context);
+    return this.#run('mapUsers', [], adapter =>
+      adapter.getUsers().then(users => DB.#visit(users, callback, context)));
   }
 
   /**
    * Read a single user from persistent cache.
    * @memberOf DB
    * @param {string} uid - ID of the user to fetch from cache.
-   * @return {Promise} promise resolved/rejected on operation completion.
+   * @return {Promise} promise resolved with <code>{user, public}</code> or <code>undefined</code> if the user is not cached.
    */
   getUser(uid) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['user']);
-      trx.oncomplete = event => {
-        const user = event.target.result;
-        resolve({
-          user: user.uid,
-          public: user.public
-        });
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'getUser', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('user').get(uid);
-    });
+    return this.#run('getUser', undefined, adapter =>
+      adapter.getUser(uid).then(user => user && {
+        user: user.uid,
+        public: user.public
+      }));
   }
 
   // Subscriptions.
@@ -400,25 +215,20 @@ export default class DB {
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   updSubscription(topicName, uid, sub) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['subscription'], 'readwrite');
-      trx.oncomplete = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'updSubscription', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('subscription').get([topicName, uid]).onsuccess = (event) => {
-        trx.objectStore('subscription').put(DB.#serializeSubscription(event.target.result, topicName, uid, sub));
-        trx.commit();
-      };
-    });
+    return this.#run('updSubscription', undefined, adapter =>
+      adapter.getSubscription(topicName, uid).then(src =>
+        adapter.putSubscription(DB.#serializeSubscription(src, topicName, uid, sub))));
+  }
+
+  /**
+   * Remove subscription from persistent cache.
+   * @memberOf DB
+   * @param {string} topicName - name of the topic which owns the subscription.
+   * @param {string} uid - ID of the unsubscribed user.
+   * @return {Promise} promise resolved/rejected on operation completion.
+   */
+  remSubscription(topicName, uid) {
+    return this.#run('remSubscription', undefined, adapter => adapter.removeSubscription(topicName, uid));
   }
 
   /**
@@ -427,29 +237,16 @@ export default class DB {
    * @param {string} topicName - name of the topic which owns the subscriptions.
    * @param {function} callback - function to call for each subscription.
    * @param {Object} context - the value or <code>this</code> inside the callback.
-   * @return {Promise} promise resolved/rejected on operation completion.
+   * @return {Promise} promise resolved with the array of subscriptions, each with <code>user</code> set to the subscriber's ID.
    */
   mapSubscriptions(topicName, callback, context) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve([]) :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['subscription']);
-      trx.onerror = (event) => {
-        this.#logger('PCache', 'mapSubscriptions', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('subscription').getAll(IDBKeyRange.bound([topicName, '-'], [topicName, '~'])).onsuccess = (event) => {
-        if (callback) {
-          event.target.result.forEach((topic) => {
-            callback.call(context, topic);
-          });
-        }
-        resolve(event.target.result);
-      };
-    });
+    return this.#run('mapSubscriptions', [], adapter =>
+      adapter.getSubscriptions(topicName).then(subs => DB.#visit(subs.map(sub => {
+        return {
+          ...sub,
+          user: sub.uid
+        };
+      }), callback, context)));
   }
 
   // Messages.
@@ -461,23 +258,7 @@ export default class DB {
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   addMessage(msg) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['message'], 'readwrite');
-      trx.onsuccess = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'addMessage', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('message').add(DB.#serializeMessage(null, msg));
-      trx.commit();
-    });
+    return this.#run('addMessage', undefined, adapter => adapter.putMessage(DB.#serializeMessage(null, msg)));
   }
 
   /**
@@ -489,33 +270,7 @@ export default class DB {
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   updMessageStatus(topicName, seq, status) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['message'], 'readwrite');
-      trx.onsuccess = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'updMessageStatus', event.target.error);
-        reject(event.target.error);
-      };
-      const req = trx.objectStore('message').get(IDBKeyRange.only([topicName, seq]));
-      req.onsuccess = event => {
-        const src = req.result || event.target.result;
-        if (src && src._status != status) {
-          trx.objectStore('message').put(DB.#serializeMessage(src, {
-            topic: topicName,
-            seq: seq,
-            _status: status
-          }));
-        }
-        trx.commit();
-      };
-    });
+    return this.#run('updMessageStatus', undefined, adapter => adapter.updateMessageStatus(topicName, seq, status));
   }
 
   /**
@@ -527,66 +282,39 @@ export default class DB {
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   updMessageReact(topicName, seq, react) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['message'], 'readwrite');
-      trx.onsuccess = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'updMessageReact', event.target.error);
-        reject(event.target.error);
-      };
-      const req = trx.objectStore('message').get(IDBKeyRange.only([topicName, seq]));
-      req.onsuccess = event => {
-        const src = req.result || event.target.result;
+    return this.#run('updMessageReact', undefined, adapter =>
+      adapter.readMessageRanges(topicName, [{
+        low: seq
+      }]).then(([src]) => {
         if (src && src.react !== react) {
-          trx.objectStore('message').put(DB.#serializeMessage(src, {
+          return adapter.putMessage(DB.#serializeMessage(src, {
             topic: topicName,
             seq: seq,
             react: react
           }));
         }
-        trx.commit();
-      };
-    });
+      }));
   }
 
   /**
    * Remove one or more messages from persistent cache.
    * @memberOf DB
    * @param {string} topicName - name of the topic which owns the message.
-   * @param {number} from - id of the message to remove or lower boundary when removing range (inclusive).
+   * @param {number=} from - id of the message to remove or lower boundary when removing range (inclusive).
+   *   When neither <code>from</code> nor <code>to</code> is given, all messages of the topic are removed.
    * @param {number=} to - upper boundary (exclusive) when removing a range of messages.
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   remMessages(topicName, from, to) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
+    return this.#run('remMessages', undefined, adapter => {
       if (!from && !to) {
-        from = 0;
-        to = Number.MAX_SAFE_INTEGER;
+        return adapter.removeMessages(topicName, 0, MAX_SEQ);
       }
-      const range = to > 0 ? IDBKeyRange.bound([topicName, from], [topicName, to], false, true) :
-        IDBKeyRange.only([topicName, from]);
-      const trx = this.db.transaction(['message'], 'readwrite');
-      trx.onsuccess = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'remMessages', event.target.error);
-        reject(event.target.error);
-      };
-      trx.objectStore('message').delete(range);
-      trx.commit();
+      from = from || 0;
+      if (to > 0) {
+        return to > from ? adapter.removeMessages(topicName, from, to) : Promise.resolve();
+      }
+      return adapter.removeMessages(topicName, from, from + 1);
     });
   }
 
@@ -594,86 +322,19 @@ export default class DB {
    * Retrieve messages from persistent store.
    * @memberOf DB
    * @param {string} topicName - name of the topic to retrieve messages from.
-   * @param {function} callback to call for each retrieved message.
    * @param {GetDataType} query - parameters of the message range to retrieve.
+   * @param {function=} callback - function to call for each retrieved message.
+   * @param {Object=} context - the value or <code>this</code> inside the callback.
    *
-   * @return {Promise} promise resolved/rejected on operation completion.
+   * @return {Promise} promise resolved with the array of retrieved messages.
    */
   readMessages(topicName, query, callback, context) {
     query = query || {};
-
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve([]) :
-        Promise.reject(new Error("not initialized"));
-    }
-
-    const trx = this.db.transaction(['message']);
-    let result = [];
-
-    // Handle individual message ranges.
-    if (Array.isArray(query.ranges)) {
-      return new Promise((resolve, reject) => {
-        trx.onerror = event => {
-          this.#logger('PCache', 'readMessages', event.target.error);
-          reject(event.target.error);
-        };
-
-        let count = 0;
-        query.ranges.forEach(range => {
-          const key = range.hi ? IDBKeyRange.bound([topicName, range.low], [topicName, range.hi], false, true) :
-            IDBKeyRange.only([topicName, range.low]);
-          trx.objectStore('message').getAll(key).onsuccess = event => {
-            const msgs = event.target.result;
-            if (msgs) {
-              if (callback) {
-                callback.call(context, msgs);
-              }
-              if (Array.isArray(msgs)) {
-                result = result.concat(msgs);
-              } else {
-                result.push(msgs);
-              }
-            }
-            count++;
-            if (count == query.ranges.length) {
-              resolve(result);
-            }
-          };
-        });
-      });
-    }
-
-    // Handle single range.
-    return new Promise((resolve, reject) => {
-      const since = query.since > 0 ? query.since : 0;
-      const before = query.before > 0 ? query.before : Number.MAX_SAFE_INTEGER;
-      const limit = query.limit | 0;
-
-      trx.onerror = event => {
-        this.#logger('PCache', 'readMessages', event.target.error);
-        reject(event.target.error);
-      };
-
-      const range = IDBKeyRange.bound([topicName, since], [topicName, before], false, true);
-      // Iterate in descending order.
-      trx.objectStore('message').openCursor(range, 'prev')
-        .onsuccess = event => {
-          const cursor = event.target.result;
-          if (cursor) {
-            if (callback) {
-              callback.call(context, cursor.value);
-            }
-            result.push(cursor.value);
-            if (limit <= 0 || result.length < limit) {
-              cursor.continue();
-            } else {
-              resolve(result);
-            }
-          } else {
-            resolve(result);
-          }
-        };
+    return this.#run('readMessages', [], adapter => {
+      const read = Array.isArray(query.ranges) ?
+        adapter.readMessageRanges(topicName, query.ranges) :
+        adapter.readMessages(topicName, DB.#window(query));
+      return read.then(msgs => DB.#visit(msgs, callback, context));
     });
   }
 
@@ -688,28 +349,14 @@ export default class DB {
    * @return {Promise} promise resolved/rejected on operation completion.
    */
   addDelLog(topicName, delId, ranges) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve() :
-        Promise.reject(new Error("not initialized"));
-    }
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['dellog'], 'readwrite');
-      trx.onsuccess = event => {
-        resolve(event.target.result);
-      };
-      trx.onerror = event => {
-        this.#logger('PCache', 'addDelLog', event.target.error);
-        reject(event.target.error);
-      };
-      ranges.forEach(r => trx.objectStore('dellog').add({
+    return this.#run('addDelLog', undefined, adapter => adapter.addDelLog(ranges.map(r => {
+      return {
         topic: topicName,
         clear: delId,
         low: r.low,
         hi: r.hi || (r.low + 1)
-      }));
-      trx.commit();
-    });
+      };
+    })));
   }
 
   /**
@@ -717,119 +364,22 @@ export default class DB {
    * @memberOf DB
    * @param {string} topicName - name of the topic to retrieve records for.
    * @param {GetDataType} query - parameters of the message range to retrieve.
-   * @return {Promise} promise resolved/rejected on operation completion.
+   * @return {Promise} promise resolved with the array of deleted ranges <code>{low, hi}</code>.
    */
   readDelLog(topicName, query) {
     query = query || {};
-
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve([]) :
-        Promise.reject(new Error("not initialized"));
-    }
-
-    const trx = this.db.transaction(['dellog']);
-    let result = [];
-
-    // Handle individual message ranges.
-    if (Array.isArray(query.ranges)) {
-      return new Promise((resolve, reject) => {
-        trx.onerror = event => {
-          this.#logger('PCache', 'readDelLog', event.target.error);
-          reject(event.target.error);
-        };
-
-        let count = 0;
-        query.ranges.forEach(range => {
-          const hi = range.hi || (range.low + 1);
-          const key = IDBKeyRange.bound([topicName, 0, range.low], [topicName, hi, Number.MAX_SAFE_INTEGER], false, true);
-          trx.objectStore('dellog').getAll(key).onsuccess = event => {
-            const entries = event.target.result;
-            if (entries) {
-              if (Array.isArray(entries)) {
-                result = result.concat(entries.map(entry => {
-                  return {
-                    low: entry.low,
-                    hi: entry.hi
-                  };
-                }));
-              } else {
-                result.push({
-                  low: entries.low,
-                  hi: entries.hi
-                });
-              }
-            }
-            count++;
-            if (count == query.ranges.length) {
-              resolve(result);
-            }
-          };
-        });
-      });
-    }
-
-    return new Promise((resolve, reject) => {
-      const since = query.since > 0 ? query.since : 0;
-      const before = query.before > 0 ? query.before : Number.MAX_SAFE_INTEGER;
-      const limit = query.limit | 0;
-
-      trx.onerror = event => {
-        this.#logger('PCache', 'readDelLog', event.target.error);
-        reject(event.target.error);
-      };
-
-      let count = 0;
-      const result = [];
-      const range = IDBKeyRange.bound([topicName, 0, since], [topicName, before, Number.MAX_SAFE_INTEGER], false, true);
-      trx.objectStore('dellog').openCursor(range, 'prev')
-        .onsuccess = event => {
-          const cursor = event.target.result;
-          if (cursor) {
-            result.push({
-              low: cursor.value.low,
-              hi: cursor.value.hi
-            });
-            count += cursor.value.hi - cursor.value.low;
-            if (limit <= 0 || count < limit) {
-              cursor.continue();
-            } else {
-              resolve(result);
-            }
-          } else {
-            resolve(result);
-          }
-        };
-    });
+    return this.#run('readDelLog', [], adapter => Array.isArray(query.ranges) ?
+      adapter.readDelLogRanges(topicName, query.ranges) :
+      adapter.readDelLog(topicName, DB.#window(query)));
   }
 
   /**
    * Retrieve the latest 'clear' ID for the given topic.
    * @param {string} topicName
-   * @return {Promise} promise resolved/rejected on operation completion.
+   * @return {Promise} promise resolved with the latest 'clear' ID or 0 if there are no records.
    */
   maxDelId(topicName) {
-    if (!this.isReady()) {
-      return this.disabled ?
-        Promise.resolve(0) :
-        Promise.reject(new Error("not initialized"));
-    }
-
-    return new Promise((resolve, reject) => {
-      const trx = this.db.transaction(['dellog']);
-      trx.onerror = event => {
-        this.#logger('PCache', 'maxDelId', event.target.error);
-        reject(event.target.error);
-      };
-
-      const index = trx.objectStore('dellog').index('topic_clear');
-      index.openCursor(IDBKeyRange.bound([topicName, 0], [topicName, Number.MAX_SAFE_INTEGER]), 'prev')
-        .onsuccess = event => {
-          if (event.target.result) {
-            resolve(event.target.result.value);
-          }
-        };
-    });
+    return this.#run('maxDelId', 0, adapter => adapter.maxDelId(topicName));
   }
 
   // Private methods.
@@ -905,13 +455,18 @@ export default class DB {
     return res;
   }
 
-  /**
-   * To use DB in a non browser context, supply indexedDB provider.
-   * @static
-   * @memberof DB
-   * @param idbProvider indexedDB provider, e.g. for node <code>require('fake-indexeddb')</code>.
-   */
-  static setDatabaseProvider(idbProvider) {
-    IDBProvider = idbProvider;
+  static #window(query) {
+    return {
+      since: query.since > 0 ? query.since : 0,
+      before: query.before > 0 ? query.before : MAX_SEQ,
+      limit: query.limit | 0
+    };
+  }
+
+  static #visit(items, callback, context) {
+    if (callback) {
+      items.forEach(item => callback.call(context, item));
+    }
+    return items;
   }
 }
