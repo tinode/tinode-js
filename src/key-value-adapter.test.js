@@ -274,6 +274,53 @@ describe('KeyValueAdapter', () => {
   });
 });
 
+describe.each([
+  ['sync store', _ => new SyncStore()],
+  ['async store', _ => new AsyncStore()]
+])('KeyValueAdapter write order over a %s', (_, createStore) => {
+  test('keeps a message saved right after removing the same seq', async () => {
+    const store = createStore();
+    const adapter = new KeyValueAdapter(store);
+    await adapter.open();
+    await adapter.putMessage({
+      topic: 'grpA',
+      seq: 5,
+      content: 'old'
+    });
+    await Promise.all([
+      adapter.removeMessages('grpA', 5, 6),
+      adapter.putMessage({
+        topic: 'grpA',
+        seq: 5,
+        content: 'new'
+      })
+    ]);
+
+    const reopened = new KeyValueAdapter(store);
+    await reopened.open();
+    const messages = await reopened.readMessageRanges('grpA', [{
+      low: 5
+    }]);
+    expect(messages.map(m => m.content)).toEqual(['new']);
+  });
+
+  test('removes a topic saved right before', async () => {
+    const store = createStore();
+    const adapter = new KeyValueAdapter(store);
+    await adapter.open();
+    await Promise.all([
+      adapter.putTopic({
+        name: 'grpA'
+      }),
+      adapter.removeTopic('grpA')
+    ]);
+
+    const reopened = new KeyValueAdapter(store);
+    await reopened.open();
+    await expect(reopened.getTopics()).resolves.toEqual([]);
+  });
+});
+
 describe('fromMMKV', () => {
   test.each([
     ['v3 with delete', () => new FakeMMKVv3()],
