@@ -6087,7 +6087,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   PACKAGE_VERSION: function() { return /* binding */ PACKAGE_VERSION; }
 /* harmony export */ });
-const PACKAGE_VERSION = "0.25.4";
+const PACKAGE_VERSION = "0.25.5";
 
 /***/ })
 
@@ -6267,7 +6267,7 @@ let IndexedDBProvider;
 if (typeof indexedDB != 'undefined') {
   IndexedDBProvider = indexedDB;
 }
-
+;
 initForNonBrowserApp();
 function initForNonBrowserApp() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
